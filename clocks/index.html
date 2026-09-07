@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+  <title>Clocks... assemble!</title>
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.3.1/css/all.min.css"
+    integrity="sha512-QeR2VH+lsBE5LSAe1Q5EnTBbe7XTBubt8dG93Y7gidSgdMCr8nVqKcfKAMyN96SV8KDbZVTDXChatu5G2KQGzg=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+  <link rel="manifest" href="site.webmanifest">
+  <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
+
+  <style>
+    .team {
+      width: 100px;
+      display: inline-block;
+      padding: 0.25em 1em;
+      border-radius: 5px;
+      color: white;
+    }
+
+    .Cyan, .LightBlue, .Yellow, .Lime, .White, .Silver {
+      color: black;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div id="app" class="container py-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h1 class="h2 mb-0">Clocks... assemble!</h1>
+      <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+    </div>
+
+    <div class="alert alert-info" v-if="people.length == 0">
+      <p class="mb-0">Having difficulties tracking <strong>what time is it</strong> for your contacts around the globe?
+      <br>
+      This simple tool will help you with that! Just start adding them.
+      <br>
+      And don't worry: <em>none of your data is sent to our server</em>.</p>
+    </div>
+
+    <h2 class="h5 text-center mt-4">My time: {{ myTime }}</h2>
+
+    <form @submit.prevent="add">
+      <table class="table table-striped table-hover align-middle">
+        <thead>
+          <tr>
+            <th scope="col">Team</th>
+            <th scope="col">Person</th>
+            <th scope="col">Current time</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <tr v-for="person in sortedPeople" :key="person.name + person.timezone">
+            <td>
+              <span class="team" :class="person.team" :style="{backgroundColor: person.team}">
+                {{person.team}}
+              </span>
+            </td>
+            <td>
+              {{person.name}}
+            </td>
+            <td>
+              {{person.time}}
+              <br>
+              <small class="text-body-secondary">{{person.timezone}}</small>
+            </td>
+            <td>
+              <button class="btn btn-sm btn-secondary" type="button" v-on:click="edit(person)" title="Edit">
+                <i class="fas fa-edit"></i>
+              </button>
+              <button class="btn btn-sm btn-danger" type="button" v-on:click="remove(person)" title="Remove">
+                <i class="fas fa-times"></i>
+              </button>
+            </td>
+          </tr>
+        </tbody>
+
+        <tfoot>
+          <tr>
+            <td>
+              <select class="form-select" v-model="new_person.team" required>
+                <option value="" disabled>Team</option>
+                <option v-for="t in teams" :value="t">{{t}}</option>
+              </select>
+            </td>
+            <td>
+              <input class="form-control" v-model="new_person.name" placeholder="New person" required>
+            </td>
+            <td>
+              <input class="form-control" list="tz-list" v-model="new_person.timezoneLabel"
+                placeholder="Search timezone..." required @input="clearTimezoneError">
+              <datalist id="tz-list">
+                <option v-for="tz in timezones" :value="tz.label"></option>
+              </datalist>
+            </td>
+            <td>
+              <div class="text-nowrap">
+                <button class="btn btn-primary" type="submit" title="Add">
+                  <i class="fas fa-plus"></i>
+                </button>
+                <button class="btn btn-secondary" type="button" v-if="editing" v-on:click="cancelEdit" title="Cancel">
+                  <i class="fas fa-undo"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </form>
+
+    <footer class="text-end">
+      <p>Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, estandarizado por Claude.</p>
+    </footer>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.5.42/vue.global.prod.min.js"
+    integrity="sha512-PREsKi18CyKMgwXMJWtvkzinqjiN0znVfDovmVadp7pKiUpyNGtq7bD2fKElDBmdfH4DGJz8pmAdgihN8NZ8TQ=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script>
+    const localTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+    function tzParts(date, timeZone) {
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+      });
+      const parts = {};
+      for (const p of formatter.formatToParts(date)) parts[p.type] = p.value;
+      return parts;
+    }
+
+    function tzOffsetLabel(timeZone, date) {
+      const part = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'shortOffset' })
+        .formatToParts(date)
+        .find(p => p.type === 'timeZoneName');
+      return part ? part.value : '';
+    }
+
+    // ponytail: day-diff assumes no timezone is more than 24h from local, true for every real IANA zone
+    function timeInTimezone(date, timeZone) {
+      const p = tzParts(date, timeZone);
+      const local = tzParts(date, localTimeZone);
+      const otherDay = Date.UTC(p.year, p.month - 1, p.day);
+      const localDay = Date.UTC(local.year, local.month - 1, local.day);
+      const dayDiff = Math.round((otherDay - localDay) / 86400000);
+      const suffix = dayDiff === 0 ? '' : (dayDiff > 0 ? ' (+1)' : ' (-1)');
+      return `${p.hour}:${p.minute}:${p.second}${suffix}`;
+    }
+
+    function buildTimezoneList(date) {
+      const names = typeof Intl.supportedValuesOf === 'function'
+        ? Intl.supportedValuesOf('timeZone')
+        : [localTimeZone];
+      return names
+        .map(key => ({ key, label: `(${tzOffsetLabel(key, date)}) ${key}` }))
+        .sort((a, b) => a.key.localeCompare(b.key));
+    }
+
+    Vue.createApp({
+      data() {
+        return {
+          editing: false,
+          myTime: '',
+          timezones: [],
+          timezoneByLabel: new Map(),
+          teams: ["Black", "Blue", "Brown", "Cyan", "DarkBlue", "Green", "Grey", "LightBlue", "Lime", "Magenta", "Maroon", "Olive", "Orange", "Purple", "Red", "Silver", "White", "Yellow"],
+          new_person: { pos: '', name: '', timezone: '', timezoneLabel: '', team: '' },
+          people: []
+        };
+      },
+      methods: {
+        add() {
+          const tzKey = this.timezoneByLabel.get(this.new_person.timezoneLabel);
+          if (!tzKey) {
+            const input = document.querySelector('input[list="tz-list"]');
+            input.setCustomValidity('Pick a timezone from the list');
+            input.reportValidity();
+            return;
+          }
+
+          const entry = { name: this.new_person.name, timezone: tzKey, time: '', team: this.new_person.team };
+          const pos = parseInt(this.new_person.pos);
+          if (pos >= 0) {
+            this.people[pos] = entry;
+          } else {
+            this.people.push(entry);
+          }
+          this.new_person = { pos: '', name: '', timezone: '', timezoneLabel: '', team: '' };
+          this.editing = false;
+          this.savePeople();
+        },
+        remove(person) {
+          this.people.splice(this.people.indexOf(person), 1);
+          this.savePeople();
+        },
+        edit(person) {
+          const pos = this.people.indexOf(person);
+          const tz = this.timezones.find(t => t.key === person.timezone);
+          this.new_person = {
+            pos, name: person.name, team: person.team,
+            timezone: person.timezone, timezoneLabel: tz ? tz.label : person.timezone
+          };
+          this.editing = true;
+        },
+        cancelEdit() {
+          this.new_person = { pos: '', name: '', timezone: '', timezoneLabel: '', team: '' };
+          this.editing = false;
+        },
+        clearTimezoneError(e) {
+          e.target.setCustomValidity('');
+        },
+        updateTime(date) {
+          this.myTime = `${tzParts(date, localTimeZone).year}-${tzParts(date, localTimeZone).month}-${tzParts(date, localTimeZone).day} ${timeInTimezone(date, localTimeZone)}`;
+          this.people.forEach(person => { person.time = timeInTimezone(date, person.timezone); });
+          setTimeout(() => this.updateTime(new Date()), 500);
+        },
+        savePeople() {
+          localStorage.setItem('people', JSON.stringify(this.people));
+        }
+      },
+      computed: {
+        sortedPeople() {
+          return [...this.people].sort((a, b) => {
+            if (a.team !== b.team) return a.team < b.team ? -1 : 1;
+            if (a.time !== b.time) return a.time < b.time ? -1 : 1;
+            return 0;
+          });
+        }
+      },
+      mounted() {
+        const now = new Date();
+        this.timezones = buildTimezoneList(now);
+        this.timezoneByLabel = new Map(this.timezones.map(t => [t.label, t.key]));
+
+        const stored = JSON.parse(localStorage.getItem('people'));
+        if (stored != null) this.people = stored;
+
+        this.updateTime(now);
+      }
+    }).mount('#app');
+
+    // theme toggle: Bootstrap's native data-bs-theme, remembered per browser
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tablas de Verdad</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    .highlight-cell {
+      border-left: 5px solid var(--bs-primary) !important;
+    }
+
+    table.truth-table thead tr th.name {
+      font-size: 0.8em;
+      font-family: 'Courier New', Courier, monospace;
+      font-weight: normal;
+    }
+
+    p.signature {
+      font-size: 0.8em;
+    }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4">
+    <div id="app">
+      <div class="d-flex justify-content-between align-items-start mb-3">
+        <h1 class="h3 mb-0">Generador de Tablas de Verdad</h1>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+      <hr>
+
+      <div class="row">
+        <div class="col-6">
+          <div class="mb-3">
+            <label for="expression" class="form-label">Expresión booleana</label>
+            <input class="form-control" id="expression" v-model="expression" @input="processExpression" placeholder="Ingresa una expresión booleana"/>
+          </div>
+        </div>
+        <div class="col-6">
+          <div v-if="variables.length > 0">
+            <h3 class="h5">Variables identificadas</h3>
+            <ul>
+              <li v-for="variable in variables" :key="variable">{{ variable }}</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <hr>
+
+      <div class="row" v-if="variables.length > 0">
+        <div class="col-12">
+          <h3 class="h5">Desarrollo de la tabla</h3>
+          <table class="table table-bordered table-hover table-striped truth-table">
+            <thead>
+              <tr>
+                <th v-for="(col, index) in truthTable[0]" :key="index" :class="{ 'highlight-cell': index == variables.length }">{{ String.fromCharCode(index + 65) }}</th>
+              </tr>
+              <tr>
+                <th v-for="(header, index) in headers" :key="header" class="name" :class="{ 'highlight-cell': index == variables.length }">{{ header.replaceAll("(","").replaceAll(")", "") }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(row, rowIndex) in truthTable" :key="rowIndex">
+                <td v-for="(value, index) in row" :key="index" :class="{ 'highlight-cell': index == variables.length }">
+                  <span v-if="value" class="badge text-bg-success">V</span>
+                  <span v-if="!value" class="badge text-bg-danger">F</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <hr>
+
+    <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, estandarizado por Claude.</p>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.5.42/vue.global.prod.min.js"
+    integrity="sha512-PREsKi18CyKMgwXMJWtvkzinqjiN0znVfDovmVadp7pKiUpyNGtq7bD2fKElDBmdfH4DGJz8pmAdgihN8NZ8TQ=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script>
+    class TreeNode {
+      constructor(value) {
+        this.value = value;
+        this.left = null;
+        this.right = null;
+      }
+      print() {
+        let ret = "(";
+        if (this.left) ret += this.left.print();
+        ret += this.value;
+        if (this.right) ret += this.right.print();
+        return ret + ")";
+      }
+    }
+
+    function getQueryParam(param) {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get(param);
+    }
+
+    Vue.createApp({
+      data() {
+        return {
+          expression: getQueryParam('e') || '!(correoRecibido || mensajeNoLeido) && notificacionesActivadas',
+          variables: [],
+          truthTable: [],
+          expressionTree: null,
+          headers: [],
+        };
+      },
+      computed: {
+        postOrderExpressions() {
+          return this.postOrder(this.expressionTree).map(node => node.print());
+        }
+      },
+      methods: {
+        processExpression() {
+          this.variables = [...new Set(this.expression.match(/[a-zA-Z]+/g))] || [];
+          const tokens = this.expression.match(/([a-zA-Z_]\w*|&&|\|\||!|\(|\)|==)/g) || [];
+          this.expressionTree = this.buildExpressionTree(this.shuntingYard(tokens));
+          this.truthTable = this.generateTruthTable();
+          this.headers = this.generateHeaders();
+        },
+        generateTruthTable() {
+          const variables = this.variables;
+          const nodes = this.postOrder(this.expressionTree);
+          const rows = Math.pow(2, variables.length);
+          const table = [];
+
+          for (let i = 0; i < rows; i++) {
+            const row = [];
+            for (let j = 0; j < variables.length; j++) {
+              row.push(i & Math.pow(2, j) ? true : false);
+            }
+            row.reverse();
+
+            nodes.forEach(node => row.push(this.evaluateNode(node, row)));
+
+            table.push(row);
+          }
+
+          return table.reverse();
+        },
+        // evalúa el árbol de la expresión ya parseado, nada de eval() sobre texto
+        evaluateNode(node, row) {
+          if (!node.left && !node.right) {
+            return row[this.variables.indexOf(node.value)];
+          }
+          if (node.value === "!") {
+            return !this.evaluateNode(node.right, row);
+          }
+          const left = this.evaluateNode(node.left, row);
+          const right = this.evaluateNode(node.right, row);
+          switch (node.value) {
+            case "&&": return left && right;
+            case "||": return left || right;
+            case "==": return left === right;
+          }
+        },
+        shuntingYard(tokens) {
+          const outputQueue = [];
+          const operatorStack = [];
+          const precedence = { "==": 0, "||": 1, "&&": 2, "!": 3 };
+          const associativity = { "==": "left", "||": "left", "&&": "left", "!": "right" };
+
+          tokens.forEach((token) => {
+            if (/[a-zA-Z_]\w*/.test(token)) {
+              outputQueue.push(token);
+            } else if (token === "!" || token === "&&" || token === "||" || token === "==") {
+              while (
+                operatorStack.length > 0 &&
+                operatorStack[operatorStack.length - 1] !== "(" &&
+                ((associativity[token] === "left" &&
+                  precedence[token] <= precedence[operatorStack[operatorStack.length - 1]]) ||
+                (associativity[token] === "right" &&
+                  precedence[token] < precedence[operatorStack[operatorStack.length - 1]]))
+              ) {
+                outputQueue.push(operatorStack.pop());
+              }
+              operatorStack.push(token);
+            } else if (token === "(") {
+              operatorStack.push(token);
+            } else if (token === ")") {
+              while (operatorStack.length > 0 && operatorStack[operatorStack.length - 1] !== "(") {
+                outputQueue.push(operatorStack.pop());
+              }
+              operatorStack.pop();
+            }
+          });
+
+          while (operatorStack.length > 0) {
+            outputQueue.push(operatorStack.pop());
+          }
+
+          return outputQueue;
+        },
+        buildExpressionTree(rpnTokens) {
+          const stack = [];
+
+          rpnTokens.forEach((token) => {
+            if (/[a-zA-Z_]\w*/.test(token)) {
+              stack.push(new TreeNode(token));
+            } else if (token === "!" || token === "&&" || token === "||" || token === "==") {
+              if (token === "!") {
+                const operand = stack.pop();
+                const node = new TreeNode(token);
+                node.right = operand;
+                stack.push(node);
+              } else {
+                const right = stack.pop();
+                const left = stack.pop();
+                const node = new TreeNode(token);
+                node.left = left;
+                node.right = right;
+                stack.push(node);
+              }
+            }
+          });
+
+          return stack[0];
+        },
+        postOrder(node) {
+          const ret = [];
+          if (node) {
+            if (node.left) ret.push(...this.postOrder(node.left));
+            if (node.right) ret.push(...this.postOrder(node.right));
+            if (node.left || node.right) ret.push(node);
+          }
+          return ret;
+        },
+        generateHeaders() {
+          const headers = [...this.variables, ...this.postOrder(this.expressionTree).map(n => n.print())];
+
+          for (let i = this.variables.length; i < headers.length; i++) {
+            for (let j = this.postOrderExpressions.length - 1; j >= 0; j--) {
+              if (headers[i].replace(this.postOrderExpressions[j], String.fromCharCode(65 + j + this.variables.length)).length > 1)
+                headers[i] = headers[i].replace(this.postOrderExpressions[j], String.fromCharCode(65 + j + this.variables.length));
+            }
+            for (let j = 0; j < this.variables.length; j++) {
+              headers[i] = headers[i].replace(this.variables[j], String.fromCharCode(65 + j));
+            }
+          }
+
+          return headers;
+        }
+      },
+      mounted() {
+        this.processExpression();
+      }
+    }).mount('#app');
+
+    // theme toggle: Bootstrap's native data-bs-theme, remembered per browser
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

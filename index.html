@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>Herramientas de Lucas Videla</title>
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+</head>
+
+<body>
+
+  <div class="container py-5" style="max-width: 640px;">
+
+    <div class="d-flex justify-content-between align-items-start mb-4">
+      <div>
+        <h1 class="h3 mb-1">🧰 Herramientas</h1>
+        <p class="text-body-secondary mb-0">por Lucas Videla (<a href="https://github.com/delucas" target="_blank" rel="noopener">@delucas</a>)</p>
+      </div>
+      <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+    </div>
+
+    <p>
+      Colección de herramientas minimalistas: gratis, sin cuentas, sin backend ni tracking.
+      Cada una es una página autocontenida que corre entera en tu navegador.
+    </p>
+
+    <div class="list-group my-4">
+      <a href="clocks/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+        <span>
+          <strong>Clocks... assemble!</strong>
+          <br>
+          <small class="text-body-secondary">Reloj mundial para trackear la hora de tu equipo o contactos.</small>
+        </span>
+        <span aria-hidden="true">→</span>
+      </a>
+      <a href="truth/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+        <span>
+          <strong>Tablas de Verdad</strong>
+          <br>
+          <small class="text-body-secondary">Generador de tablas de verdad a partir de una expresión booleana.</small>
+        </span>
+        <span aria-hidden="true">→</span>
+      </a>
+    </div>
+
+    <footer class="text-body-secondary small border-top pt-3">
+      <p>Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, estandarizado por Claude.</p>
+      <p class="mb-0">
+        Código abierto bajo licencia <a href="https://opensource.org/licenses/MIT" target="_blank" rel="noopener">MIT</a>
+        · <a href="https://github.com/delucas/tools" target="_blank" rel="noopener">Repo en GitHub</a>
+      </p>
+    </footer>
+  </div>
+
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+
+</html>

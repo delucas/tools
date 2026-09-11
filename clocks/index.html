@@ -33,6 +33,10 @@
     .Cyan, .LightBlue, .Yellow, .Lime, .White, .Silver {
       color: black;
     }
+
+    p.signature {
+      font-size: 0.8em;
+    }
   </style>
 </head>
 
@@ -40,10 +44,16 @@
 
   <div id="app" class="container py-4">
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
-      <h1 class="h2 mb-0">Clocks... assemble!</h1>
-      <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← All tools</a>
+    <div class="d-flex justify-content-between align-items-start mb-3">
+      <h1 class="h3 mb-0">Clocks... assemble!</h1>
+      <div class="d-flex gap-2">
+        <button class="btn btn-outline-secondary btn-sm" type="button" v-on:click="share">{{ shared ? '✅ Copied!' : '🔗 Share' }}</button>
+        <button class="btn btn-outline-secondary btn-sm" type="button" v-on:click="reset">🗑️ Reset</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
     </div>
+    <hr>
 
     <div class="alert alert-info" v-if="people.length == 0">
       <p class="mb-0">Having difficulties tracking <strong>what time is it</strong> for your contacts around the globe?
@@ -125,9 +135,8 @@
       </table>
     </form>
 
-    <footer class="text-end">
-      <p>Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, estandarizado por Claude.</p>
-    </footer>
+    <hr>
+    <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, estandarizado por Claude.</p>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.5.42/vue.global.prod.min.js"
@@ -165,6 +174,24 @@
       return `${p.hour}:${p.minute}:${p.second}${suffix}`;
     }
 
+    const STORAGE_KEY = 'people';
+
+    function getQueryParam(param) {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get(param);
+    }
+
+    function loadPeopleFromURL() {
+      const raw = getQueryParam('data');
+      if (!raw) return null;
+      try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : null;
+      } catch {
+        return null;
+      }
+    }
+
     function buildTimezoneList(date) {
       const names = typeof Intl.supportedValuesOf === 'function'
         ? Intl.supportedValuesOf('timeZone')
@@ -183,7 +210,8 @@
           timezoneByLabel: new Map(),
           teams: ["Black", "Blue", "Brown", "Cyan", "DarkBlue", "Green", "Grey", "LightBlue", "Lime", "Magenta", "Maroon", "Olive", "Orange", "Purple", "Red", "Silver", "White", "Yellow"],
           new_person: { pos: '', name: '', timezone: '', timezoneLabel: '', team: '' },
-          people: []
+          people: [],
+          shared: false
         };
       },
       methods: {
@@ -233,7 +261,18 @@
           setTimeout(() => this.updateTime(new Date()), 500);
         },
         savePeople() {
-          localStorage.setItem('people', JSON.stringify(this.people));
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(this.people));
+        },
+        reset() {
+          this.people = [];
+          localStorage.removeItem(STORAGE_KEY);
+          history.replaceState(null, '', window.location.pathname);
+        },
+        share() {
+          const url = `${window.location.origin}${window.location.pathname}?data=${encodeURIComponent(JSON.stringify(this.people))}`;
+          navigator.clipboard.writeText(url);
+          this.shared = true;
+          setTimeout(() => this.shared = false, 1500);
         }
       },
       computed: {
@@ -250,8 +289,14 @@
         this.timezones = buildTimezoneList(now);
         this.timezoneByLabel = new Map(this.timezones.map(t => [t.label, t.key]));
 
-        const stored = JSON.parse(localStorage.getItem('people'));
-        if (stored != null) this.people = stored;
+        const fromURL = loadPeopleFromURL();
+        if (fromURL) {
+          this.people = fromURL;
+          this.savePeople();
+        } else {
+          const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+          if (stored != null) this.people = stored;
+        }
 
         this.updateTime(now);
       }

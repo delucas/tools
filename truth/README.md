@@ -8,4 +8,6 @@ Generador de tablas de verdad a partir de una expresión booleana. Muestra tambi
 2. Escribir una expresión usando variables (letras) y los operadores `&&`, `||`, `!`, `==`, con paréntesis para agrupar. Ej: `!(correoRecibido || mensajeNoLeido) && notificacionesActivadas`.
 3. La tabla se arma sola con cada combinación de valores.
 
-También se puede compartir una expresión por link con el parámetro `?e=`, ej. `index.html?e=a%26%26b`.
+También se puede compartir una expresión por link con el parámetro `?e=`, ej. `index.html?e=a%26%26b` (o con el botón "🔗 Compartir", que copia el link actual al portapapeles).
+
+La expresión se guarda sola en `localStorage`. El botón "🗑️ Reiniciar" la borra y vuelve a la expresión de ejemplo.

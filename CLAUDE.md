@@ -46,6 +46,29 @@ Snippet de referencia (pegar y ajustar el id del botón):
 </script>
 ```
 
+## Volver al índice
+
+Cada herramienta lleva, arriba de todo (antes del `<h1>`), un link de vuelta al índice general:
+
+```html
+<a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+```
+
+Es un link relativo (`../`, la raíz del repo donde vive el `index.html` general), no un path absoluto. En herramientas cuya UI quedó en otro idioma (excepción explícita), el texto del link se traduce junto con el resto de la UI (ej. `← All tools`).
+
+## Estado: localStorage, reset y URL
+
+Toda herramienta cuyo usuario carga datos editables (listas, formularios, opciones) debe:
+
+- **Persistir en `localStorage`** bajo una clave propia de la herramienta, actualizándola en cada cambio de estado.
+- **Botón de reset**: borra la clave de `localStorage`, vuelve el estado a sus valores por defecto y limpia el query string de la URL (`history.replaceState`).
+- **Inicializar desde la URL**: al cargar, leer el estado desde query params antes que de `localStorage`. Prioridad: `URL > localStorage > default`.
+  - Estado simple (un valor): un query param legible, ej. `?e=expresion`.
+  - Estado complejo (listas/objetos): serializar a JSON y pasarlo por un único param, ej. `?data=` + `encodeURIComponent(JSON.stringify(...))`.
+- **Botón de compartir** (cuando el estado sea compartible): copia al portapapeles la URL actual con el estado codificado, para no obligar a armarla a mano.
+
+No hace falta un archivo o helper compartido entre herramientas — cada una es autocontenida, así que esta lógica se repite (duplicada) en cada `index.html`.
+
 ## Versionado de CDNs
 
 - Toda referencia a CDN (Bootstrap, Font Awesome, cualquier librería) se **pinea a la última versión estable disponible al momento de crear la herramienta**. Nunca `@latest` ni sin versión — siempre el número exacto (ej. `bootstrap@5.3.3`).

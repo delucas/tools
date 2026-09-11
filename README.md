@@ -10,5 +10,6 @@ Ver [`CLAUDE.md`](./CLAUDE.md) para los lineamientos de cómo se arma cada herra
 |---|---|
 | [`clocks`](./clocks) | Reloj mundial para trackear la hora de contactos en distintas timezones. |
 | [`truth`](./truth) | Generador de tablas de verdad a partir de una expresión booleana. |
+| [`csv-a-grafico`](./csv-a-grafico) | Convierte un CSV pegado en un gráfico de torta, series o líneas. |
 
 Cada carpeta tiene su propio `README.md` con el detalle de uso.

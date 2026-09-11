@@ -30,9 +30,14 @@
 
   <main class="container py-4">
     <div id="app">
+      <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
       <div class="d-flex justify-content-between align-items-start mb-3">
         <h1 class="h3 mb-0">Generador de Tablas de Verdad</h1>
-        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+        <div class="d-flex gap-2">
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ shared ? '¡Copiado!' : '🔗 Compartir' }}</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset">🗑️ Reiniciar</button>
+          <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+        </div>
       </div>
       <hr>
 
@@ -110,14 +115,18 @@
       return urlParams.get(param);
     }
 
+    const STORAGE_KEY = 'truth-expression';
+    const DEFAULT_EXPRESSION = '!(correoRecibido || mensajeNoLeido) && notificacionesActivadas';
+
     Vue.createApp({
       data() {
         return {
-          expression: getQueryParam('e') || '!(correoRecibido || mensajeNoLeido) && notificacionesActivadas',
+          expression: getQueryParam('e') || localStorage.getItem(STORAGE_KEY) || DEFAULT_EXPRESSION,
           variables: [],
           truthTable: [],
           expressionTree: null,
           headers: [],
+          shared: false,
         };
       },
       computed: {
@@ -127,11 +136,24 @@
       },
       methods: {
         processExpression() {
+          localStorage.setItem(STORAGE_KEY, this.expression);
           this.variables = [...new Set(this.expression.match(/[a-zA-Z]+/g))] || [];
           const tokens = this.expression.match(/([a-zA-Z_]\w*|&&|\|\||!|\(|\)|==)/g) || [];
           this.expressionTree = this.buildExpressionTree(this.shuntingYard(tokens));
           this.truthTable = this.generateTruthTable();
           this.headers = this.generateHeaders();
+        },
+        reset() {
+          localStorage.removeItem(STORAGE_KEY);
+          this.expression = DEFAULT_EXPRESSION;
+          history.replaceState(null, '', window.location.pathname);
+          this.processExpression();
+        },
+        share() {
+          const url = `${window.location.origin}${window.location.pathname}?e=${encodeURIComponent(this.expression)}`;
+          navigator.clipboard.writeText(url);
+          this.shared = true;
+          setTimeout(() => this.shared = false, 1500);
         },
         generateTruthTable() {
           const variables = this.variables;

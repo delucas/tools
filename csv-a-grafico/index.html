@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CSV a Gráfico</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    #csv {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 0.85em;
+    }
+
+    #chart-wrap {
+      position: relative;
+      height: 60vh;
+      min-height: 320px;
+    }
+
+    p.signature {
+      font-size: 0.8em;
+    }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4">
+    <div id="app">
+      <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+      <div class="d-flex justify-content-between align-items-start mb-3">
+        <h1 class="h3 mb-0">CSV a Gráfico</h1>
+        <div class="d-flex gap-2">
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ shared ? '¡Copiado!' : '🔗 Compartir' }}</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset">🗑️ Reiniciar</button>
+          <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+        </div>
+      </div>
+      <hr>
+
+      <div class="row g-4">
+        <div class="col-12 col-lg-5">
+          <label for="csv" class="form-label">Datos CSV (con encabezado)</label>
+          <textarea id="csv" class="form-control" rows="12" v-model="csvText" @input="update"></textarea>
+          <div class="form-text">Primera columna: categorías. Cada columna siguiente es una serie.</div>
+          <div class="alert alert-danger mt-2 mb-0 py-2" v-if="error">{{ error }}</div>
+        </div>
+
+        <div class="col-12 col-lg-7">
+          <input class="form-control mb-2" v-model="title" @input="update" placeholder="Título del gráfico (opcional)">
+
+          <div class="btn-group mb-2" role="group" aria-label="Tipo de gráfico">
+            <input type="radio" class="btn-check" id="type-pie" value="pie" v-model="chartType" @change="update">
+            <label class="btn btn-outline-primary" for="type-pie">🥧 Torta</label>
+
+            <input type="radio" class="btn-check" id="type-bar" value="bar" v-model="chartType" @change="update">
+            <label class="btn btn-outline-primary" for="type-bar">📊 Series</label>
+
+            <input type="radio" class="btn-check" id="type-line" value="line" v-model="chartType" @change="update">
+            <label class="btn btn-outline-primary" for="type-line">📈 Líneas</label>
+          </div>
+          <div class="form-text mb-2" v-if="chartType === 'pie'">La torta usa una sola serie: la primera columna de valores del CSV.</div>
+
+          <div id="chart-wrap">
+            <canvas id="chart-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr>
+    <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, estandarizado por Claude.</p>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.5.42/vue.global.prod.min.js"
+    integrity="sha512-PREsKi18CyKMgwXMJWtvkzinqjiN0znVfDovmVadp7pKiUpyNGtq7bD2fKElDBmdfH4DGJz8pmAdgihN8NZ8TQ=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"
+    integrity="sha512-WoViKhKD4qI2WruSZqv9+kvM4WfFhUMQCLN4QlDTt5aU56fLQy2gYoxWIqlEnXqJy/+Ac5q/hk1oWfqnMDhwMA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"
+    integrity="sha512-JPcRR8yFa8mmCsfrw4TNte1ZvF1e3+1SdGMslZvmrzDYxS69J7J49vkFL8u6u8PlPJK+H3voElBtUCzaXj+6ig=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script>
+    Chart.register(ChartDataLabels);
+
+    // Paleta categórica fija (orden validado para daltonismo), misma para todos los gráficos.
+    const PALETTE = {
+      light: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'],
+      dark: ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9', '#e66767']
+    };
+
+    function currentTheme() {
+      return document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'dark' : 'light';
+    }
+
+    // ponytail: más de 8 series/categorías repite colores en vez de agruparlas en "Otros"
+    function colorAt(i) {
+      const p = PALETTE[currentTheme()];
+      return p[i % p.length];
+    }
+
+    const STORAGE_CSV = 'csv-grafico-csv';
+    const STORAGE_TYPE = 'csv-grafico-type';
+    const STORAGE_TITLE = 'csv-grafico-title';
+    const DEFAULT_CSV = 'Mes,Ingresos,Gastos\nEnero,1200,800\nFebrero,1500,900\nMarzo,1100,950\nAbril,1800,1000';
+
+    function getQueryParam(param) {
+      return new URLSearchParams(window.location.search).get(param);
+    }
+
+    function detectDelimiter(text) {
+      const firstLine = text.split('\n')[0] || '';
+      const commas = (firstLine.match(/,/g) || []).length;
+      const semicolons = (firstLine.match(/;/g) || []).length;
+      return semicolons > commas ? ';' : ',';
+    }
+
+    // parser CSV mínimo: soporta comillas, comas o punto y coma como separador y "" escapado
+    function parseCSV(text, delimiter) {
+      const rows = [];
+      let row = [], field = '', inQuotes = false;
+      for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (inQuotes) {
+          if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQuotes = false; }
+          else field += c;
+        } else if (c === '"') inQuotes = true;
+        else if (c === delimiter) { row.push(field); field = ''; }
+        else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+        else if (c === '\r') { /* el \n siguiente cierra la fila */ }
+        else field += c;
+      }
+      if (field !== '' || row.length) { row.push(field); rows.push(row); }
+      return rows.filter(r => r.some(f => f.trim() !== ''));
+    }
+
+    const app = Vue.createApp({
+      data() {
+        const urlData = getQueryParam('data');
+        const urlTitle = getQueryParam('title');
+        return {
+          csvText: urlData ? decodeURIComponent(urlData) : (localStorage.getItem(STORAGE_CSV) || DEFAULT_CSV),
+          chartType: getQueryParam('type') || localStorage.getItem(STORAGE_TYPE) || 'bar',
+          title: urlTitle ? decodeURIComponent(urlTitle) : (localStorage.getItem(STORAGE_TITLE) || ''),
+          error: '',
+          shared: false,
+          chart: null
+        };
+      },
+      methods: {
+        update() {
+          localStorage.setItem(STORAGE_CSV, this.csvText);
+          localStorage.setItem(STORAGE_TYPE, this.chartType);
+          localStorage.setItem(STORAGE_TITLE, this.title);
+          this.error = '';
+
+          const delimiter = detectDelimiter(this.csvText);
+          const rows = parseCSV(this.csvText, delimiter);
+          if (rows.length < 2) {
+            this.error = 'Pegá un CSV con encabezado y al menos una fila de datos.';
+            this.renderChart(null);
+            return;
+          }
+
+          const [header, ...dataRows] = rows;
+          const seriesNames = header.slice(1);
+          if (seriesNames.length === 0) {
+            this.error = 'El CSV necesita al menos una columna de valores además de la de categorías.';
+            this.renderChart(null);
+            return;
+          }
+
+          const labels = dataRows.map(r => r[0]);
+          const series = seriesNames.map((name, si) => ({
+            name,
+            values: dataRows.map(r => {
+              const raw = (r[si + 1] || '').trim();
+              const n = parseFloat(delimiter === ';' ? raw.replace(',', '.') : raw);
+              return isNaN(n) ? 0 : n;
+            })
+          }));
+
+          this.renderChart({ labels, series, categoryLabel: header[0] });
+        },
+        renderChart(parsed) {
+          if (this.chart) { this.chart.destroy(); this.chart = null; }
+          if (!parsed) return;
+          const { labels, series, categoryLabel } = parsed;
+
+          const textColor = getComputedStyle(document.body).color;
+          const gridColor = currentTheme() === 'dark' ? '#2c2c2a' : '#e1e0d9';
+          const surfaceColor = getComputedStyle(document.body).backgroundColor;
+          const ctx = document.getElementById('chart-canvas');
+          const titlePlugin = { display: !!this.title, text: this.title, color: textColor, font: { size: 16 } };
+          // títulos de eje: la primera fila del CSV (categoría, y el nombre de la serie si hay una sola)
+          const xAxisTitle = { display: !!categoryLabel, text: categoryLabel, color: textColor };
+          const yAxisTitle = { display: series && series.length === 1, text: series && series.length === 1 ? series[0].name : '', color: textColor };
+
+          if (this.chartType === 'pie') {
+            const values = series[0].values;
+            const total = values.reduce((a, b) => a + b, 0);
+            this.chart = new Chart(ctx, {
+              type: 'pie',
+              data: {
+                labels,
+                datasets: [{
+                  data: values,
+                  backgroundColor: labels.map((_, i) => colorAt(i)),
+                  borderColor: surfaceColor,
+                  borderWidth: 2
+                }]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  title: titlePlugin,
+                  legend: { display: labels.length > 1, position: 'right', labels: { color: textColor } },
+                  datalabels: {
+                    color: '#fff',
+                    font: { weight: 'bold' },
+                    formatter: (value) => `${value}\n${total ? (value / total * 100).toFixed(1) : 0}%`
+                  },
+                  tooltip: {
+                    callbacks: {
+                      label: (item) => `${item.label}: ${item.parsed} (${total ? (item.parsed / total * 100).toFixed(1) : 0}%)`
+                    }
+                  }
+                }
+              }
+            });
+          } else if (this.chartType === 'bar') {
+            this.chart = new Chart(ctx, {
+              type: 'bar',
+              data: {
+                labels,
+                datasets: series.map((s, i) => ({
+                  label: s.name,
+                  data: s.values,
+                  backgroundColor: colorAt(i),
+                  borderRadius: 4,
+                  borderSkipped: false
+                }))
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                  x: { stacked: true, title: xAxisTitle, ticks: { color: textColor }, grid: { display: false } },
+                  y: { stacked: true, title: yAxisTitle, ticks: { color: textColor }, grid: { color: gridColor } }
+                },
+                plugins: {
+                  title: titlePlugin,
+                  legend: { display: series.length > 1, labels: { color: textColor } },
+                  datalabels: { display: false }
+                }
+              }
+            });
+          } else {
+            this.chart = new Chart(ctx, {
+              type: 'line',
+              data: {
+                labels,
+                datasets: series.map((s, i) => ({
+                  label: s.name,
+                  data: s.values,
+                  borderColor: colorAt(i),
+                  backgroundColor: colorAt(i),
+                  borderWidth: 2,
+                  pointRadius: 4,
+                  pointBorderWidth: 2,
+                  pointBorderColor: surfaceColor,
+                  tension: 0.15
+                }))
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                  x: { title: xAxisTitle, ticks: { color: textColor }, grid: { display: false } },
+                  y: { title: yAxisTitle, ticks: { color: textColor }, grid: { color: gridColor } }
+                },
+                plugins: {
+                  title: titlePlugin,
+                  legend: { display: series.length > 1, labels: { color: textColor } },
+                  datalabels: { display: false }
+                }
+              }
+            });
+          }
+        },
+        reset() {
+          localStorage.removeItem(STORAGE_CSV);
+          localStorage.removeItem(STORAGE_TYPE);
+          localStorage.removeItem(STORAGE_TITLE);
+          this.csvText = DEFAULT_CSV;
+          this.chartType = 'bar';
+          this.title = '';
+          history.replaceState(null, '', window.location.pathname);
+          this.update();
+        },
+        share() {
+          const url = `${window.location.origin}${window.location.pathname}?type=${this.chartType}&title=${encodeURIComponent(this.title)}&data=${encodeURIComponent(this.csvText)}`;
+          navigator.clipboard.writeText(url);
+          this.shared = true;
+          setTimeout(() => this.shared = false, 1500);
+        }
+      },
+      mounted() {
+        this.update();
+        document.addEventListener('themechange', this.update);
+      }
+    });
+
+    // theme toggle: Bootstrap's native data-bs-theme, remembered per browser.
+    // Applied before the Vue app mounts, so the chart's first render (which reads
+    // computed colors from the page) already sees the right theme.
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      app.mount('#app');
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+        document.dispatchEvent(new Event('themechange'));
+      });
+    })();
+  </script>
+</body>
+</html>

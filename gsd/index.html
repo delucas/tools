@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Get Sh*t Done</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    [v-cloak] { display: none; }
+    .task-done .task-text { text-decoration: line-through; }
+    label.task-text { cursor: pointer; }
+    .drag-handle {
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
+    }
+    .sortable-ghost {
+      opacity: 0.45;
+    }
+  </style>
+</head>
+<body>
+  <main class="container py-4" id="app" v-cloak>
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">Get Sh*t Done</h1>
+        <p class="text-body-secondary mb-0">Lista de tareas con fecha de creación y fecha de tildado.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ shared ? '¡Copiado!' : '🔗 Compartir' }}</button>
+        <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-body">
+        <form @submit.prevent="addTask">
+          <label for="new-task" class="form-label">Nueva tarea</label>
+          <div class="input-group">
+            <input id="new-task" class="form-control" type="text" maxlength="280" placeholder="¿Qué hay que hacer?"
+              v-model="newText" autocomplete="off" @paste="onPaste">
+            <button class="btn btn-primary" type="submit" :disabled="!newText.trim()">Agregar</button>
+          </div>
+          <div class="form-text">Pegá varias líneas para agregar varias tareas a la vez. Arrastrá <span aria-hidden="true">⠿</span> para reordenar las pendientes.</div>
+        </form>
+      </div>
+    </div>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+      <p class="mb-0 text-body-secondary small">{{ pendingCount }} pendientes · {{ doneTodayCount }} completadas hoy · {{ tasks.length }} en total</p>
+      <button v-if="doneCount > 0" class="btn btn-outline-danger btn-sm" type="button" @click="clearDone">Borrar completadas</button>
+    </div>
+
+    <div v-if="tasks.length" class="progress mb-3" role="progressbar" aria-label="Progreso">
+      <div class="progress-bar" :style="{ width: progress + '%' }">{{ progress }}%</div>
+    </div>
+
+    <div v-if="!tasks.length" class="border rounded p-4 text-body-secondary text-center">Todavía no agregaste tareas.</div>
+    <div v-else>
+      <div id="pending-list" class="vstack gap-2">
+        <template v-for="item in pendingView" :key="item.task.id">
+        <div class="card" :data-id="item.task.id">
+          <div class="card-body py-2">
+            <div class="row g-2 align-items-center">
+              <div class="col-auto"><span class="drag-handle text-body-secondary" title="Arrastrar para reordenar" aria-label="Arrastrar para reordenar">⠿</span></div>
+              <div class="col-auto">
+                <input class="form-check-input" type="checkbox" :id="'task-' + item.task.id" :checked="item.task.done" @change="toggleTask(item.task)" :aria-label="'Tildar ' + item.task.text">
+              </div>
+              <div class="col">
+                <span v-if="item.age > 0" :title="'Hace ' + daysLabel(item.age)">{{ '❗'.repeat(item.age) }} </span><label class="task-text mb-0" :class="{ 'fw-bold': item.top }" :for="'task-' + item.task.id">{{ item.task.text }}</label>
+                <br>
+                <small class="text-body-secondary">Creada: {{ formatDate(item.task.createdAt) }}<span v-if="item.age > 0"> · ({{ daysLabel(item.age) }})</span></small>
+              </div>
+              <div class="col-auto">
+                <button class="btn btn-outline-danger btn-sm" type="button" @click="deleteTask(item.task)">Borrar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <hr v-if="item.divider" class="my-1 opacity-100">
+        </template>
+      </div>
+
+      <div v-if="doneTasks.length" class="vstack gap-2 mt-3">
+        <h2 class="h6 text-body-secondary mb-0">Completadas</h2>
+        <div v-for="task in doneTasks" :key="task.id" class="card task-done">
+          <div class="card-body py-2">
+            <div class="row g-2 align-items-center">
+              <div class="col-auto">
+                <input class="form-check-input" type="checkbox" :id="'task-' + task.id" :checked="task.done" @change="toggleTask(task)" :aria-label="'Destildar ' + task.text">
+              </div>
+              <div class="col">
+                <label class="task-text mb-0" :for="'task-' + task.id">{{ task.text }}</label>
+                <br>
+                <small class="text-body-secondary">Creada: {{ formatDate(task.createdAt) }}<span v-if="task.completedAt"> · Tildada: {{ formatDate(task.completedAt) }}</span></small>
+              </div>
+              <div class="col-auto">
+                <button class="btn btn-outline-danger btn-sm" type="button" @click="deleteTask(task)">Borrar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr>
+    <p>Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.5.42/vue.global.prod.min.js"
+    integrity="sha512-PREsKi18CyKMgwXMJWtvkzinqjiN0znVfDovmVadp7pKiUpyNGtq7bD2fKElDBmdfH4DGJz8pmAdgihN8NZ8TQ=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+
+  <script>
+    function newId() {
+      return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+    }
+
+    // Fechas solo con día (YYYY-MM-DD en hora local): no se guarda la hora.
+    function formatLocalDate(d) {
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${d.getFullYear()}-${m}-${day}`;
+    }
+
+    function todayStr(offsetDays = 0) {
+      const d = new Date();
+      d.setDate(d.getDate() + offsetDays);
+      return formatLocalDate(d);
+    }
+
+    function toDateOnly(value) {
+      if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        const [y, m, d] = value.split('-').map(Number);
+        const check = new Date(y, m - 1, d);
+        if (check.getFullYear() === y && check.getMonth() === m - 1 && check.getDate() === d) return value;
+        return null;
+      }
+      const time = Date.parse(value);
+      if (isNaN(time)) return null;
+      return formatLocalDate(new Date(time));
+    }
+
+    function parseLocalDate(str) {
+      const [y, m, d] = str.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    }
+
+    function daysSince(dateStr) {
+      const ms = parseLocalDate(todayStr()) - parseLocalDate(dateStr);
+      return Number.isFinite(ms) ? Math.max(0, Math.round(ms / 864e5)) : 0;
+    }
+
+    function normalizeTask(item) {
+      if (!item || typeof item.text !== 'string' || !item.text.trim()) return null;
+      const done = Boolean(item.done);
+      const createdAt = toDateOnly(item.createdAt) || todayStr();
+      const completedAt = done ? (toDateOnly(item.completedAt) || createdAt) : null;
+      return {
+        id: typeof item.id === 'string' ? item.id : newId(),
+        text: item.text.trim().slice(0, 280),
+        createdAt,
+        done,
+        completedAt
+      };
+    }
+
+    function defaultTasks() {
+      return [
+        { id: newId(), text: 'Probar la lista de tareas', createdAt: todayStr(-2), done: false, completedAt: null },
+        { id: newId(), text: 'Tildar una tarea para ver la fecha de tildado', createdAt: todayStr(-3), done: true, completedAt: todayStr(-1) },
+        { id: newId(), text: 'Compartir la lista con 🔗 Compartir', createdAt: todayStr(), done: false, completedAt: null }
+      ];
+    }
+
+    function cleanList(value) {
+      try {
+        const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+        const list = Array.isArray(parsed) ? parsed : parsed?.tasks;
+        if (!Array.isArray(list)) return null;
+        return list.map(normalizeTask).filter(Boolean);
+      } catch {
+        return null;
+      }
+    }
+
+    function loadTasks() {
+      // Prioridad: URL > localStorage > ejemplo.
+      return cleanList(new URLSearchParams(window.location.search).get('data'))
+        || cleanList(localStorage.getItem('gsd-tareas'))
+        || defaultTasks();
+    }
+
+    const dateFormatter = new Intl.DateTimeFormat('es', { day: '2-digit', month: 'short', year: 'numeric' });
+
+    // Elemento con Sortable activo (fuera de data: Vue envolvería el DOM en un Proxy y rompería la identidad).
+    let sortableEl = null;
+
+    const app = Vue.createApp({
+      data() {
+        return {
+          tasks: loadTasks(),
+          newText: '',
+          shared: false
+        };
+      },
+      watch: {
+        pendingView() {
+          this.initSortable();
+        }
+      },
+      computed: {
+        pendingCount() {
+          return this.tasks.filter(t => !t.done).length;
+        },
+        doneCount() {
+          return this.tasks.filter(t => t.done).length;
+        },
+        doneTodayCount() {
+          const today = todayStr();
+          return this.tasks.filter(t => t.done && t.completedAt === today).length;
+        },
+        progress() {
+          if (!this.tasks.length) return 0;
+          return Math.round(this.doneCount / this.tasks.length * 100);
+        },
+        pendingView() {
+          const pending = this.tasks.filter(t => !t.done);
+          return pending.map((task, i) => ({
+            task,
+            age: daysSince(task.createdAt),
+            top: i < 3,
+            divider: i === 2 && pending.length > 3
+          }));
+        },
+        doneTasks() {
+          return this.tasks
+            .filter(t => t.done)
+            .sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''));
+        }
+      },
+      methods: {
+        save() {
+          localStorage.setItem('gsd-tareas', JSON.stringify({ tasks: this.tasks }));
+        },
+        addTask() {
+          this.addLines(this.newText.split('\n'));
+        },
+        onPaste(event) {
+          const text = event.clipboardData?.getData('text') || '';
+          if (!text.includes('\n')) return;
+          event.preventDefault();
+          this.addLines((this.newText + text).split('\n'));
+        },
+        addLines(lines) {
+          const clean = lines.map(line => line.trim()).filter(Boolean);
+          if (!clean.length) {
+            this.newText = '';
+            return;
+          }
+          const createdAt = todayStr();
+          this.tasks.push(...clean.map(text => ({ id: newId(), text: text.slice(0, 280), createdAt, done: false, completedAt: null })));
+          this.newText = '';
+          this.save();
+        },
+        toggleTask(task) {
+          task.done = !task.done;
+          task.completedAt = task.done ? todayStr() : null;
+          this.save();
+        },
+        deleteTask(task) {
+          this.tasks = this.tasks.filter(t => t.id !== task.id);
+          this.save();
+        },
+        clearDone() {
+          this.tasks = this.tasks.filter(t => !t.done);
+          this.save();
+        },
+        formatDate(value) {
+          try {
+            return dateFormatter.format(parseLocalDate(value));
+          } catch {
+            return value;
+          }
+        },
+        daysLabel(age) {
+          return `${age} ${age === 1 ? 'día' : 'días'}`;
+        },
+        reset() {
+          localStorage.removeItem('gsd-tareas');
+          this.tasks = defaultTasks();
+          this.newText = '';
+          history.replaceState(null, '', window.location.pathname);
+          this.save();
+        },
+        async share() {
+          const url = `${window.location.origin}${window.location.pathname}?data=${encodeURIComponent(JSON.stringify({ tasks: this.tasks }))}`;
+          try {
+            await navigator.clipboard.writeText(url);
+            this.shared = true;
+            setTimeout(() => { this.shared = false; }, 1500);
+          } catch {
+            window.prompt('Copiá el enlace:', url);
+          }
+        },
+        initSortable() {
+          if (!window.Sortable) return;
+          this.$nextTick(() => {
+            const el = document.getElementById('pending-list');
+            if (!el || el === sortableEl) return;
+            sortableEl = el;
+            new Sortable(el, {
+              animation: 150,
+              draggable: '.card',
+              handle: '.drag-handle',
+              ghostClass: 'sortable-ghost',
+              onEnd: () => {
+                const order = [...el.querySelectorAll('[data-id]')].map(node => node.dataset.id);
+                const byId = new Map(this.tasks.filter(t => !t.done).map(t => [t.id, t]));
+                const reordered = order.map(id => byId.get(id)).filter(Boolean);
+                this.tasks.filter(t => !t.done && !order.includes(t.id)).forEach(t => reordered.push(t));
+                this.tasks = [...reordered, ...this.tasks.filter(t => t.done)];
+                this.save();
+              }
+            });
+          });
+        }
+      },
+      mounted() {
+        this.save();
+        this.initSortable();
+      }
+    });
+
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      app.mount('#app');
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

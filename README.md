@@ -13,5 +13,6 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`csv-a-grafico`](./csv-a-grafico) | Convierte un CSV pegado en un gráfico de torta, series o líneas. |
 | [`pseditor`](./pseditor) | Editor de pseudocódigo con resaltado, indentación y operadores Unicode. |
 | [`basket`](./basket) | Lista de compras para cualquier comercio, con cantidades, unidades y orden personalizado. |
+| [`gsd`](./gsd) | Get Sh*t Done: lista de tareas con fecha de creación y fecha de tildado. |
 
 Cada carpeta tiene su propio `README.md` con el detalle de uso.

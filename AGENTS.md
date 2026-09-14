@@ -57,3 +57,10 @@ Para herramientas con estado que usen Vue.js (vía CDN, versión fija):
 1. Crear una carpeta raíz en kebab-case y español.
 2. Añadir su `index.html` autocontenido y un `README.md` breve.
 3. Agregarla a la tabla de `README.md` raíz y al listado de `index.html` raíz.
+
+## Commits
+
+- Mensajes simples y cortos, en español, describiendo el cambio.
+- Solamente el mensaje: sin coautorías, sin menciones a IA ni metadatos extra.
+- Revisar `git status` antes de `git add` y agregar solo los archivos que correspondan al cambio.
+- Un commit por cambio lógico; separar cambios independientes en commits distintos.

@@ -12,5 +12,6 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`truth`](./truth) | Generador de tablas de verdad a partir de una expresión booleana. |
 | [`csv-a-grafico`](./csv-a-grafico) | Convierte un CSV pegado en un gráfico de torta, series o líneas. |
 | [`pseditor`](./pseditor) | Editor de pseudocódigo con resaltado, indentación y operadores Unicode. |
+| [`basket`](./basket) | Lista de compras para cualquier comercio, con cantidades, unidades y orden personalizado. |
 
 Cada carpeta tiene su propio `README.md` con el detalle de uso.

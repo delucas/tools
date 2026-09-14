@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Compra-o-matic</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    .quantity-input {
+      max-width: 4.5rem;
+    }
+
+    .drag-handle {
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
+    }
+
+    .sortable-ghost {
+      opacity: 0.45;
+    }
+
+    .signature {
+      font-size: 0.8em;
+    }
+  </style>
+</head>
+<body>
+  <main class="container py-4">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">Compra-o-matic</h1>
+        <p class="text-body-secondary mb-0">Armá y ordená tu lista de compras.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="share" class="btn btn-outline-secondary btn-sm" type="button">🔗 Compartir</button>
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div id="notice" class="alert alert-success py-2 d-none" role="status"></div>
+
+    <div class="card mb-4">
+      <div class="card-body">
+        <label for="raw-list" class="form-label">Cargar productos</label>
+        <textarea id="raw-list" class="form-control" rows="3" placeholder="Tomates&#10;Papas&#10;Bananas"></textarea>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-2">
+          <div class="form-text mt-0">Un producto por línea. Cargar reemplaza la lista actual.</div>
+          <button id="load-list" class="btn btn-outline-primary btn-sm" type="button">Cargar lista</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+      <h2 class="h5 mb-0">Productos</h2>
+      <div class="d-flex gap-2">
+        <button id="select-all" class="btn btn-outline-secondary btn-sm" type="button">Todos</button>
+        <button id="select-none" class="btn btn-outline-secondary btn-sm" type="button">Ninguno</button>
+        <button id="add-item" class="btn btn-primary btn-sm" type="button">Agregar línea</button>
+      </div>
+    </div>
+
+    <div id="empty-list" class="border rounded p-4 text-body-secondary text-center">Todavía no agregaste productos.</div>
+    <div id="item-list" class="vstack gap-2"></div>
+
+    <section class="mt-4">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+        <h2 class="h5 mb-0">Lista para comprar</h2>
+        <button id="copy-shopping-list" class="btn btn-outline-secondary btn-sm" type="button">📋 Copiar lista</button>
+      </div>
+      <div id="selected-list" class="border rounded p-3"></div>
+    </section>
+
+    <hr>
+    <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+  <script>
+    (() => {
+      const STORAGE_KEY = 'basket-lista';
+      const DEFAULT_STATE = {
+        raw: '',
+        items: [
+          { id: 'tomates', name: 'tomates', quantity: 1, unit: 'kilos', selected: true },
+          { id: 'papas', name: 'papas', quantity: 2, unit: 'kilos', selected: true },
+          { id: 'bananas', name: 'bananas', quantity: 1, unit: 'docena', selected: false }
+        ]
+      };
+      const UNITS = ['unidades', 'kilos', 'docena'];
+      const rawList = document.getElementById('raw-list');
+      const itemList = document.getElementById('item-list');
+      const emptyList = document.getElementById('empty-list');
+      const selectedList = document.getElementById('selected-list');
+      const notice = document.getElementById('notice');
+      let noticeTimeout;
+
+      function newId() {
+        return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+      }
+
+      function normalizeItem(item) {
+        if (!item || typeof item.name !== 'string') return null;
+        return {
+          id: typeof item.id === 'string' ? item.id : newId(),
+          name: item.name.slice(0, 120),
+          quantity: Math.max(0, Number(item.quantity) || 0),
+          unit: UNITS.includes(item.unit) ? item.unit : 'unidades',
+          selected: Boolean(item.selected)
+        };
+      }
+
+      function normalizeState(value) {
+        if (!value || !Array.isArray(value.items)) return null;
+        return {
+          raw: typeof value.raw === 'string' ? value.raw : '',
+          items: value.items.map(normalizeItem).filter(Boolean)
+        };
+      }
+
+      function loadState() {
+        const encoded = new URLSearchParams(window.location.search).get('data');
+        if (encoded) {
+          try {
+            const stateFromUrl = normalizeState(JSON.parse(encoded));
+            if (stateFromUrl) return stateFromUrl;
+          } catch { /* Se usa el estado local si la URL no es válida. */ }
+        }
+        try {
+          const stored = normalizeState(JSON.parse(localStorage.getItem(STORAGE_KEY)));
+          if (stored) return stored;
+        } catch { /* Se usa el ejemplo si el estado guardado no es válido. */ }
+        return structuredClone(DEFAULT_STATE);
+      }
+
+      let state = loadState();
+
+      function save() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      }
+
+      function showNotice(message) {
+        clearTimeout(noticeTimeout);
+        notice.textContent = message;
+        notice.classList.remove('d-none');
+        noticeTimeout = setTimeout(() => notice.classList.add('d-none'), 1800);
+      }
+
+      function escapeHtml(value) {
+        return value.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
+      }
+
+      function itemMarkup(item) {
+        const units = UNITS.map(unit => `<option value="${unit}"${unit === item.unit ? ' selected' : ''}>${unit}</option>`).join('');
+        return `<div class="card" data-id="${item.id}">
+          <div class="card-body py-2">
+            <div class="row g-2 align-items-center">
+              <div class="col-auto"><span class="drag-handle text-body-secondary" title="Arrastrar para reordenar" aria-label="Arrastrar para reordenar">⠿</span></div>
+              <div class="col-auto"><input class="form-check-input" type="checkbox" data-action="selected"${item.selected ? ' checked' : ''} aria-label="Incluir ${escapeHtml(item.name || 'producto')}"></div>
+              <div class="col-auto"><div class="input-group input-group-sm"><button class="btn btn-outline-secondary" type="button" data-action="decrease" aria-label="Restar">−</button><input class="form-control text-center quantity-input" type="number" min="0" step="1" value="${item.quantity}" data-action="quantity" aria-label="Cantidad"><button class="btn btn-outline-secondary" type="button" data-action="increase" aria-label="Sumar">+</button></div></div>
+              <div class="col-12 col-sm-3 col-md-2"><select class="form-select form-select-sm" data-action="unit" aria-label="Unidad">${units}</select></div>
+              <div class="col"><input class="form-control form-control-sm" type="text" maxlength="120" value="${escapeHtml(item.name)}" data-action="name" placeholder="Producto" aria-label="Producto"></div>
+              <div class="col-auto"><button class="btn btn-outline-danger btn-sm" type="button" data-action="delete">Borrar</button></div>
+            </div>
+          </div>
+        </div>`;
+      }
+
+      function render() {
+        rawList.value = state.raw;
+        itemList.innerHTML = state.items.map(itemMarkup).join('');
+        emptyList.classList.toggle('d-none', state.items.length > 0);
+        const selected = state.items.filter(item => item.selected && item.name.trim() && item.quantity > 0);
+        selectedList.innerHTML = selected.length
+          ? `<ul class="list-unstyled mb-0">${selected.map(item => `<li>${item.quantity} <strong>${item.unit}</strong> de ${escapeHtml(item.name)}</li>`).join('')}</ul>`
+          : '<span class="text-body-secondary">Seleccioná al menos un producto con cantidad mayor a cero.</span>';
+      }
+
+      function shoppingListText() {
+        return state.items
+          .filter(item => item.selected && item.name.trim() && item.quantity > 0)
+          .map(item => `${item.quantity} ${item.unit} de ${item.name}`)
+          .join('\n');
+      }
+
+      function updateItem(id, update) {
+        const item = state.items.find(candidate => candidate.id === id);
+        if (!item) return;
+        update(item);
+        save();
+        render();
+      }
+
+      function copyText(text) {
+        if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
+        const input = document.createElement('textarea');
+        input.value = text;
+        input.style.position = 'fixed';
+        document.body.append(input);
+        input.select();
+        document.execCommand('copy');
+        input.remove();
+        return Promise.resolve();
+      }
+
+      itemList.addEventListener('click', event => {
+        const button = event.target.closest('button[data-action]');
+        if (!button) return;
+        const row = button.closest('[data-id]');
+        const id = row.dataset.id;
+        if (button.dataset.action === 'increase') updateItem(id, item => { item.quantity += 1; item.selected = true; });
+        if (button.dataset.action === 'decrease') updateItem(id, item => { item.quantity = Math.max(0, item.quantity - 1); if (!item.quantity) item.selected = false; });
+        if (button.dataset.action === 'delete') {
+          state.items = state.items.filter(item => item.id !== id);
+          save();
+          render();
+        }
+      });
+
+      itemList.addEventListener('change', event => {
+        const control = event.target;
+        const row = control.closest('[data-id]');
+        if (!row || !control.dataset.action) return;
+        const id = row.dataset.id;
+        if (control.dataset.action === 'selected') updateItem(id, item => { item.selected = control.checked; });
+        if (control.dataset.action === 'quantity') updateItem(id, item => { item.quantity = Math.max(0, Number(control.value) || 0); if (!item.quantity) item.selected = false; });
+        if (control.dataset.action === 'unit') updateItem(id, item => { item.unit = control.value; });
+        if (control.dataset.action === 'name') updateItem(id, item => { item.name = control.value; });
+      });
+
+      rawList.addEventListener('input', () => {
+        state.raw = rawList.value;
+        save();
+      });
+
+      document.getElementById('load-list').addEventListener('click', () => {
+        const names = rawList.value.split('\n').map(name => name.trim()).filter(Boolean);
+        state.items = names.map(name => ({ id: newId(), name, quantity: 1, unit: 'unidades', selected: true }));
+        save();
+        render();
+      });
+
+      document.getElementById('add-item').addEventListener('click', () => {
+        state.items.push({ id: newId(), name: '', quantity: 1, unit: 'unidades', selected: true });
+        save();
+        render();
+        itemList.querySelector('[data-id]:last-child input[data-action="name"]')?.focus();
+      });
+
+      document.getElementById('select-all').addEventListener('click', () => {
+        state.items.forEach(item => { item.selected = item.quantity > 0; });
+        save();
+        render();
+      });
+
+      document.getElementById('select-none').addEventListener('click', () => {
+        state.items.forEach(item => { item.selected = false; });
+        save();
+        render();
+      });
+
+      document.getElementById('reset').addEventListener('click', () => {
+        localStorage.removeItem(STORAGE_KEY);
+        state = structuredClone(DEFAULT_STATE);
+        window.history.replaceState(null, '', window.location.pathname);
+        render();
+        showNotice('Se restauró la lista de ejemplo.');
+      });
+
+      document.getElementById('share').addEventListener('click', async () => {
+        const url = new URL(window.location.href);
+        url.search = '';
+        url.searchParams.set('data', JSON.stringify(state));
+        try {
+          await copyText(url.toString());
+          showNotice('Se copió el enlace con la lista.');
+        } catch {
+          showNotice('No se pudo copiar el enlace.');
+        }
+      });
+
+      document.getElementById('copy-shopping-list').addEventListener('click', async () => {
+        const list = shoppingListText();
+        if (!list) {
+          showNotice('No hay productos seleccionados para copiar.');
+          return;
+        }
+        try {
+          await copyText(list);
+          showNotice('Se copió la lista de compras.');
+        } catch {
+          showNotice('No se pudo copiar la lista.');
+        }
+      });
+
+      new Sortable(itemList, {
+        animation: 150,
+        handle: '.drag-handle',
+        ghostClass: 'sortable-ghost',
+        onEnd(event) {
+          if (event.oldIndex === event.newIndex) return;
+          const [item] = state.items.splice(event.oldIndex, 1);
+          state.items.splice(event.newIndex, 0, item);
+          save();
+          render();
+        }
+      });
+
+      const root = document.documentElement;
+      const themeButton = document.getElementById('theme-toggle');
+      const storedTheme = localStorage.getItem('theme');
+      function applyTheme(theme) {
+        root.setAttribute('data-bs-theme', theme);
+        themeButton.textContent = theme === 'dark' ? '☀️' : '🌙';
+      }
+      applyTheme(storedTheme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+      themeButton.addEventListener('click', () => {
+        const nextTheme = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', nextTheme);
+        applyTheme(nextTheme);
+      });
+
+      render();
+    })();
+  </script>
+</body>
+</html>

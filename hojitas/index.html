@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f4c4%3B%3C/text%3E%3C/svg%3E">
+  <title>Hojitas</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    .page {
+      width: 210mm;
+      height: 297mm;
+      background-color: #ffffff;
+      position: relative;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    @media screen {
+      .sheet-screen {
+        background: #e0e0e0;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18), 0 1px 4px rgba(0, 0, 0, 0.10);
+      }
+      #vista-hoja body, body.vista-hoja {
+        background: #e0e0e0;
+      }
+    }
+
+    @media print {
+      .no-print {
+        display: none !important;
+      }
+      html, body {
+        background: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+      .page {
+        box-shadow: none !important;
+        transform: none !important;
+        /* Un poco menos de 297mm: absorbe el redondeo mm→px y garantiza una sola página. */
+        height: 296.5mm !important;
+        break-inside: avoid;
+      }
+      #sheet-wrap {
+        padding: 0 !important;
+        margin: 0 !important;
+        display: block !important;
+      }
+      @page {
+        size: A4;
+        margin: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="container py-4 no-print" id="config-app">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">📄 Hojitas</h1>
+        <p class="text-body-secondary mb-0">Plantillas de hojas A4 para imprimir: puntos, renglones o cuadrícula.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="open-sheet" class="btn btn-success btn-sm" type="button">🖨️ Abrir hoja</button>
+        <button id="share" class="btn btn-outline-secondary btn-sm" type="button">🔗 Compartir</button>
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div id="notice" class="alert alert-success py-2 d-none" role="status"></div>
+
+    <div class="card mb-3">
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-12 col-md-4">
+            <span class="form-label d-block" id="tipo-label">Tipo de hoja</span>
+            <div class="btn-group w-100" role="group" aria-labelledby="tipo-label">
+              <input type="radio" class="btn-check" name="tipo" id="tipo-puntos" value="puntos" autocomplete="off">
+              <label class="btn btn-outline-primary btn-sm" for="tipo-puntos">Puntitos</label>
+              <input type="radio" class="btn-check" name="tipo" id="tipo-renglones" value="renglones" autocomplete="off">
+              <label class="btn btn-outline-primary btn-sm" for="tipo-renglones">Renglones</label>
+              <input type="radio" class="btn-check" name="tipo" id="tipo-cuadricula" value="cuadricula" autocomplete="off">
+              <label class="btn btn-outline-primary btn-sm" for="tipo-cuadricula">Cuadrícula</label>
+            </div>
+          </div>
+          <div class="col-12 col-md-4">
+            <label for="distancia" class="form-label">Distancia (mm)</label>
+            <input id="distancia" class="form-control" type="number" min="3" max="20" step="0.5" value="5">
+            <div class="form-text">Entre 3 y 20 mm.</div>
+          </div>
+          <div class="col-12 col-md-4">
+            <span class="form-label d-block" id="tono-label">Tono de gris</span>
+            <div class="btn-group w-100" role="group" aria-labelledby="tono-label">
+              <input type="radio" class="btn-check" name="tono" id="tono-claro" value="claro" autocomplete="off">
+              <label class="btn btn-outline-primary btn-sm" for="tono-claro">Claro</label>
+              <input type="radio" class="btn-check" name="tono" id="tono-medio" value="medio" autocomplete="off">
+              <label class="btn btn-outline-primary btn-sm" for="tono-medio">Medio</label>
+              <input type="radio" class="btn-check" name="tono" id="tono-oscuro" value="oscuro" autocomplete="off">
+              <label class="btn btn-outline-primary btn-sm" for="tono-oscuro">Oscuro</label>
+            </div>
+          </div>
+        </div>
+        <div id="margen-row" class="form-check mt-2 d-none">
+          <input id="margen" class="form-check-input" type="checkbox">
+          <label for="margen" class="form-check-label">Doble raya de margen a la izquierda</label>
+        </div>
+        <div class="form-text mt-2">Abrir hoja muestra solo la hoja en una pestaña nueva, lista para imprimir en A4 sin márgenes.</div>
+      </div>
+    </div>
+
+    <h2 class="h5 mb-2">Vista previa</h2>
+    <div class="border rounded p-3 d-flex justify-content-center overflow-hidden" style="background: #e0e0e0;">
+      <div id="preview-wrap" class="overflow-hidden">
+        <div id="preview-sheet" class="page sheet-screen"></div>
+      </div>
+    </div>
+
+    <hr>
+    <p>Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <div id="sheet-app" class="d-none">
+    <div class="no-print d-flex flex-wrap justify-content-center gap-2 py-3">
+      <button id="print-now" class="btn btn-success btn-sm" type="button">🖨️ Imprimir</button>
+      <a id="back-link" href="./" class="btn btn-outline-secondary btn-sm">← Volver a configurar</a>
+    </div>
+    <div id="sheet-wrap" class="d-flex justify-content-center px-3 pb-4">
+      <div id="print-sheet" class="page sheet-screen"></div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'hojitas-config';
+      const TIPOS = ['puntos', 'renglones', 'cuadricula'];
+      const TONOS = { claro: '#d9d9d9', medio: '#bdbdbd', oscuro: '#8a8a8a' };
+      const DEFAULTS = { tipo: 'puntos', distancia: 5, tono: 'medio', margen: false };
+
+      function normalizeConfig(value) {
+        try {
+          const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+          if (!parsed || typeof parsed !== 'object') return null;
+          if (!TIPOS.includes(parsed.tipo)) return null;
+          const distancia = Number(parsed.distancia);
+          if (!Number.isFinite(distancia)) return null;
+          if (!Object.hasOwn(TONOS, parsed.tono)) return null;
+          return {
+            tipo: parsed.tipo,
+            distancia: Math.min(20, Math.max(3, Math.round(distancia * 2) / 2)),
+            tono: parsed.tono,
+            margen: parsed.margen === true
+          };
+        } catch {
+          return null;
+        }
+      }
+
+      function loadConfig() {
+        // Prioridad: URL > localStorage > ejemplo (puntos 5mm, como la hoja original).
+        return normalizeConfig(new URLSearchParams(window.location.search).get('data'))
+          ?? normalizeConfig(localStorage.getItem(STORAGE_KEY))
+          ?? { ...DEFAULTS };
+      }
+
+      function paintSheet(el, config) {
+        const color = TONOS[config.tono];
+        const gap = `${config.distancia}mm`;
+        if (config.tipo === 'puntos') {
+          el.style.backgroundImage = `radial-gradient(circle, ${color} 1px, transparent 1px)`;
+          el.style.backgroundSize = `${gap} ${gap}`;
+          el.style.backgroundRepeat = 'repeat';
+        } else if (config.tipo === 'renglones') {
+          // Doble raya de margen: dos líneas verticales de 2px a los 25 y 26 mm (1 mm entre ellas).
+          const margen = config.margen
+            ? `linear-gradient(to right, transparent 0 25mm, ${color} 25mm calc(25mm + 2px), transparent calc(25mm + 2px)),` +
+              `linear-gradient(to right, transparent 0 26mm, ${color} 26mm calc(26mm + 2px), transparent calc(26mm + 2px)),`
+            : '';
+          el.style.backgroundImage = margen +
+            `repeating-linear-gradient(to bottom, transparent 0, transparent calc(${gap} - 1px), ${color} calc(${gap} - 1px), ${color} ${gap})`;
+          el.style.backgroundSize = '100% 100%, 100% 100%, auto';
+          el.style.backgroundRepeat = 'no-repeat, no-repeat, repeat';
+        } else {
+          el.style.backgroundImage =
+            `repeating-linear-gradient(to right, transparent 0, transparent calc(${gap} - 1px), ${color} calc(${gap} - 1px), ${color} ${gap}),` +
+            `repeating-linear-gradient(to bottom, transparent 0, transparent calc(${gap} - 1px), ${color} calc(${gap} - 1px), ${color} ${gap})`;
+          el.style.backgroundSize = 'auto';
+          el.style.backgroundRepeat = 'repeat';
+        }
+      }
+
+      const params = new URLSearchParams(window.location.search);
+      const config = loadConfig();
+
+      if (params.get('vista') === 'hoja') {
+        // Vista limpia: solo la hoja, fondo claro fijo.
+        document.documentElement.setAttribute('data-bs-theme', 'light');
+        document.body.classList.add('vista-hoja');
+        document.getElementById('config-app').remove();
+        const sheetApp = document.getElementById('sheet-app');
+        sheetApp.classList.remove('d-none');
+        paintSheet(document.getElementById('print-sheet'), config);
+        const back = document.getElementById('back-link');
+        back.href = `./?data=${encodeURIComponent(JSON.stringify(config))}`;
+        document.getElementById('print-now').addEventListener('click', () => window.print());
+        return;
+      }
+
+      // Vista configuración.
+      document.querySelector(`input[name="tipo"][value="${config.tipo}"]`).checked = true;
+      document.querySelector(`input[name="tono"][value="${config.tono}"]`).checked = true;
+      const distanciaInput = document.getElementById('distancia');
+      distanciaInput.value = config.distancia;
+      const margenInput = document.getElementById('margen');
+      const margenRow = document.getElementById('margen-row');
+      margenInput.checked = config.margen === true;
+      const previewSheet = document.getElementById('preview-sheet');
+      const previewWrap = document.getElementById('preview-wrap');
+      const notice = document.getElementById('notice');
+      let noticeTimeout;
+
+      function showNotice(message) {
+        clearTimeout(noticeTimeout);
+        notice.textContent = message;
+        notice.classList.remove('d-none');
+        noticeTimeout = setTimeout(() => notice.classList.add('d-none'), 1800);
+      }
+
+      function fitPreview() {
+        // Escala la hoja A4 real al ancho disponible (el transform no afecta offsetWidth).
+        const scale = Math.min(1, previewWrap.parentElement.clientWidth / previewSheet.offsetWidth);
+        previewSheet.style.transform = `scale(${scale})`;
+        previewSheet.style.transformOrigin = 'top left';
+        previewWrap.style.width = `${previewSheet.offsetWidth * scale}px`;
+        previewWrap.style.height = `${previewSheet.offsetHeight * scale}px`;
+      }
+
+      function currentConfig() {
+        return {
+          tipo: document.querySelector('input[name="tipo"]:checked').value,
+          distancia: Math.min(20, Math.max(3, Number(distanciaInput.value) || DEFAULTS.distancia)),
+          tono: document.querySelector('input[name="tono"]:checked').value,
+          margen: margenInput.checked
+        };
+      }
+
+      function refresh(save = true) {
+        const next = currentConfig();
+        Object.assign(config, next);
+        // La doble raya solo existe en renglones.
+        margenRow.classList.toggle('d-none', config.tipo !== 'renglones');
+        paintSheet(previewSheet, config);
+        fitPreview();
+        if (save) localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+      }
+
+      document.querySelectorAll('input[name="tipo"], input[name="tono"]').forEach(input => {
+        input.addEventListener('change', () => refresh());
+      });
+      distanciaInput.addEventListener('input', () => refresh());
+      margenInput.addEventListener('change', () => refresh());
+      window.addEventListener('resize', fitPreview);
+
+      function sheetUrl() {
+        const url = new URL(window.location.href);
+        url.search = '';
+        url.searchParams.set('data', JSON.stringify(config));
+        url.searchParams.set('vista', 'hoja');
+        return url.toString();
+      }
+
+      document.getElementById('open-sheet').addEventListener('click', () => {
+        refresh();
+        window.open(sheetUrl(), '_blank', 'noopener');
+      });
+
+      document.getElementById('share').addEventListener('click', async () => {
+        refresh();
+        const url = new URL(window.location.href);
+        url.search = '';
+        url.searchParams.set('data', JSON.stringify(config));
+        try {
+          await navigator.clipboard.writeText(url.toString());
+          showNotice('Se copió el enlace con la configuración.');
+        } catch {
+          showNotice('No se pudo copiar el enlace.');
+        }
+      });
+
+      document.getElementById('reset').addEventListener('click', () => {
+        localStorage.removeItem(STORAGE_KEY);
+        Object.assign(config, DEFAULTS);
+        document.querySelector(`input[name="tipo"][value="${config.tipo}"]`).checked = true;
+        document.querySelector(`input[name="tono"][value="${config.tono}"]`).checked = true;
+        distanciaInput.value = config.distancia;
+        margenInput.checked = config.margen === true;
+        window.history.replaceState(null, '', window.location.pathname);
+        refresh();
+        showNotice('Se restauró la hoja de ejemplo (puntos 5mm).');
+      });
+
+      const root = document.documentElement;
+      const themeButton = document.getElementById('theme-toggle');
+      const storedTheme = localStorage.getItem('theme');
+      function applyTheme(theme) {
+        root.setAttribute('data-bs-theme', theme);
+        themeButton.textContent = theme === 'dark' ? '☀️' : '🌙';
+      }
+      applyTheme(storedTheme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+      themeButton.addEventListener('click', () => {
+        const nextTheme = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', nextTheme);
+        applyTheme(nextTheme);
+      });
+
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+      refresh(false);
+    })();
+  </script>
+</body>
+</html>

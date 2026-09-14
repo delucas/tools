@@ -26,7 +26,7 @@ Este repositorio reúne herramientas web autocontenidas. Cada herramienta vive e
 - Al final, incluir exactamente:
 
 ```html
-<p>Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, estandarizado por Claude.</p>
+<p>Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
 ```
 
 ## Estado editable

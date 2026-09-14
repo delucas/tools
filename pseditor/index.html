@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PSEditor</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x2328%3B%3C/text%3E%3C/svg%3E">
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    #editor {
+      border: var(--bs-border-width) solid var(--bs-border-color);
+      border-radius: var(--bs-border-radius);
+      overflow: hidden;
+    }
+
+    .cm-editor {
+      min-height: 420px;
+      font-size: 0.95rem;
+    }
+
+    .cm-scroller {
+      font-family: var(--bs-font-monospace);
+    }
+
+    #file-list .list-group-item {
+      text-align: left;
+      overflow-wrap: anywhere;
+    }
+
+    .signature {
+      font-size: 0.8em;
+    }
+  </style>
+</head>
+<body>
+  <main class="container py-4">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">PSEditor</h1>
+        <p class="text-body-secondary mb-0">Editor de pseudocódigo con bloques por indentación.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="share" class="btn btn-outline-secondary btn-sm" type="button">Compartir archivo</button>
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div id="notice" class="alert alert-success py-2 d-none" role="status"></div>
+
+    <div class="mb-4">
+      <label for="workspace-name" class="form-label">Workspace</label>
+      <div class="input-group">
+        <input id="workspace-name" class="form-control" type="text" maxlength="100" placeholder="Por ejemplo, Grafos - Recorrido.workspace">
+        <button id="import-workspace" class="btn btn-outline-secondary" type="button">Abrir</button>
+        <button id="export-workspace" class="btn btn-outline-secondary" type="button">Guardar</button>
+      </div>
+      <div class="form-text">Abrí o guardá todos los archivos de este workspace en un único Markdown.</div>
+    </div>
+
+    <div class="row g-3">
+      <aside class="col-12 col-md-4 col-lg-3" aria-label="Explorador de archivos">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h2 class="h6 mb-0">Archivos</h2>
+          <button id="new-file" class="btn btn-outline-secondary btn-sm" type="button">Nuevo</button>
+        </div>
+        <div id="file-list" class="list-group"></div>
+      </aside>
+      <section class="col-12 col-md-8 col-lg-9">
+        <div class="d-flex flex-wrap align-items-end gap-2 mb-2">
+          <div class="flex-grow-1">
+            <label for="file-name" class="form-label">Nombre del archivo</label>
+            <input id="file-name" class="form-control" type="text" maxlength="80">
+          </div>
+          <button id="delete-file" class="btn btn-outline-danger" type="button">Eliminar</button>
+        </div>
+        <p id="editor-label" class="form-label">Pseudocódigo</p>
+        <div id="editor" aria-labelledby="editor-label"></div>
+        <p id="statistics" class="form-text mb-0"></p>
+      </section>
+    </div>
+
+    <input id="workspace-file" type="file" accept=".md,text/markdown,text/plain" hidden>
+
+    <details class="mt-4">
+      <summary class="text-body-secondary">Sintaxis incluida</summary>
+      <div class="mt-2 small">
+        <p class="mb-2">Los bloques se delimitan solo mediante indentación. Las palabras reservadas se escriben en mayúsculas y los comentarios comienzan con <code>#</code>.</p>
+        <p class="mb-0">Al escribir se sustituyen <code>&lt;=</code>, <code>&gt;=</code>, <code>!=</code>, <code>&lt;-</code> y <code>-&gt;</code> por sus operadores Unicode. Podés crear varios archivos: se guardan en este navegador. Guardar workspace genera un Markdown legible que contiene todos los archivos.</p>
+      </div>
+    </details>
+
+    <hr>
+    <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script type="module">
+    import { Compartment, EditorState } from 'https://esm.sh/@codemirror/state@6.5.2';
+    import { EditorView, keymap, lineNumbers } from 'https://esm.sh/@codemirror/view@6.38.6?deps=@codemirror/state@6.5.2';
+    import { defaultKeymap, history, historyKeymap, indentWithTab, insertNewlineAndIndent } from 'https://esm.sh/@codemirror/commands@6.8.1?deps=@codemirror/state@6.5.2,@codemirror/view@6.38.6';
+    import { StreamLanguage, HighlightStyle, syntaxHighlighting, bracketMatching, indentOnInput } from 'https://esm.sh/@codemirror/language@6.11.0?deps=@codemirror/state@6.5.2,@codemirror/view@6.38.6,@lezer/highlight@1.2.0';
+    import { closeBrackets, closeBracketsKeymap } from 'https://esm.sh/@codemirror/autocomplete@6.18.6?deps=@codemirror/state@6.5.2,@codemirror/view@6.38.6';
+    import { tags } from 'https://esm.sh/@lezer/highlight@1.2.0/es2022/highlight.mjs';
+
+    // Editar este objeto alcanza para adaptar el vocabulario y los operadores del lenguaje.
+    const PSEUDOCODE_CONFIG = {
+      keywords: ['ALGORITMO', 'SI', 'NO', 'SINO', 'MIENTRAS', 'PARA', 'FUNCION', 'RETORNAR', 'EN', 'RANGO', 'ROMPER', 'CONTINUAR', 'MOSTRAR'],
+      literals: ['VERDADERO', 'FALSO', 'NULO'],
+      blockKeywords: ['ALGORITMO', 'SI', 'SINO', 'MIENTRAS', 'PARA', 'FUNCION'],
+      dedentKeywords: ['SI NO', 'SINO'],
+      operators: ['+', '-', '*', '/', '%', '=', '!=', '<', '>', '<=', '>=', '<-', '->', '≠', '≤', '≥', '←', '→', '∧', '∨', '¬'],
+      autoReplacements: [
+        ['<=', '≤'],
+        ['>=', '≥'],
+        ['!=', '≠'],
+        ['<-', '←'],
+        ['->', '→']
+      ]
+    };
+
+    const STORAGE_KEY = 'pseditor-archivos';
+    const LEGACY_STORAGE_KEY = 'pseditor-codigo';
+    const DEFAULT_CODE = `# Calcula la suma de los números pares
+ALGORITMO suma_de_pares
+  FUNCION suma_pares(limite)
+    total ← 0
+    PARA numero EN RANGO(1, limite + 1)
+      SI numero % 2 = 0
+        total ← total + numero
+    RETORNAR total
+
+  resultado ← suma_pares(10)
+  SI resultado ≥ 20
+    MOSTRAR("La suma es", resultado)
+  SI NO
+    MOSTRAR("La suma es menor que 20")`;
+
+    const keywordSet = new Set(PSEUDOCODE_CONFIG.keywords);
+    const literalSet = new Set(PSEUDOCODE_CONFIG.literals);
+    const blockKeywordSet = new Set(PSEUDOCODE_CONFIG.blockKeywords);
+    const dedentPattern = new RegExp(`^\\s*(?:${PSEUDOCODE_CONFIG.dedentKeywords.join('|')})\\b`, 'u');
+    const blockLinePattern = new RegExp(`^\\s*(?:${PSEUDOCODE_CONFIG.blockKeywords.join('|')})\\b`, 'u');
+    const operatorPattern = new RegExp(`^(?:${PSEUDOCODE_CONFIG.operators
+      .sort((a, b) => b.length - a.length)
+      .map(operator => operator.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .join('|')})`);
+
+    function replaceAsciiOperators(text) {
+      return PSEUDOCODE_CONFIG.autoReplacements.reduce(
+        (result, [ascii, unicode]) => result.replaceAll(ascii, unicode),
+        text
+      );
+    }
+
+    const pseudocodeLanguage = StreamLanguage.define({
+      startState() {
+        return { blockIndent: null, afterSi: false };
+      },
+      token(stream, state) {
+        if (stream.sol()) {
+          state.blockIndent = null;
+          state.afterSi = false;
+        }
+        if (stream.eatSpace()) return null;
+        if (stream.match('#')) {
+          stream.skipToEnd();
+          return 'comment';
+        }
+        if (stream.match(/^("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')/)) return 'string';
+        if (stream.match(/^\d+(?:\.\d+)?/)) return 'number';
+        const word = stream.match(/^[\p{L}_][\p{L}\p{N}_]*/u);
+        if (word) {
+          const isSiNo = word[0] === 'NO' && state.afterSi;
+          if (blockKeywordSet.has(word[0])) state.blockIndent = stream.indentation();
+          state.afterSi = word[0] === 'SI';
+          if (isSiNo) return 'keyword';
+          if (keywordSet.has(word[0])) return 'keyword';
+          if (literalSet.has(word[0])) return 'bool';
+          return 'variableName';
+        }
+        if (stream.match(operatorPattern)) return 'operator';
+        if (stream.match(/^[()[\]{}]/)) return 'bracket';
+        stream.next();
+        return null;
+      },
+      indent(state, textAfter, context) {
+        if (dedentPattern.test(textAfter)) return Math.max(0, context.baseIndent - context.unit);
+        if (state.blockIndent !== null) return state.blockIndent + context.unit;
+        return null;
+      },
+      languageData: {
+        commentTokens: { line: '#' },
+        indentOnInput: dedentPattern
+      }
+    });
+
+    const eclipseHighlightStyle = HighlightStyle.define([
+      { tag: tags.keyword, color: '#7f0055', fontWeight: 'bold' },
+      { tag: tags.variableName, color: '#000000' },
+      { tag: [tags.number, tags.bool], color: '#0000c0' },
+      { tag: tags.string, color: '#2a00ff' },
+      { tag: tags.comment, color: '#3f7f5f', fontStyle: 'italic' },
+      { tag: tags.operator, color: '#000000' },
+      { tag: tags.bracket, color: '#000000' }
+    ]);
+
+    const draculaHighlightStyle = HighlightStyle.define([
+      { tag: tags.keyword, color: '#ff79c6' },
+      { tag: tags.variableName, color: '#f8f8f2' },
+      { tag: [tags.number, tags.bool], color: '#bd93f9' },
+      { tag: tags.string, color: '#f1fa8c' },
+      { tag: tags.comment, color: '#6272a4', fontStyle: 'italic' },
+      { tag: tags.operator, color: '#ff79c6' },
+      { tag: tags.bracket, color: '#f8f8f2' }
+    ]);
+
+    function editorTheme(dark) {
+      const palette = dark
+        ? { background: '#282a36', foreground: '#f8f8f2', gutter: '#282a36', gutterText: '#6272a4', active: '#44475a', selection: '#44475a', cursor: '#f8f8f2' }
+        : { background: '#ffffff', foreground: '#000000', gutter: '#f5f5f5', gutterText: '#777777', active: '#e8f2fe', selection: '#add6ff', cursor: '#000000' };
+
+      return EditorView.theme({
+        '&': { backgroundColor: palette.background, color: palette.foreground },
+        '.cm-gutters': { backgroundColor: palette.gutter, color: palette.gutterText, borderRight: '1px solid #d0d0d0' },
+        '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: palette.active },
+        '.cm-cursor, .cm-dropCursor': { borderLeftColor: palette.cursor },
+        '.cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection': { backgroundColor: palette.selection },
+        '&.cm-focused .cm-matchingBracket': { backgroundColor: dark ? '#6272a480' : '#cce8ff' }
+      }, { dark });
+    }
+
+    function createFile(name, code) {
+      return { id: crypto.randomUUID(), name, code };
+    }
+
+    function createWorkspace(name, files, activeId) {
+      return { name, files, activeId, shared: false };
+    }
+
+    function readWorkspace() {
+      const params = new URLSearchParams(window.location.search);
+      const sharedCode = params.get('codigo');
+      const sharedName = params.get('nombre')?.trim() || 'compartido.pse';
+      if (sharedCode !== null) {
+        const file = createFile(sharedName, sharedCode);
+        return { ...createWorkspace('Workspace compartido.workspace', [file], file.id), shared: true };
+      }
+
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (Array.isArray(saved?.files) && saved.files.length) {
+          const activeId = saved.files.some(file => file.id === saved.activeId) ? saved.activeId : saved.files[0].id;
+          return createWorkspace(saved.name || 'Mi workspace.workspace', saved.files, activeId);
+        }
+      } catch { /* Un dato inválido se reemplaza por el espacio inicial. */ }
+
+      const legacyCode = localStorage.getItem(LEGACY_STORAGE_KEY);
+      const file = createFile('algoritmo.pse', legacyCode || DEFAULT_CODE);
+      return createWorkspace('Mi workspace.workspace', [file], file.id);
+    }
+
+    function copyText(text) {
+      if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
+      const input = document.createElement('textarea');
+      input.value = text;
+      input.style.position = 'fixed';
+      document.body.append(input);
+      input.select();
+      document.execCommand('copy');
+      input.remove();
+      return Promise.resolve();
+    }
+
+    function workspaceMarkdown() {
+      const lines = ['# PSEditor workspace', '', `Nombre: ${workspace.name}`, `Archivo activo: ${activeFile().name}`, ''];
+      workspace.files.forEach(file => {
+        lines.push(`## Archivo: ${file.name}`, '', '```pse', file.code, '```', '');
+      });
+      return lines.join('\n');
+    }
+
+    function workspaceFromMarkdown(markdown) {
+      const name = markdown.match(/^Nombre:\s*(.+)$/m)?.[1].trim() || 'Workspace importado';
+      const activeName = markdown.match(/^Archivo activo:\s*(.+)$/m)?.[1].trim();
+      const files = [];
+      const sections = markdown.matchAll(/^## Archivo:\s*(.+)\r?\n+```pse\r?\n([\s\S]*?)\r?\n```/gm);
+      for (const section of sections) files.push(createFile(section[1].trim(), section[2]));
+      if (!files.length) throw new Error('No se encontraron archivos .pse en el Markdown.');
+      const activeFile = files.find(file => file.name === activeName) || files[0];
+      return createWorkspace(name, files, activeFile.id);
+    }
+
+    function downloadWorkspace() {
+      const blob = new Blob([workspaceMarkdown()], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const filename = (workspace.name || 'workspace').replace(/[\\/:*?"<>|]/g, '-');
+      link.download = `${filename}.md`;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+
+    const root = document.documentElement;
+    const themeButton = document.getElementById('theme-toggle');
+    const notice = document.getElementById('notice');
+    const statistics = document.getElementById('statistics');
+    const workspaceName = document.getElementById('workspace-name');
+    const fileList = document.getElementById('file-list');
+    const fileName = document.getElementById('file-name');
+    const deleteFileButton = document.getElementById('delete-file');
+    const workspaceFile = document.getElementById('workspace-file');
+    const themeCompartment = new Compartment();
+    const highlightingCompartment = new Compartment();
+    let noticeTimeout;
+    let workspace = readWorkspace();
+    workspace.activeId ||= workspace.files[0].id;
+
+    function isDarkTheme() {
+      return root.getAttribute('data-bs-theme') === 'dark';
+    }
+
+    function updateStatistics(code) {
+      const lines = code ? code.split('\n').length : 1;
+      statistics.textContent = `${lines} ${lines === 1 ? 'línea' : 'líneas'} · ${code.length} caracteres`;
+    }
+
+    function showNotice(message) {
+      clearTimeout(noticeTimeout);
+      notice.textContent = message;
+      notice.classList.remove('d-none');
+      noticeTimeout = setTimeout(() => notice.classList.add('d-none'), 1800);
+    }
+
+    function activeFile() {
+      return workspace.files.find(file => file.id === workspace.activeId);
+    }
+
+    function saveWorkspace() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ name: workspace.name, files: workspace.files, activeId: workspace.activeId }));
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
+      workspace.shared = false;
+    }
+
+    function renderFiles() {
+      workspaceName.value = workspace.name;
+      fileList.replaceChildren(...workspace.files.map(file => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `list-group-item list-group-item-action${file.id === workspace.activeId ? ' active' : ''}`;
+        button.textContent = file.name;
+        button.addEventListener('click', () => {
+          openFile(file.id);
+          saveWorkspace();
+        });
+        return button;
+      }));
+      fileName.value = activeFile().name;
+      deleteFileButton.disabled = workspace.files.length === 1;
+    }
+
+    const maxOperatorLength = Math.max(...PSEUDOCODE_CONFIG.autoReplacements.map(([ascii]) => ascii.length));
+    const inputReplacement = EditorView.inputHandler.of((view, from, to, text) => {
+      const start = Math.max(0, from - maxOperatorLength + 1);
+      const end = Math.min(view.state.doc.length, to + maxOperatorLength - 1);
+      const prefix = view.state.sliceDoc(start, from);
+      const suffix = view.state.sliceDoc(to, end);
+      const replacement = replaceAsciiOperators(prefix + text + suffix);
+
+      if (replacement === prefix + text + suffix) return false;
+      view.dispatch({
+        changes: { from: start, to: end, insert: replacement },
+        selection: { anchor: start + replaceAsciiOperators(prefix + text).length },
+        userEvent: 'input.type'
+      });
+      return true;
+    });
+
+    function insertNewlineForBlock(view) {
+      const selection = view.state.selection.main;
+      const line = view.state.doc.lineAt(selection.head);
+      if (selection.head !== line.to || !blockLinePattern.test(line.text)) return insertNewlineAndIndent(view);
+
+      const baseIndent = line.text.match(/^\s*/)[0];
+      const indentation = `${baseIndent}  `;
+      view.dispatch({
+        changes: { from: selection.from, to: selection.to, insert: `\n${indentation}` },
+        selection: { anchor: selection.from + indentation.length + 1 },
+        userEvent: 'input'
+      });
+      return true;
+    }
+
+    function editorState(code) {
+      return EditorState.create({
+        doc: code,
+        extensions: [
+          history(),
+          lineNumbers(),
+          keymap.of([{ key: 'Enter', run: insertNewlineForBlock }, indentWithTab, ...defaultKeymap, ...historyKeymap, ...closeBracketsKeymap]),
+          closeBrackets(),
+          bracketMatching(),
+          indentOnInput(),
+          pseudocodeLanguage,
+          themeCompartment.of(editorTheme(isDarkTheme())),
+          highlightingCompartment.of(syntaxHighlighting(isDarkTheme() ? draculaHighlightStyle : eclipseHighlightStyle)),
+          inputReplacement,
+          EditorView.updateListener.of(update => {
+            if (!update.docChanged) return;
+            const code = update.state.doc.toString();
+            activeFile().code = code;
+            saveWorkspace();
+            updateStatistics(code);
+          })
+        ]
+      });
+    }
+
+    function createEditor(code) {
+      return new EditorView({
+        state: editorState(code),
+        parent: document.getElementById('editor')
+      });
+    }
+
+    let editor = createEditor(activeFile().code);
+
+    updateStatistics(editor.state.doc.toString());
+    renderFiles();
+
+    function openFile(fileId) {
+      workspace.activeId = fileId;
+      editor.destroy();
+      editor = createEditor(activeFile().code);
+      renderFiles();
+      updateStatistics(activeFile().code);
+    }
+
+    function applyTheme(theme) {
+      root.setAttribute('data-bs-theme', theme);
+      themeButton.textContent = theme === 'dark' ? '☀️' : '🌙';
+      editor.dispatch({
+        effects: [
+          themeCompartment.reconfigure(editorTheme(theme === 'dark')),
+          highlightingCompartment.reconfigure(syntaxHighlighting(theme === 'dark' ? draculaHighlightStyle : eclipseHighlightStyle))
+        ]
+      });
+    }
+
+    const storedTheme = localStorage.getItem('theme');
+    applyTheme(storedTheme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+
+    themeButton.addEventListener('click', () => {
+      const nextTheme = isDarkTheme() ? 'light' : 'dark';
+      localStorage.setItem('theme', nextTheme);
+      applyTheme(nextTheme);
+    });
+
+    workspaceName.addEventListener('input', () => {
+      workspace.name = workspaceName.value.trim() || 'Mi workspace.workspace';
+      saveWorkspace();
+    });
+
+    fileName.addEventListener('input', () => {
+      const name = fileName.value.trim();
+      activeFile().name = name || 'sin-nombre.pse';
+      saveWorkspace();
+      renderFiles();
+    });
+
+    document.getElementById('new-file').addEventListener('click', () => {
+      const file = createFile(`archivo-${workspace.files.length + 1}.pse`, '');
+      workspace.files.push(file);
+      workspace.activeId = file.id;
+      openFile(file.id);
+      saveWorkspace();
+      editor.focus();
+    });
+
+    deleteFileButton.addEventListener('click', () => {
+      if (workspace.files.length === 1) return;
+      if (!window.confirm(`¿Eliminar ${activeFile().name}?`)) return;
+      const index = workspace.files.findIndex(file => file.id === workspace.activeId);
+      workspace.files.splice(index, 1);
+      workspace.activeId = workspace.files[Math.max(0, index - 1)].id;
+      saveWorkspace();
+      openFile(workspace.activeId);
+      showNotice('Se eliminó el archivo.');
+    });
+
+    document.getElementById('reset').addEventListener('click', () => {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
+      const file = createFile('algoritmo.pse', DEFAULT_CODE);
+      workspace = createWorkspace('Mi workspace.workspace', [file], file.id);
+      editor.destroy();
+      editor = createEditor(file.code);
+      renderFiles();
+      updateStatistics(file.code);
+      window.history.replaceState(null, '', window.location.pathname);
+      showNotice('Se restauró el ejemplo inicial.');
+    });
+
+    document.getElementById('share').addEventListener('click', async () => {
+      const url = new URL(window.location.href);
+      url.search = '';
+      url.searchParams.set('codigo', activeFile().code);
+      url.searchParams.set('nombre', activeFile().name);
+      try {
+        await copyText(url.toString());
+        showNotice('Se copió el enlace con el código.');
+      } catch {
+        showNotice('No se pudo copiar el enlace.');
+      }
+    });
+
+    document.getElementById('export-workspace').addEventListener('click', () => {
+      downloadWorkspace();
+      showNotice('Se descargó el workspace en formato Markdown.');
+    });
+
+    document.getElementById('import-workspace').addEventListener('click', () => workspaceFile.click());
+
+    workspaceFile.addEventListener('change', async () => {
+      const [file] = workspaceFile.files;
+      if (!file) return;
+      try {
+        workspace = workspaceFromMarkdown(await file.text());
+        editor.destroy();
+        editor = createEditor(activeFile().code);
+        renderFiles();
+        updateStatistics(activeFile().code);
+        saveWorkspace();
+        window.history.replaceState(null, '', window.location.pathname);
+        showNotice('Se abrió el workspace.');
+      } catch (error) {
+        showNotice(error.message);
+      } finally {
+        workspaceFile.value = '';
+      }
+    });
+  </script>
+</body>
+</html>

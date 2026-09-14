@@ -294,8 +294,12 @@
           this.people = fromURL;
           this.savePeople();
         } else {
-          const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
-          if (stored != null) this.people = stored;
+          try {
+            const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+            if (Array.isArray(stored)) this.people = stored;
+          } catch {
+            localStorage.removeItem(STORAGE_KEY);
+          }
         }
 
         this.updateTime(now);

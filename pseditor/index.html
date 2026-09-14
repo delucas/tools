@@ -47,8 +47,8 @@
         <p class="text-body-secondary mb-0">Editor de pseudocódigo con bloques por indentación.</p>
       </div>
       <div class="d-flex flex-wrap gap-2">
-        <button id="share" class="btn btn-outline-secondary btn-sm" type="button">Compartir archivo</button>
-        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">Reiniciar</button>
+        <button id="share" class="btn btn-outline-secondary btn-sm" type="button">🔗 Compartir archivo</button>
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
         <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
       </div>
     </div>
@@ -81,7 +81,16 @@
           </div>
           <button id="delete-file" class="btn btn-outline-danger" type="button">Eliminar</button>
         </div>
-        <p id="editor-label" class="form-label">Pseudocódigo</p>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+          <p id="editor-label" class="form-label mb-0">Pseudocódigo</p>
+          <div class="d-flex align-items-center gap-3">
+            <div class="form-check mb-0">
+              <input id="show-line-numbers" class="form-check-input" type="checkbox">
+              <label for="show-line-numbers" class="form-check-label small">Mostrar números de línea</label>
+            </div>
+            <button id="copy-formatted" class="btn btn-outline-secondary btn-sm" type="button">📋 Copiar con formato</button>
+          </div>
+        </div>
         <div id="editor" aria-labelledby="editor-label"></div>
         <p id="statistics" class="form-text mb-0"></p>
       </section>
@@ -111,7 +120,7 @@
 
     // Editar este objeto alcanza para adaptar el vocabulario y los operadores del lenguaje.
     const PSEUDOCODE_CONFIG = {
-      keywords: ['ALGORITMO', 'SI', 'NO', 'SINO', 'MIENTRAS', 'PARA', 'FUNCION', 'RETORNAR', 'EN', 'RANGO', 'ROMPER', 'CONTINUAR', 'MOSTRAR'],
+      keywords: ['ALGORITMO', 'SI', 'NO', 'SINO', 'MIENTRAS', 'PARA', 'HASTA', 'PASO', 'HACER', 'FUNCION', 'RETORNAR', 'EN', 'RANGO', 'ROMPER', 'CONTINUAR', 'MOSTRAR'],
       literals: ['VERDADERO', 'FALSO', 'NULO'],
       blockKeywords: ['ALGORITMO', 'SI', 'SINO', 'MIENTRAS', 'PARA', 'FUNCION'],
       dedentKeywords: ['SI NO', 'SINO'],
@@ -127,11 +136,12 @@
 
     const STORAGE_KEY = 'pseditor-archivos';
     const LEGACY_STORAGE_KEY = 'pseditor-codigo';
+    const LINE_NUMBERS_STORAGE_KEY = 'pseditor-mostrar-numeros';
     const DEFAULT_CODE = `# Calcula la suma de los números pares
-ALGORITMO suma_de_pares
+ALGORITMO SumaDePares
   FUNCION suma_pares(limite)
     total ← 0
-    PARA numero EN RANGO(1, limite + 1)
+    PARA numero = 1 HASTA limite PASO 1 HACER
       SI numero % 2 = 0
         total ← total + numero
     RETORNAR total
@@ -145,12 +155,9 @@ ALGORITMO suma_de_pares
     const keywordSet = new Set(PSEUDOCODE_CONFIG.keywords);
     const literalSet = new Set(PSEUDOCODE_CONFIG.literals);
     const blockKeywordSet = new Set(PSEUDOCODE_CONFIG.blockKeywords);
+    const operators = [...PSEUDOCODE_CONFIG.operators].sort((a, b) => b.length - a.length);
     const dedentPattern = new RegExp(`^\\s*(?:${PSEUDOCODE_CONFIG.dedentKeywords.join('|')})\\b`, 'u');
     const blockLinePattern = new RegExp(`^\\s*(?:${PSEUDOCODE_CONFIG.blockKeywords.join('|')})\\b`, 'u');
-    const operatorPattern = new RegExp(`^(?:${PSEUDOCODE_CONFIG.operators
-      .sort((a, b) => b.length - a.length)
-      .map(operator => operator.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-      .join('|')})`);
 
     function replaceAsciiOperators(text) {
       return PSEUDOCODE_CONFIG.autoReplacements.reduce(
@@ -159,36 +166,89 @@ ALGORITMO suma_de_pares
       );
     }
 
+    function lexLine(line) {
+      const tokens = [];
+      let index = 0;
+      let expectsAlgorithmName = false;
+      while (index < line.length) {
+        const rest = line.slice(index);
+        if (/^\s/.test(rest)) {
+          const whitespace = rest.match(/^\s+/)[0];
+          tokens.push({ text: whitespace, type: null });
+          index += whitespace.length;
+          continue;
+        }
+        if (rest.startsWith('#')) {
+          tokens.push({ text: rest, type: 'comment' });
+          break;
+        }
+        const string = rest.match(/^("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')/);
+        if (string) {
+          tokens.push({ text: string[0], type: 'string' });
+          index += string[0].length;
+          continue;
+        }
+        const size = rest.match(/^\|[\p{L}_][\p{L}\p{N}_]*\|/u);
+        if (size) {
+          tokens.push({ text: size[0], type: 'variable-2' });
+          index += size[0].length;
+          continue;
+        }
+        const number = rest.match(/^\d+(?:\.\d+)?/);
+        if (number) {
+          tokens.push({ text: number[0], type: 'number' });
+          index += number[0].length;
+          continue;
+        }
+        const word = rest.match(/^[\p{L}_][\p{L}\p{N}_]*/u);
+        if (word) {
+          const value = word[0];
+          let type = 'variableName';
+          if (expectsAlgorithmName) {
+            if (/^[A-Z][a-zA-Z0-9]*$/.test(value)) type = 'typeName';
+            else if (/^[a-z][a-zA-Z0-9]*$/.test(value)) type = 'variable-2';
+            expectsAlgorithmName = false;
+          } else if (keywordSet.has(value)) {
+            type = 'keyword';
+            expectsAlgorithmName = value === 'ALGORITMO';
+          } else if (literalSet.has(value)) {
+            type = 'bool';
+          }
+          tokens.push({ text: value, type });
+          index += value.length;
+          continue;
+        }
+        const operator = operators.find(value => rest.startsWith(value));
+        if (operator) {
+          tokens.push({ text: operator, type: 'operator' });
+          index += operator.length;
+          continue;
+        }
+        if (/^[()[\]{}]/.test(rest)) {
+          tokens.push({ text: rest[0], type: 'bracket' });
+          index++;
+          continue;
+        }
+        tokens.push({ text: rest[0], type: null });
+        index++;
+      }
+      return tokens;
+    }
+
     const pseudocodeLanguage = StreamLanguage.define({
       startState() {
-        return { blockIndent: null, afterSi: false };
+        return { tokens: [], tokenIndex: 0, blockIndent: null };
       },
       token(stream, state) {
         if (stream.sol()) {
-          state.blockIndent = null;
-          state.afterSi = false;
+          state.tokens = lexLine(stream.string);
+          state.tokenIndex = 0;
+          const firstWord = state.tokens.find(token => token.type === 'keyword');
+          state.blockIndent = firstWord && blockKeywordSet.has(firstWord.text) ? stream.indentation() : null;
         }
-        if (stream.eatSpace()) return null;
-        if (stream.match('#')) {
-          stream.skipToEnd();
-          return 'comment';
-        }
-        if (stream.match(/^("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')/)) return 'string';
-        if (stream.match(/^\d+(?:\.\d+)?/)) return 'number';
-        const word = stream.match(/^[\p{L}_][\p{L}\p{N}_]*/u);
-        if (word) {
-          const isSiNo = word[0] === 'NO' && state.afterSi;
-          if (blockKeywordSet.has(word[0])) state.blockIndent = stream.indentation();
-          state.afterSi = word[0] === 'SI';
-          if (isSiNo) return 'keyword';
-          if (keywordSet.has(word[0])) return 'keyword';
-          if (literalSet.has(word[0])) return 'bool';
-          return 'variableName';
-        }
-        if (stream.match(operatorPattern)) return 'operator';
-        if (stream.match(/^[()[\]{}]/)) return 'bracket';
-        stream.next();
-        return null;
+        const token = state.tokens[state.tokenIndex++];
+        stream.pos += token.text.length;
+        return token.type;
       },
       indent(state, textAfter, context) {
         if (dedentPattern.test(textAfter)) return Math.max(0, context.baseIndent - context.unit);
@@ -207,6 +267,8 @@ ALGORITMO suma_de_pares
       { tag: [tags.number, tags.bool], color: '#0000c0' },
       { tag: tags.string, color: '#2a00ff' },
       { tag: tags.comment, color: '#3f7f5f', fontStyle: 'italic' },
+      { tag: tags.typeName, color: '#7f0055', fontWeight: 'bold' },
+      { tag: tags.special(tags.variableName), color: '#3f7f5f' },
       { tag: tags.operator, color: '#000000' },
       { tag: tags.bracket, color: '#000000' }
     ]);
@@ -217,6 +279,8 @@ ALGORITMO suma_de_pares
       { tag: [tags.number, tags.bool], color: '#bd93f9' },
       { tag: tags.string, color: '#f1fa8c' },
       { tag: tags.comment, color: '#6272a4', fontStyle: 'italic' },
+      { tag: tags.typeName, color: '#8be9fd', fontWeight: 'bold' },
+      { tag: tags.special(tags.variableName), color: '#50fa7b' },
       { tag: tags.operator, color: '#ff79c6' },
       { tag: tags.bracket, color: '#f8f8f2' }
     ]);
@@ -257,13 +321,13 @@ ALGORITMO suma_de_pares
         const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
         if (Array.isArray(saved?.files) && saved.files.length) {
           const activeId = saved.files.some(file => file.id === saved.activeId) ? saved.activeId : saved.files[0].id;
-          return createWorkspace(saved.name || 'Mi workspace.workspace', saved.files, activeId);
+          return createWorkspace(saved.name || 'algoritmos', saved.files, activeId);
         }
       } catch { /* Un dato inválido se reemplaza por el espacio inicial. */ }
 
       const legacyCode = localStorage.getItem(LEGACY_STORAGE_KEY);
       const file = createFile('algoritmo.pse', legacyCode || DEFAULT_CODE);
-      return createWorkspace('Mi workspace.workspace', [file], file.id);
+      return createWorkspace('algoritmos', [file], file.id);
     }
 
     function copyText(text) {
@@ -276,6 +340,65 @@ ALGORITMO suma_de_pares
       document.execCommand('copy');
       input.remove();
       return Promise.resolve();
+    }
+
+    function escapeHtml(text) {
+      return text.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
+    }
+
+    function formattedCodeHtml(code) {
+      const dark = isDarkTheme();
+      const colors = dark
+        ? { background: '#282a36', text: '#f8f8f2', keyword: '#ff79c6', number: '#bd93f9', string: '#f1fa8c', comment: '#6272a4', public: '#8be9fd', private: '#50fa7b', size: '#50fa7b', gutter: '#6272a4' }
+        : { background: '#ffffff', text: '#000000', keyword: '#7f0055', number: '#0000c0', string: '#2a00ff', comment: '#3f7f5f', public: '#7f0055', private: '#3f7f5f', size: '#3f7f5f', gutter: '#777777' };
+      function token(text, color, extra = '') {
+        return `<span style="color:${color};${extra}">${escapeHtml(text)}</span>`;
+      }
+
+      function formatLine(line) {
+        const tokenColors = {
+          comment: colors.comment,
+          string: colors.string,
+          number: colors.number,
+          bool: colors.number,
+          keyword: colors.keyword,
+          typeName: colors.public,
+          variableName: colors.text,
+          'variable-2': colors.private,
+          operator: colors.text,
+          bracket: colors.text
+        };
+        return lexLine(line).map(part => {
+          if (!part.type) return escapeHtml(part.text).replaceAll(' ', '&nbsp;').replaceAll('\t', '&nbsp;&nbsp;&nbsp;&nbsp;');
+          const extra = part.type === 'comment' ? 'font-style:italic;' : part.type === 'keyword' || part.type === 'typeName' ? 'font-weight:bold;' : '';
+          return token(part.text, tokenColors[part.type], extra);
+        }).join('') || '&nbsp;';
+      }
+
+      const lineCount = code.split('\n').length;
+      const gutterWidth = String(lineCount).length;
+      const lines = code.split('\n').map((line, index) => {
+        const number = shouldShowLineNumbers
+          ? `<span style="display:inline-block;min-width:${gutterWidth}ch;margin-right:1.25em;color:${colors.gutter};user-select:none">${index + 1}</span>`
+          : '';
+        return `${number}${formatLine(line)}`;
+      });
+      const background = dark ? `background:${colors.background};` : '';
+      return `<div style="margin:0;padding:16px;${background}color:${colors.text};font-family:Consolas,'Courier New',monospace;font-size:14px;line-height:100%;mso-line-height-rule:exactly;white-space:pre">${lines.join('<br>')}</div>`;
+    }
+
+    async function copyFormattedCode() {
+      const code = activeFile().code;
+      const html = formattedCodeHtml(code);
+      if (navigator.clipboard?.write && window.ClipboardItem) {
+        await navigator.clipboard.write([new ClipboardItem({
+          'text/plain': new Blob([code], { type: 'text/plain' }),
+          'text/html': new Blob([html], { type: 'text/html' })
+        })]);
+        return true;
+      }
+      await copyText(code);
+      return false;
     }
 
     function workspaceMarkdown() {
@@ -317,10 +440,13 @@ ALGORITMO suma_de_pares
     const fileName = document.getElementById('file-name');
     const deleteFileButton = document.getElementById('delete-file');
     const workspaceFile = document.getElementById('workspace-file');
+    const showLineNumbers = document.getElementById('show-line-numbers');
     const themeCompartment = new Compartment();
     const highlightingCompartment = new Compartment();
+    const lineNumbersCompartment = new Compartment();
     let noticeTimeout;
     let workspace = readWorkspace();
+    let shouldShowLineNumbers = localStorage.getItem(LINE_NUMBERS_STORAGE_KEY) !== 'false';
     workspace.activeId ||= workspace.files[0].id;
 
     function isDarkTheme() {
@@ -351,6 +477,7 @@ ALGORITMO suma_de_pares
 
     function renderFiles() {
       workspaceName.value = workspace.name;
+      showLineNumbers.checked = shouldShowLineNumbers;
       fileList.replaceChildren(...workspace.files.map(file => {
         const button = document.createElement('button');
         button.type = 'button';
@@ -403,7 +530,7 @@ ALGORITMO suma_de_pares
         doc: code,
         extensions: [
           history(),
-          lineNumbers(),
+          lineNumbersCompartment.of(shouldShowLineNumbers ? lineNumbers() : []),
           keymap.of([{ key: 'Enter', run: insertNewlineForBlock }, indentWithTab, ...defaultKeymap, ...historyKeymap, ...closeBracketsKeymap]),
           closeBrackets(),
           bracketMatching(),
@@ -463,8 +590,23 @@ ALGORITMO suma_de_pares
       applyTheme(nextTheme);
     });
 
+    showLineNumbers.addEventListener('change', () => {
+      shouldShowLineNumbers = showLineNumbers.checked;
+      localStorage.setItem(LINE_NUMBERS_STORAGE_KEY, String(shouldShowLineNumbers));
+      editor.dispatch({ effects: lineNumbersCompartment.reconfigure(shouldShowLineNumbers ? lineNumbers() : []) });
+    });
+
+    document.getElementById('copy-formatted').addEventListener('click', async () => {
+      try {
+        const copiedWithFormat = await copyFormattedCode();
+        showNotice(copiedWithFormat ? 'Se copió el código con formato.' : 'Se copió el código como texto plano.');
+      } catch {
+        showNotice('No se pudo copiar el código.');
+      }
+    });
+
     workspaceName.addEventListener('input', () => {
-      workspace.name = workspaceName.value.trim() || 'Mi workspace.workspace';
+      workspace.name = workspaceName.value.trim() || 'algoritmos';
       saveWorkspace();
     });
 
@@ -499,7 +641,7 @@ ALGORITMO suma_de_pares
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(LEGACY_STORAGE_KEY);
       const file = createFile('algoritmo.pse', DEFAULT_CODE);
-      workspace = createWorkspace('Mi workspace.workspace', [file], file.id);
+      workspace = createWorkspace('algoritmos', [file], file.id);
       editor.destroy();
       editor = createEditor(file.code);
       renderFiles();

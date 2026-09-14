@@ -64,3 +64,5 @@ Para herramientas con estado que usen Vue.js (vía CDN, versión fija):
 - Solamente el mensaje: sin coautorías, sin menciones a IA ni metadatos extra.
 - Revisar `git status` antes de `git add` y agregar solo los archivos que correspondan al cambio.
 - Un commit por cambio lógico; separar cambios independientes en commits distintos.
+- No ejecutar acciones destructivas o irreversibles con git (`reset --hard`, `clean -f`, `push --force`, reescribir historia publicada, borrar ramas o stashes). Ante la duda, no tocar.
+- Nunca pushear: el `push` lo hace el humano.

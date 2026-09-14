@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x2692%3B%3C/text%3E%3C/svg%3E">
+  <title>Checksmith</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    [v-cloak] { display: none; }
+    .drag-handle {
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
+    }
+    .sortable-ghost {
+      opacity: 0.45;
+    }
+  </style>
+</head>
+<body>
+  <main class="container py-4" id="app" v-cloak>
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">⚒️ Checksmith</h1>
+        <p class="text-body-secondary mb-0">Catálogo de plantillas de checklist para instanciar en Get Sh*t Done.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ shared ? '¡Copiado!' : '🔗 Compartir' }}</button>
+        <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div v-if="notice" class="alert alert-success py-2" role="status">{{ notice }}</div>
+
+    <div class="card mb-3">
+      <div class="card-body">
+        <form @submit.prevent="addTemplate">
+          <label for="new-template" class="form-label">Nueva plantilla</label>
+          <div class="input-group">
+            <input id="new-template" class="form-control" type="text" maxlength="80" placeholder="p. ej. Revisión semanal"
+              v-model="newTemplateName" autocomplete="off">
+            <button class="btn btn-primary" type="submit" :disabled="!newTemplateName.trim()">Crear</button>
+          </div>
+          <div class="form-text">Cada plantilla es un molde: se guarda en el catálogo y se instancia como lista pendiente en GSD.</div>
+        </form>
+      </div>
+    </div>
+
+    <div v-if="!templates.length" class="border rounded p-4 text-body-secondary text-center">Todavía no hay plantillas. Creá la primera arriba.</div>
+    <div v-else class="row g-3">
+      <div class="col-12 col-md-4">
+        <div class="list-group">
+          <button v-for="t in templates" :key="t.id" type="button"
+            class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+            :class="{ active: t.id === selectedId }" @click="select(t.id)">
+            <span class="text-truncate">{{ t.name || '(sin nombre)' }}</span>
+            <span class="badge text-bg-secondary rounded-pill ms-2">{{ t.items.length }}</span>
+          </button>
+        </div>
+        <p class="text-body-secondary small mt-2 mb-0">{{ templates.length }} plantillas · {{ totalItems }} ítems en total</p>
+      </div>
+
+      <div class="col-12 col-md-8" v-if="selected">
+        <div class="card mb-3">
+          <div class="card-body">
+            <label :for="'name-' + selected.id" class="form-label">Nombre de la plantilla</label>
+            <input :id="'name-' + selected.id" class="form-control mb-2" type="text" maxlength="80"
+              v-model="selected.name" @input="save">
+            <div class="d-flex flex-wrap gap-2">
+              <button class="btn btn-success btn-sm" type="button" @click="useInGsd(selected)">✅ Usar en GSD</button>
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="copyLink(selected)">🔗 Copiar link GSD</button>
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="duplicateTemplate(selected)">⧉ Duplicar</button>
+              <button class="btn btn-outline-danger btn-sm" type="button" @click="deleteTemplate(selected)">Borrar</button>
+            </div>
+            <div class="form-text mt-2">Usar en GSD abre la plantilla como lista pendiente nueva (con fecha de hoy) y copia el link. El link reemplaza lo que muestra GSD, no lo fusiona.</div>
+          </div>
+        </div>
+
+        <div class="card mb-3">
+          <div class="card-body">
+            <form @submit.prevent="addItem">
+              <label :for="'new-item-' + selected.id" class="form-label">Nuevo ítem</label>
+              <div class="input-group">
+                <input :id="'new-item-' + selected.id" class="form-control" type="text" maxlength="280"
+                  placeholder="¿Qué incluye esta checklist?" v-model="newItemText" autocomplete="off" @paste="onPasteItem">
+                <button class="btn btn-primary" type="submit" :disabled="!newItemText.trim()">Agregar</button>
+              </div>
+              <div class="form-text">Pegá varias líneas para agregar varios ítems a la vez. Arrastrá <span aria-hidden="true">⠿</span> para ordenar.</div>
+            </form>
+          </div>
+        </div>
+
+        <div v-if="!selected.items.length" class="border rounded p-4 text-body-secondary text-center">Esta plantilla no tiene ítems todavía.</div>
+        <div v-else id="items-list" class="vstack gap-2">
+          <div v-for="(item, i) in selected.items" :key="item.id" class="card" :data-id="item.id">
+            <div class="card-body py-2">
+              <div class="row g-2 align-items-center">
+                <div class="col-auto"><span class="drag-handle text-body-secondary" title="Arrastrar para ordenar" aria-label="Arrastrar para ordenar">⠿</span></div>
+                <div class="col">
+                  <label :for="'item-' + item.id" class="visually-hidden">Ítem {{ i + 1 }}</label>
+                  <input :id="'item-' + item.id" class="form-control form-control-sm" type="text" maxlength="280"
+                    v-model="item.text" @input="save" placeholder="Ítem">
+                </div>
+                <div class="col-auto">
+                  <button class="btn btn-outline-danger btn-sm" type="button" @click="deleteItem(item)">Borrar</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr>
+    <p>Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.5.42/vue.global.prod.min.js"
+    integrity="sha512-PREsKi18CyKMgwXMJWtvkzinqjiN0znVfDovmVadp7pKiUpyNGtq7bD2fKElDBmdfH4DGJz8pmAdgihN8NZ8TQ=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+
+  <script>
+    const STORAGE_KEY = 'checksmith-plantillas';
+
+    function newId() {
+      return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+    }
+
+    function formatLocalDate(d) {
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${d.getFullYear()}-${m}-${day}`;
+    }
+
+    function normalizeItem(item) {
+      if (!item || typeof item.text !== 'string' || !item.text.trim()) return null;
+      return { id: typeof item.id === 'string' ? item.id : newId(), text: item.text.trim().slice(0, 280) };
+    }
+
+    function normalizeTemplate(t) {
+      if (!t || typeof t.name !== 'string' || !Array.isArray(t.items)) return null;
+      return {
+        id: typeof t.id === 'string' ? t.id : newId(),
+        name: t.name.trim().slice(0, 80) || '(sin nombre)',
+        items: t.items.map(normalizeItem).filter(Boolean)
+      };
+    }
+
+    function cleanCatalog(value) {
+      try {
+        const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+        const list = Array.isArray(parsed) ? parsed : parsed?.templates;
+        if (!Array.isArray(list)) return null;
+        return list.map(normalizeTemplate).filter(Boolean);
+      } catch {
+        return null;
+      }
+    }
+
+    function defaultTemplates() {
+      return [
+        {
+          id: newId(),
+          name: 'Revisión semanal',
+          items: [
+            'Vaciar bandeja de entrada',
+            'Revisar calendario de la próxima semana',
+            'Repasar pendientes en Get Sh*t Done',
+            'Ordenar escritorio',
+            'Definir 3 prioridades de la semana'
+          ].map(text => ({ id: newId(), text }))
+        },
+        {
+          id: newId(),
+          name: 'Bolso de viaje',
+          items: [
+            'Documentos y cargadores',
+            'Muda de ropa',
+            'Botella de agua',
+            'Avisar a portería'
+          ].map(text => ({ id: newId(), text }))
+        }
+      ];
+    }
+
+    function loadCatalog() {
+      // Prioridad: URL > localStorage > ejemplos. ?? (no ||) para respetar el catálogo vacío.
+      return cleanCatalog(new URLSearchParams(window.location.search).get('data'))
+        ?? cleanCatalog(localStorage.getItem(STORAGE_KEY))
+        ?? defaultTemplates();
+    }
+
+    // Elemento con Sortable activo (fuera de data: Vue lo envolvería en un Proxy y rompería la identidad).
+    let sortableEl = null;
+    let noticeTimer = null;
+
+    const app = Vue.createApp({
+      data() {
+        const templates = loadCatalog();
+        return {
+          templates,
+          selectedId: templates[0]?.id || null,
+          newTemplateName: '',
+          newItemText: '',
+          shared: false,
+          notice: ''
+        };
+      },
+      watch: {
+        // Clave de orden: solo reintentar Sortable al cambiar de plantilla o
+        // al aparecer/desaparecer la lista (no en cada tecla, como haría un deep).
+        sortableKey() { this.initSortable(); }
+      },
+      computed: {
+        sortableKey() {
+          return `${this.selectedId}:${this.selected?.items.length || 0}`;
+        },
+        selected() {
+          return this.templates.find(t => t.id === this.selectedId) || null;
+        },
+        totalItems() {
+          return this.templates.reduce((acc, t) => acc + t.items.length, 0);
+        }
+      },
+      methods: {
+        save() {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({ templates: this.templates }));
+        },
+        showNotice(text) {
+          this.notice = text;
+          clearTimeout(noticeTimer);
+          noticeTimer = setTimeout(() => { this.notice = ''; }, 1800);
+        },
+        select(id) {
+          this.selectedId = id;
+          this.newItemText = '';
+        },
+        addTemplate() {
+          const name = this.newTemplateName.trim().slice(0, 80);
+          if (!name) return;
+          const t = { id: newId(), name, items: [] };
+          this.templates.push(t);
+          this.selectedId = t.id;
+          this.newTemplateName = '';
+          this.save();
+        },
+        duplicateTemplate(t) {
+          const copy = {
+            id: newId(),
+            name: `${t.name} (copia)`.slice(0, 80),
+            items: t.items.map(item => ({ id: newId(), text: item.text }))
+          };
+          this.templates.push(copy);
+          this.selectedId = copy.id;
+          this.save();
+          this.showNotice('Se duplicó la plantilla.');
+        },
+        deleteTemplate(t) {
+          this.templates = this.templates.filter(x => x.id !== t.id);
+          if (this.selectedId === t.id) this.selectedId = this.templates[0]?.id || null;
+          this.save();
+        },
+        addItem() {
+          this.addLines(this.newItemText.split('\n'));
+        },
+        onPasteItem(event) {
+          const text = event.clipboardData?.getData('text') || '';
+          if (!text.includes('\n')) return;
+          event.preventDefault();
+          this.addLines((this.newItemText + text).split('\n'));
+        },
+                addLines(lines) {          if (!this.selected) return;
+          const clean = lines.map(line => line.trim()).filter(Boolean);
+          if (!clean.length) {
+            this.newItemText = '';
+            return;
+          }
+          this.selected.items.push(...clean.map(text => ({ id: newId(), text: text.slice(0, 280) })));
+          this.newItemText = '';
+          this.save();
+        },
+        deleteItem(item) {
+          if (!this.selected) return;
+          this.selected.items = this.selected.items.filter(x => x.id !== item.id);
+          this.save();
+        },
+        gsdUrl(t) {
+          const today = formatLocalDate(new Date());
+          const tasks = t.items
+            .map(item => item.text.trim())
+            .filter(Boolean)
+            .map(text => ({ id: newId(), text: text.slice(0, 280), createdAt: today, done: false, completedAt: null }));
+          const url = new URL('../gsd/', window.location.href);
+          url.searchParams.set('data', JSON.stringify({ tasks }));
+          return url.toString();
+        },
+        async copyText(text) {
+          if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
+          const input = document.createElement('textarea');
+          input.value = text;
+          input.style.position = 'fixed';
+          document.body.append(input);
+          input.select();
+          document.execCommand('copy');
+          input.remove();
+          return Promise.resolve();
+        },
+        async useInGsd(t) {
+          if (!t.items.length) {
+            this.showNotice('La plantilla no tiene ítems para instanciar.');
+            return;
+          }
+          const url = this.gsdUrl(t);
+          try {
+            await this.copyText(url);
+          } catch { /* Igual se abre GSD aunque no se pueda copiar. */ }
+          this.showNotice('Link copiado. Abriendo GSD…');
+          window.open(url, '_blank', 'noopener');
+        },
+        async copyLink(t) {
+          if (!t.items.length) {
+            this.showNotice('La plantilla no tiene ítems para instanciar.');
+            return;
+          }
+          try {
+            await this.copyText(this.gsdUrl(t));
+            this.showNotice('Se copió el enlace a GSD.');
+          } catch {
+            window.prompt('Copiá el enlace a GSD:', this.gsdUrl(t));
+          }
+        },
+        async share() {
+          const url = new URL(window.location.href);
+          url.search = '';
+          url.searchParams.set('data', JSON.stringify({ templates: this.templates }));
+          try {
+            await this.copyText(url.toString());
+            this.shared = true;
+            setTimeout(() => { this.shared = false; }, 1500);
+          } catch {
+            window.prompt('Copiá el enlace:', url.toString());
+          }
+        },
+        reset() {
+          localStorage.removeItem(STORAGE_KEY);
+          this.templates = defaultTemplates();
+          this.selectedId = this.templates[0]?.id || null;
+          this.newTemplateName = '';
+          this.newItemText = '';
+          history.replaceState(null, '', window.location.pathname);
+          this.save();
+          this.showNotice('Se restauraron las plantillas de ejemplo.');
+        },
+        initSortable() {
+          if (!window.Sortable) return;
+          this.$nextTick(() => {
+            const el = document.getElementById('items-list');
+            if (!el) {
+              sortableEl = null;
+              return;
+            }
+            if (el === sortableEl) return;
+            sortableEl = el;
+            new Sortable(el, {
+              animation: 150,
+              draggable: '.card',
+              handle: '.drag-handle',
+              ghostClass: 'sortable-ghost',
+              onEnd: () => {
+                if (!this.selected) return;
+                const order = [...el.querySelectorAll('[data-id]')].map(node => node.dataset.id);
+                const byId = new Map(this.selected.items.map(item => [item.id, item]));
+                const reordered = order.map(id => byId.get(id)).filter(Boolean);
+                this.selected.items.filter(item => !order.includes(item.id)).forEach(item => reordered.push(item));
+                this.selected.items = reordered;
+                this.save();
+              }
+            });
+          });
+        }
+      },
+      mounted() {
+        this.save();
+        this.initSortable();
+      }
+    });
+
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      app.mount('#app');
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

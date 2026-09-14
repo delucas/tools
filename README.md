@@ -14,5 +14,6 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`pseditor`](./pseditor) | Editor de pseudocódigo con resaltado, indentación y operadores Unicode. |
 | [`basket`](./basket) | Lista de compras para cualquier comercio, con cantidades, unidades y orden personalizado. |
 | [`gsd`](./gsd) | Get Sh*t Done: lista de tareas con fecha de creación y fecha de tildado. |
+| [`checksmith`](./checksmith) | Forja de checklists: catálogo de plantillas para instanciar en Get Sh*t Done. |
 
 Cada carpeta tiene su propio `README.md` con el detalle de uso.

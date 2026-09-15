@@ -81,7 +81,7 @@
               <button class="btn btn-outline-secondary btn-sm" type="button" @click="duplicateTemplate(selected)">⧉ Duplicar</button>
               <button class="btn btn-outline-danger btn-sm" type="button" @click="deleteTemplate(selected)">Borrar</button>
             </div>
-            <div class="form-text mt-2">Usar en GSD abre la plantilla como lista pendiente nueva (con fecha de hoy) y copia el link. El link reemplaza lo que muestra GSD, no lo fusiona.</div>
+            <div class="form-text mt-2">Usar en GSD agrega la plantilla como lista nueva (con fecha de hoy) sin borrar las demás listas.</div>
           </div>
         </div>
 
@@ -301,7 +301,7 @@
             .filter(Boolean)
             .map(text => ({ id: newId(), text: text.slice(0, 280), createdAt: today, done: false, completedAt: null }));
           const url = new URL('../gsd/', window.location.href);
-          url.searchParams.set('data', JSON.stringify({ tasks }));
+          url.searchParams.set('addList', JSON.stringify({ name: t.name, tasks }));
           return url.toString();
         },
         async copyText(text) {

@@ -17,5 +17,6 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`checksmith`](./checksmith) | Forja de checklists: catálogo de plantillas para instanciar en Get Sh*t Done. |
 | [`hojitas`](./hojitas) | Hojas A4 para imprimir: puntitos, renglones o cuadrícula configurables. |
 | [`eqtex`](./eqtex) | Editor de ecuaciones LaTeX con vista previa y descarga en PNG transparente. |
+| [`markpress`](./markpress) | Editor markdown de dos paneles con tablas, LaTeX y salida a PDF. |
 
 Cada carpeta tiene su propio `README.md` con el detalle de uso.

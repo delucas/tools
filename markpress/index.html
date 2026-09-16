@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f4f0%3B%3C/text%3E%3C/svg%3E">
+  <title>MarkPress — editor markdown a PDF</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.18.6/katex.min.css" rel="stylesheet"
+    integrity="sha512-hlhL0Hg3cxOco8tCQqGSQJpKClqXth8ioVSeCyXoRBvcWvMJGlKAtgz6McECrKqrzwiTtZf/p8U+LPzShtmgVw=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link id="css-latex" href="https://cdn.jsdelivr.net/npm/latex.css@1.13.0/style.min.css" rel="stylesheet"
+    integrity="sha512-QrCqrkk5zNH+fCawTcuke2APkBfL8QHuO4cjfHyssm73ftpCIS+pHJeA+3RsRDtc2oTOb0e+SsDPFb8rhzFTCg=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link id="css-tufte" href="https://cdnjs.cloudflare.com/ajax/libs/tufte-css/1.8.0/tufte.min.css" rel="stylesheet"
+    integrity="sha512-F5lKjC1GKbwLFXdThwMWx8yF8TX/WVrdhWYN9PWb6eb5hIRLmO463nrpqLnEUHxy2EHIzfC4dq/mncHD6ndR+g=="
+    crossorigin="anonymous" referrerpolicy="no-referrer" disabled>
+
+  <style>
+    #markdown-input {
+      font-family: var(--bs-font-monospace);
+      min-height: 60vh;
+      resize: vertical;
+    }
+
+    #print-area {
+      background-color: #ffffff;
+      color: #000000;
+      border: 1px solid #dee2e6;
+      border-radius: var(--bs-border-radius);
+      min-height: 60vh;
+    }
+
+    #print-area .katex {
+      color: #000000;
+    }
+
+    /* Contención: LaTeX.css y Tufte son globales por diseño; la app conserva
+       Bootstrap y el documento toma el estilo elegido solo en #print-area. */
+    html {
+      font-size: initial;
+    }
+
+    body {
+      width: auto;
+      max-width: none;
+      margin: 0;
+      padding: 0;
+      font-family: var(--bs-body-font-family);
+      line-height: var(--bs-body-line-height);
+      background-color: var(--bs-body-bg);
+      color: var(--bs-body-color);
+    }
+
+    section {
+      padding-top: 0;
+      padding-bottom: 0;
+    }
+
+    html[data-estilo="latex"] #print-area {
+      font-family: 'Latin Modern', Georgia, Cambria, 'Times New Roman', Times, serif;
+      line-height: 1.8;
+      max-width: 80ch;
+      margin: 0 auto;
+    }
+
+    html[data-estilo="tufte"] #print-area {
+      font-family: et-book, Palatino, "Palatino Linotype", "Palatino LT STD", "Book Antiqua", Georgia, serif;
+      background-color: #fffff8;
+      max-width: 1400px;
+    }
+
+    html[data-estilo="actual"] #print-area blockquote {
+      border-left: 4px solid var(--bs-border-color);
+      padding-left: 1em;
+      color: #555555;
+    }
+
+    html[data-estilo="actual"] #print-area pre {
+      background-color: #f6f8fa;
+      color: #000000;
+      border-radius: var(--bs-border-radius);
+      padding: 1em;
+      overflow-x: auto;
+    }
+
+    #print-area .math-display {
+      overflow-x: auto;
+      padding: 0.25em 0;
+    }
+
+    p.signature {
+      font-size: 0.8em;
+    }
+
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+
+      #print-area,
+      #print-area * {
+        visibility: visible;
+      }
+
+      #print-area {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        width: 100%;
+        min-height: auto;
+        border: none !important;
+        background: #ffffff !important;
+        color: #000000 !important;
+      }
+
+      #print-area .katex {
+        color: #000000;
+      }
+
+      #print-area table,
+      #print-area pre,
+      #print-area blockquote {
+        break-inside: avoid;
+      }
+
+      @page {
+        size: A4;
+        margin: 15mm;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <main class="container-fluid px-4 py-4">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1 text-start">MarkPress</h1>
+        <p class="text-body-secondary mb-0">Editor markdown de dos paneles: escribí, previsualizá y sacá el PDF.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="open" class="btn btn-outline-secondary btn-sm" type="button">📂 Abrir</button>
+        <button id="save" class="btn btn-outline-secondary btn-sm" type="button">💾 Guardar</button>
+        <button id="pdf" class="btn btn-outline-secondary btn-sm" type="button">🖨️ PDF</button>
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div id="notice" class="alert alert-success py-2 d-none" role="status"></div>
+
+    <div class="mb-3" style="max-width: 640px;">
+      <label for="doc-name" class="form-label">Nombre del documento</label>
+      <input id="doc-name" class="form-control" type="text" maxlength="80" placeholder="Por ejemplo, informe-mensual">
+    </div>
+
+    <div class="row g-3">
+      <section class="col-12 col-lg-6">
+        <label for="markdown-input" class="form-label">Markdown</label>
+        <textarea id="markdown-input" class="form-control" spellcheck="false" placeholder="# Título&#10;&#10;Escribí tu documento acá…"></textarea>
+        <div id="stats" class="form-text"></div>
+      </section>
+      <section class="col-12 col-lg-6">
+        <div class="mb-1 d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <span class="form-label mb-0">Vista previa</span>
+          <div class="btn-group btn-group-sm" role="group" aria-label="Estilo del documento">
+            <button id="est-actual" class="btn btn-outline-secondary" type="button">Actual</button>
+            <button id="est-latex" class="btn btn-outline-secondary" type="button">LaTeX</button>
+            <button id="est-tufte" class="btn btn-outline-secondary" type="button">Tufte</button>
+          </div>
+        </div>
+        <div id="print-area" class="p-4">
+          <div id="preview"></div>
+        </div>
+        <div id="error" class="form-text text-danger d-none" role="alert"></div>
+      </section>
+    </div>
+
+    <input id="import-file" type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" hidden>
+
+    <details class="mt-4">
+      <summary class="text-body-secondary">Sintaxis soportada</summary>
+      <div class="mt-2 small">
+        <p class="mb-2">Markdown estándar y tablas estilo GitHub. LaTeX con <code>$...$</code> en línea y <code>$$...$$</code> en bloque. Si una fórmula falla, se muestra el texto original y el detalle queda en la consola.</p>
+        <p class="mb-0">El botón <code>🖨️ PDF</code> abre el diálogo de impresión con el documento ya optimizado: elegí "Guardar como PDF" para obtener un PDF vectorial en A4. El borrador se guarda automáticamente en este navegador.</p>
+      </div>
+    </details>
+
+    <hr>
+
+    <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/18.0.13/lib/marked.umd.min.js"
+    integrity="sha512-kHavuYjOa82OKvUxD8j04s+kMIH84FmETnuIgj0yFyY9LWU10sXNwU54Iozpewat8VxAzH4aXiwTEZMRrpwfBw=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.18.6/katex.min.js"
+    integrity="sha512-R6ebU8e1iPsUu+8q3BMGd8M7DyKQcB2lVvWSyTC1RK7O3ywVWCbHDr4a9C10w3HNbYvhxiRtIwjE5w3hPRwzRw=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script>
+    const STORAGE_KEY = 'markpress-doc';
+    const DEFAULT_NAME = 'ejemplo';
+    const ESTILOS = ['actual', 'latex', 'tufte'];
+    const DEFAULT_ESTILO = 'latex';
+    const DEFAULT_MARKDOWN = `# Informe de ejemplo
+
+Este es un documento de **MarkPress**: escribí a la izquierda y mirá el resultado a la derecha.
+
+## Una tabla
+
+| Producto | Cantidad | Precio |
+|----------|:--------:|-------:|
+| Manzanas | 10 | $ 150 |
+| Peras | 4 | $ 90 |
+
+## Una fórmula en línea y una en bloque
+
+La energía cinética es $E = \\frac{1}{2} \\cdot m \\cdot v^{2}$ y vale para $v \\in \\mathbb{R}$.
+
+$$f(x) = \\begin{cases}
+  1 & \\text{si } x \\in A \\\\
+  0 & \\text{en otro caso}
+\\end{cases} \\Rightarrow E = m \\cdot c^{2}$$
+`;
+
+    const docName = document.getElementById('doc-name');
+    const input = document.getElementById('markdown-input');
+    const preview = document.getElementById('preview');
+    const stats = document.getElementById('stats');
+    const notice = document.getElementById('notice');
+    const errorBox = document.getElementById('error');
+    const importFile = document.getElementById('import-file');
+    let noticeTimeout;
+    let renderTimeout;
+    let estilo = DEFAULT_ESTILO;
+
+    function showNotice(message) {
+      clearTimeout(noticeTimeout);
+      notice.textContent = message;
+      notice.classList.remove('d-none');
+      noticeTimeout = setTimeout(() => notice.classList.add('d-none'), 1800);
+    }
+
+    function showError(message) {
+      if (!message) {
+        errorBox.classList.add('d-none');
+        return;
+      }
+      errorBox.textContent = message;
+      errorBox.classList.remove('d-none');
+    }
+
+    function escapeHtml(text) {
+      return text.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
+    }
+
+    function sanitizeFilename(name) {
+      return (name || 'documento').replace(/[\\/:*?"<>|]/g, '-').trim().slice(0, 60) || 'documento';
+    }
+
+    function validEstilo(value) {
+      return ESTILOS.includes(value) ? value : DEFAULT_ESTILO;
+    }
+
+    function loadDoc() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (typeof saved?.markdown === 'string') {
+          return { nombre: saved.nombre || DEFAULT_NAME, markdown: saved.markdown, estilo: validEstilo(saved.estilo) };
+        }
+      } catch { /* dato inválido: se usa el ejemplo */ }
+      return { nombre: DEFAULT_NAME, markdown: DEFAULT_MARKDOWN, estilo: DEFAULT_ESTILO };
+    }
+
+    function saveDoc() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ nombre: docName.value, markdown: input.value, estilo }));
+    }
+
+    function applyEstilo(nombre) {
+      estilo = validEstilo(nombre);
+      document.getElementById('css-latex').disabled = estilo !== 'latex';
+      document.getElementById('css-tufte').disabled = estilo !== 'tufte';
+      document.documentElement.dataset.estilo = estilo;
+      document.getElementById('print-area').classList.toggle('text-justify', estilo === 'latex');
+      ESTILOS.forEach(n => {
+        const btn = document.getElementById('est-' + n);
+        btn.classList.toggle('btn-secondary', n === estilo);
+        btn.classList.toggle('btn-outline-secondary', n !== estilo);
+      });
+      render();
+    }
+
+    // Extrae segmentos (matemática display/inline y código) antes de marked.parse
+    // y los restaura después, para que el parser no los deforme.
+    function renderMarkdown(markdown) {
+      const display = [];
+      const inline = [];
+      const code = [];
+      let mathErrors = 0;
+
+      // Bloques de código cercados: se restauran como <pre><code> escapado.
+      let text = markdown.replace(/```(\w*)\n([\s\S]*?)(?:\n```|$)/g, (_, lang, body) => {
+        code.push({ lang: (lang || '').trim(), body: body.replace(/\n$/, '') });
+        return `\n\nMKPCODE${code.length - 1}MKP\n\n`;
+      });
+      // Código en línea: se restaura como <code> escapado.
+      text = text.replace(/`([^`\n]+)`/g, (_, body) => {
+        code.push({ lang: '', inline: true, body });
+        return `MKPCODE${code.length - 1}MKP`;
+      });
+      // Matemática display $$...$$.
+      text = text.replace(/\$\$([\s\S]+?)\$\$/g, (_, body) => {
+        display.push(body.trim());
+        return `\n\nMKPMATHD${display.length - 1}MKP\n\n`;
+      });
+      // Matemática inline $...$ (una línea, sin $ anidados ni espacio inicial,
+      // para no confundir precios como $ 150 con fórmulas).
+      text = text.replace(/\$([^\s$][^$\n]*?)\$/g, (match, body) => {
+        inline.push(body.trim());
+        return `MKPMATHI${inline.length - 1}MKP`;
+      });
+
+      let html = marked.parse(text);
+
+      html = html.replace(/<p>\s*(MKPMATHD\d+MKP)\s*<\/p>/g, (_, token) => {
+        const body = display[Number(token.slice(8, -3))];
+        try {
+          return katex.renderToString(body, { displayMode: true, throwOnError: true });
+        } catch (e) {
+          mathErrors++;
+          console.error('MarkPress: error de sintaxis LaTeX:', e.message);
+          return `<pre>$$${escapeHtml(body)}$$</pre>`;
+        }
+      });
+      html = html.replace(/(MKPMATHD\d+MKP|MKPMATHI\d+MKP|MKPCODE\d+MKP)/g, token => {
+        if (token.startsWith('MKPMATHD')) {
+          const body = display[Number(token.slice(8, -3))];
+          try {
+            return `<div class="math-display">${katex.renderToString(body, { displayMode: true, throwOnError: true })}</div>`;
+          } catch (e) {
+            mathErrors++;
+            console.error('MarkPress: error de sintaxis LaTeX:', e.message);
+            return `<pre>$$${escapeHtml(body)}$$</pre>`;
+          }
+        }
+        if (token.startsWith('MKPMATHI')) {
+          const body = inline[Number(token.slice(8, -3))];
+          try {
+            return katex.renderToString(body, { displayMode: false, throwOnError: true });
+          } catch (e) {
+            mathErrors++;
+            console.error('MarkPress: error de sintaxis LaTeX:', e.message);
+            return `$${escapeHtml(body)}$`;
+          }
+        }
+        const entry = code[Number(token.slice(7, -3))];
+        if (!entry) return token;
+        if (entry.inline) return `<code>${escapeHtml(entry.body)}</code>`;
+        return `<pre><code>${escapeHtml(entry.body)}</code></pre>`;
+      });
+
+      return { html, mathErrors };
+    }
+
+    function render() {
+      if (typeof marked === 'undefined' || typeof katex === 'undefined') {
+        showError('No se pudieron cargar marked o KaTeX (revisá tu conexión).');
+        console.error('MarkPress: marked o KaTeX no disponibles; un CDN o su hash SRI falló.');
+        return;
+      }
+      const { html, mathErrors } = renderMarkdown(input.value);
+      preview.innerHTML = html;
+      // En modo Actual las tablas llevan Bootstrap; en LaTeX/Tufte las
+      // estila la propia librería (booktabs y cía).
+      if (estilo === 'actual') {
+        preview.querySelectorAll('table').forEach(table => {
+          table.classList.add('table', 'table-bordered', 'table-sm');
+        });
+      }
+      const length = input.value.length;
+      stats.textContent = `${length} ${length === 1 ? 'carácter' : 'caracteres'}`;
+      showError(mathErrors ? 'Revisá la sintaxis LaTeX (detalle en consola).' : '');
+      saveDoc();
+    }
+
+    function scheduleRender() {
+      clearTimeout(renderTimeout);
+      renderTimeout = setTimeout(render, 250);
+    }
+
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    const initial = loadDoc();
+    docName.value = initial.nombre;
+    input.value = initial.markdown;
+    applyEstilo(initial.estilo);
+
+    input.addEventListener('input', scheduleRender);
+    docName.addEventListener('input', saveDoc);
+
+    document.getElementById('save').addEventListener('click', () => {
+      saveDoc();
+      downloadBlob(new Blob([input.value], { type: 'text/markdown;charset=utf-8' }), sanitizeFilename(docName.value) + '.md');
+      showNotice('Se descargó el documento Markdown.');
+    });
+
+    document.getElementById('open').addEventListener('click', () => importFile.click());
+
+    importFile.addEventListener('change', async event => {
+      const [file] = event.target.files;
+      event.target.value = '';
+      if (!file) return;
+      try {
+        input.value = await file.text();
+        docName.value = file.name.replace(/\.(md|markdown|txt)$/i, '') || DEFAULT_NAME;
+        render();
+        showNotice('Se abrió el documento.');
+      } catch {
+        showNotice('No se pudo abrir el archivo.');
+      }
+    });
+
+    document.getElementById('pdf').addEventListener('click', () => window.print());
+
+    document.getElementById('reset').addEventListener('click', () => {
+      localStorage.removeItem(STORAGE_KEY);
+      docName.value = DEFAULT_NAME;
+      input.value = DEFAULT_MARKDOWN;
+      applyEstilo(DEFAULT_ESTILO);
+      showNotice('Se restauró el ejemplo inicial.');
+    });
+
+    ESTILOS.forEach(n => {
+      document.getElementById('est-' + n).addEventListener('click', () => applyEstilo(n));
+    });
+
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initialTheme = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initialTheme);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

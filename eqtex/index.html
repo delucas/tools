@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x2211%3B%3C/text%3E%3C/svg%3E">
+  <title>EqTeX — editor de ecuaciones LaTeX</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.18.6/katex.min.css" rel="stylesheet"
+    integrity="sha512-hlhL0Hg3cxOco8tCQqGSQJpKClqXth8ioVSeCyXoRBvcWvMJGlKAtgz6McECrKqrzwiTtZf/p8U+LPzShtmgVw=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    #latex-input {
+      font-family: var(--bs-font-monospace);
+      min-height: 160px;
+    }
+
+    #preview-box {
+      background-color: #ffffff;
+      color: #000000;
+      border: 1px solid #dee2e6;
+      border-radius: var(--bs-border-radius);
+      overflow-x: auto;
+    }
+
+    #preview-box .katex {
+      color: #000000;
+    }
+
+    .cheat-row {
+      cursor: pointer;
+    }
+
+    .cheat-row code {
+      overflow-wrap: anywhere;
+    }
+
+    .cheat-preview {
+      overflow-x: auto;
+      max-width: 100%;
+    }
+
+    p.signature {
+      font-size: 0.8em;
+    }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4">
+    <div id="app">
+      <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+      <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+        <div>
+          <h1 class="h3 mb-1">EqTeX</h1>
+          <p class="text-body-secondary mb-0">Editor de ecuaciones LaTeX con vista previa lista para capturar.</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ shared ? '¡Copiado!' : '🔗 Compartir' }}</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset">🗑️ Reiniciar</button>
+          <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+        </div>
+      </div>
+
+      <div v-if="notice" class="alert alert-success py-2" role="status">{{ notice }}</div>
+
+      <div class="row g-3">
+        <section class="col-12 col-lg-8">
+          <div class="mb-3">
+            <label for="formula-name" class="form-label">Nombre de la fórmula</label>
+            <div class="input-group">
+              <input id="formula-name" class="form-control" type="text" maxlength="80" v-model="nombre" @input="saveDraft" placeholder="Por ejemplo, Energía cinética">
+              <button class="btn btn-outline-secondary" type="button" @click="guardar">Guardar</button>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label for="latex-input" class="form-label">LaTeX</label>
+            <textarea id="latex-input" class="form-control" v-model="latex" @input="onInput" spellcheck="false" placeholder="E = \frac{1}{2} \cdot m \cdot v^{2}"></textarea>
+            <div class="form-text">{{ latex.length }} caracteres</div>
+          </div>
+
+          <div class="mb-1 d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <span class="form-label mb-0">Vista previa (fondo blanco)</span>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+              <div class="btn-group btn-group-sm" role="group" aria-label="Tamaño de la fórmula">
+                <button type="button" :class="['btn', tamano === 1 ? 'btn-secondary' : 'btn-outline-secondary']" @click="setTamano(1)" title="Tamaño normal">1×</button>
+                <button type="button" :class="['btn', tamano === 2 ? 'btn-secondary' : 'btn-outline-secondary']" @click="setTamano(2)" title="Doble tamaño">2×</button>
+                <button type="button" :class="['btn', tamano === 3 ? 'btn-secondary' : 'btn-outline-secondary']" @click="setTamano(3)" title="Triple tamaño">3×</button>
+              </div>
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="downloadPng" :disabled="pngBusy">{{ pngBusy ? 'Generando…' : '⬇️ Descargar PNG transparente' }}</button>
+            </div>
+          </div>
+          <div id="preview-box" class="mb-2" style="background-color:#ffffff;color:#000000;padding:1.5rem;">
+            <div id="preview" :style="{ color: '#000000', fontSize: tamano + 'em' }"></div>
+          </div>
+          <div v-if="error" class="form-text text-danger" role="alert">{{ error }}</div>
+          <p class="form-text">El PNG sale con fondo transparente y 1em de margen, al tamaño elegido.</p>
+        </section>
+
+        <aside class="col-12 col-lg-4">
+          <h2 class="h6">Cheatsheet <small class="text-body-secondary fw-normal">(clic para insertar)</small></h2>
+          <div class="table-responsive mb-1">
+            <table class="table table-sm table-hover align-middle mb-0">
+              <tbody>
+                <tr v-for="item in cheatsheet" :key="item.cmd" class="cheat-row" @click="insert(item.snippet)" :title="'Insertar ' + item.cmd">
+                  <td class="font-monospace small"><code>{{ item.cmd }}</code></td>
+                  <td class="small text-body-secondary">{{ item.desc }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="small mb-4"><a href="https://katex.org/docs/supported.html" target="_blank" rel="noopener">📖 Referencia</a></p>
+
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h2 class="h6 mb-0">Mis fórmulas</h2>
+            <span class="badge text-bg-secondary">{{ formulas.length }}</span>
+          </div>
+          <div v-if="!formulas.length" class="text-body-secondary small mb-2">Todavía no guardaste fórmulas. Escribí una y ponle nombre.</div>
+          <div v-else class="list-group mb-2">
+            <div v-for="f in formulas" :key="f.nombre" class="list-group-item d-flex justify-content-between align-items-center gap-2">
+              <button class="btn btn-link text-start text-decoration-none p-0 flex-grow-1 text-truncate" type="button" @click="cargar(f.nombre)" :title="f.latex">{{ f.nombre }}</button>
+              <button class="btn btn-outline-danger btn-sm" type="button" @click="eliminar(f.nombre)" :title="'Eliminar ' + f.nombre">×</button>
+            </div>
+          </div>
+          <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-outline-secondary btn-sm" type="button" @click="exportar">Guardar .md</button>
+            <button class="btn btn-outline-secondary btn-sm" type="button" @click="abrirImport">Abrir .md</button>
+          </div>
+          <input id="import-file" type="file" accept=".md,text/markdown,text/plain" hidden @change="importar">
+        </aside>
+      </div>
+    </div>
+
+    <hr>
+
+    <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.5.42/vue.global.prod.min.js"
+    integrity="sha512-PREsKi18CyKMgwXMJWtvkzinqjiN0znVfDovmVadp7pKiUpyNGtq7bD2fKElDBmdfH4DGJz8pmAdgihN8NZ8TQ=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.18.6/katex.min.js"
+    integrity="sha512-R6ebU8e1iPsUu+8q3BMGd8M7DyKQcB2lVvWSyTC1RK7O3ywVWCbHDr4a9C10w3HNbYvhxiRtIwjE5w3hPRwzRw=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"
+    integrity="sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoeqMV/TJlSKda6FXzoEyYGjTe+vXA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script>
+    const FORMULAS_KEY = 'eqtex-formulas';
+    const DRAFT_KEY = 'eqtex-actual';
+    const DEFAULT_NOMBRE = 'Ejemplo con casos';
+    const DEFAULT_LATEX = 'f(x) = \\begin{cases}\n  1 & \\text{si } x \\in A \\\\\n  0 & \\text{en otro caso}\n\\end{cases} \\Rightarrow E = m \\cdot c^{2}';
+
+    const CHEATSHEET = [
+      { cmd: '\\in', desc: 'Pertenencia', snippet: 'x \\in A' },
+      { cmd: '\\cases', desc: 'Definición por casos', snippet: '\\begin{cases}\n  1 & \\text{si } x \\in A \\\\\n  0 & \\text{en otro caso}\n\\end{cases}' },
+      { cmd: '\\cdot', desc: 'Producto punto', snippet: 'a \\cdot b' },
+      { cmd: '\\times', desc: 'Producto cruz', snippet: 'a \\times b' },
+      { cmd: '\\frac', desc: 'Fracción', snippet: '\\frac{a}{b}' },
+      { cmd: '^{ } / _{ }', desc: 'Super / subíndice', snippet: 'x^{n}_{i}' },
+      { cmd: '\\sum', desc: 'Sumatoria', snippet: '\\sum_{i=1}^{n} x_i' },
+      { cmd: '\\Rightarrow', desc: 'Implica', snippet: 'A \\Rightarrow B' },
+      { cmd: '\\rightarrow', desc: 'Flecha / tiende a', snippet: 'x \\rightarrow 0' },
+      { cmd: '\\neq', desc: 'Distinto', snippet: 'a \\neq b' },
+      { cmd: '\\leq / \\geq', desc: 'Menor-mayor o igual', snippet: 'a \\leq b \\geq c' },
+      { cmd: '\\infty', desc: 'Infinito', snippet: '\\infty' },
+      { cmd: '\\forall / \\exists', desc: 'Cuantificadores', snippet: '\\forall x \\in A,\\ \\exists y' },
+      { cmd: '\\text', desc: 'Texto dentro', snippet: '\\text{si } x > 0' }
+    ];
+
+    function getQueryParam(param) {
+      return new URLSearchParams(window.location.search).get(param);
+    }
+
+    function loadFormulas() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(FORMULAS_KEY));
+        if (Array.isArray(saved)) return saved.filter(f => typeof f?.nombre === 'string' && typeof f?.latex === 'string');
+      } catch { /* dato inválido: se empieza vacío */ }
+      return [];
+    }
+
+    function validTamano(value) {
+      const n = Number(value);
+      return [1, 2, 3].includes(n) ? n : 1;
+    }
+
+    function loadDraft() {
+      const sharedLatex = getQueryParam('latex');
+      const sharedNombre = getQueryParam('nombre');
+      if (sharedLatex !== null) return { nombre: (sharedNombre || 'compartida').trim() || 'compartida', latex: sharedLatex, tamano: validTamano(getQueryParam('t')) };
+      try {
+        const saved = JSON.parse(localStorage.getItem(DRAFT_KEY));
+        if (typeof saved?.latex === 'string') return { nombre: saved.nombre || DEFAULT_NOMBRE, latex: saved.latex, tamano: validTamano(saved.tamano) };
+      } catch { /* dato inválido: se usa el ejemplo */ }
+      return { nombre: DEFAULT_NOMBRE, latex: DEFAULT_LATEX, tamano: 1 };
+    }
+
+    function copyText(text) {
+      if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
+      const input = document.createElement('textarea');
+      input.value = text;
+      input.style.position = 'fixed';
+      document.body.append(input);
+      input.select();
+      document.execCommand('copy');
+      input.remove();
+      return Promise.resolve();
+    }
+
+    function sanitizeFilename(name) {
+      return (name || 'formula').replace(/[\\/:*?"<>|]/g, '-').trim().slice(0, 60) || 'formula';
+    }
+
+    function formulasMarkdown(formulas) {
+      const lines = ['# EqTeX fórmulas', ''];
+      formulas.forEach(f => {
+        lines.push(`## Fórmula: ${f.nombre}`, '', '```latex', f.latex, '```', '');
+      });
+      return lines.join('\n');
+    }
+
+    function formulasFromMarkdown(markdown) {
+      const formulas = [];
+      const sections = markdown.split(/^## Fórmula:\s*(.+)$/m);
+      // sections[0] es el encabezado; luego alterna nombre / cuerpo
+      for (let i = 1; i < sections.length; i += 2) {
+        const nombre = (sections[i] || '').trim();
+        const body = sections[i + 1] || '';
+        const code = body.match(/```latex\r?\n([\s\S]*?)\r?\n```/);
+        if (nombre && code) formulas.push({ nombre, latex: code[1] });
+      }
+      if (!formulas.length) throw new Error('No se encontraron fórmulas (bloques ```latex) en el archivo.');
+      return formulas;
+    }
+
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    let noticeTimeout;
+
+    Vue.createApp({
+      data() {
+        const draft = loadDraft();
+        return {
+          nombre: draft.nombre,
+          latex: draft.latex,
+          tamano: draft.tamano,
+          formulas: loadFormulas(),
+          cheatsheet: CHEATSHEET,
+          error: '',
+          notice: '',
+          shared: false,
+          pngBusy: false
+        };
+      },
+      methods: {
+        render() {
+          const el = document.getElementById('preview');
+          if (!el) return;
+          if (typeof katex === 'undefined') {
+            this.error = 'No se pudo cargar KaTeX (revisá tu conexión).';
+            console.error('EqTeX: KaTeX no está disponible; el CDN o su hash SRI falló.');
+            return;
+          }
+          try {
+            katex.render(this.latex, el, { displayMode: true, throwOnError: true });
+            if (this.error) this.error = '';
+          } catch (e) {
+            try {
+              katex.render(this.latex, el, { displayMode: true, throwOnError: false });
+            } catch { el.textContent = ''; }
+            console.error('EqTeX: error de sintaxis LaTeX:', e.message);
+            const message = 'Revisá la sintaxis (detalle en consola).';
+            if (this.error !== message) this.error = message;
+          }
+        },
+        showNotice(message) {
+          clearTimeout(noticeTimeout);
+          this.notice = message;
+          noticeTimeout = setTimeout(() => { this.notice = ''; }, 1800);
+        },
+        onInput() {
+          this.saveDraft();
+          this.render();
+        },
+        saveDraft() {
+          localStorage.setItem(DRAFT_KEY, JSON.stringify({ nombre: this.nombre, latex: this.latex, tamano: this.tamano }));
+        },
+        setTamano(n) {
+          this.tamano = n;
+          this.saveDraft();
+        },
+        saveFormulas() {
+          localStorage.setItem(FORMULAS_KEY, JSON.stringify(this.formulas));
+        },
+        insert(snippet) {
+          const input = document.getElementById('latex-input');
+          const start = input.selectionStart ?? this.latex.length;
+          const end = input.selectionEnd ?? this.latex.length;
+          this.latex = this.latex.slice(0, start) + snippet + this.latex.slice(end);
+          this.onInput();
+          this.$nextTick(() => {
+            input.focus();
+            const pos = start + snippet.length;
+            input.setSelectionRange(pos, pos);
+          });
+        },
+        guardar() {
+          const nombre = this.nombre.trim() || 'sin-nombre';
+          const existing = this.formulas.find(f => f.nombre === nombre);
+          if (existing) {
+            if (!window.confirm(`¿Sobrescribir "${nombre}"?`)) return;
+            existing.latex = this.latex;
+          } else {
+            this.formulas.push({ nombre, latex: this.latex });
+          }
+          this.nombre = nombre;
+          this.saveFormulas();
+          this.saveDraft();
+          this.showNotice(`Se guardó "${nombre}".`);
+        },
+        cargar(nombre) {
+          const found = this.formulas.find(f => f.nombre === nombre);
+          if (!found) return;
+          this.nombre = found.nombre;
+          this.latex = found.latex;
+          this.saveDraft();
+          this.render();
+        },
+        eliminar(nombre) {
+          if (!window.confirm(`¿Eliminar "${nombre}"?`)) return;
+          this.formulas = this.formulas.filter(f => f.nombre !== nombre);
+          this.saveFormulas();
+          this.showNotice('Se eliminó la fórmula.');
+        },
+        share() {
+          const url = new URL(window.location.href);
+          url.search = '';
+          url.searchParams.set('nombre', this.nombre.trim() || 'sin-nombre');
+          url.searchParams.set('latex', this.latex);
+          url.searchParams.set('t', String(this.tamano));
+          copyText(url.toString()).then(
+            () => { this.shared = true; setTimeout(() => { this.shared = false; }, 1500); },
+            () => this.showNotice('No se pudo copiar el enlace.')
+          );
+        },
+        reset() {
+          localStorage.removeItem(FORMULAS_KEY);
+          localStorage.removeItem(DRAFT_KEY);
+          this.formulas = [];
+          this.nombre = DEFAULT_NOMBRE;
+          this.latex = DEFAULT_LATEX;
+          this.tamano = 1;
+          history.replaceState(null, '', window.location.pathname);
+          this.render();
+          this.showNotice('Se restauró el ejemplo inicial.');
+        },
+        async downloadPng() {
+          const box = document.getElementById('preview-box');
+          if (typeof html2canvas === 'undefined') {
+            this.showNotice('No se pudo cargar el generador de PNG.');
+            return;
+          }
+          this.pngBusy = true;
+          // El recuadro es blanco para captura manual, pero el PNG debe salir
+          // transparente y con 1em de margen: se ajusta durante la captura
+          // y se restaura después.
+          const previousBackground = box.style.backgroundColor;
+          const previousPadding = box.style.padding;
+          const previousBorder = box.style.border;
+          const previousOverflow = box.style.overflow;
+          const previousWidth = box.style.width;
+          box.style.backgroundColor = 'transparent';
+          box.style.padding = '1em';
+          box.style.border = 'none';
+          // Sin esto, una fórmula más ancha que la columna genera scroll y el
+          // padding derecho se pierde: la caja se ensancha al contenido.
+          box.style.overflow = 'visible';
+          box.style.width = 'max-content';
+          try {
+            const canvas = await html2canvas(box, { backgroundColor: null, scale: 3, logging: false });
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+            if (!blob) throw new Error('canvas vacío');
+            downloadBlob(blob, sanitizeFilename(this.nombre.trim()) + '.png');
+            this.showNotice('Se descargó el PNG transparente.');
+          } catch (e) {
+            console.error('EqTeX: no se pudo generar el PNG:', e);
+            this.showNotice('No se pudo generar el PNG.');
+          } finally {
+            box.style.backgroundColor = previousBackground;
+            box.style.padding = previousPadding;
+            box.style.border = previousBorder;
+            box.style.overflow = previousOverflow;
+            box.style.width = previousWidth;
+            this.pngBusy = false;
+          }
+        },
+        exportar() {
+          if (!this.formulas.length) {
+            this.showNotice('No hay fórmulas para exportar.');
+            return;
+          }
+          downloadBlob(new Blob([formulasMarkdown(this.formulas)], { type: 'text/markdown;charset=utf-8' }), 'eqtex-formulas.md');
+          this.showNotice('Se descargó la colección en Markdown.');
+        },
+        abrirImport() {
+          document.getElementById('import-file').click();
+        },
+        async importar(event) {
+          const [file] = event.target.files;
+          event.target.value = '';
+          if (!file) return;
+          try {
+            this.formulas = formulasFromMarkdown(await file.text());
+            this.saveFormulas();
+            history.replaceState(null, '', window.location.pathname);
+            this.showNotice('Se importó la colección.');
+          } catch (e) {
+            this.showNotice(e.message);
+          }
+        }
+      },
+      mounted() {
+        this.render();
+      }
+    }).mount('#app');
+
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

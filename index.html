@@ -31,88 +31,109 @@
       Cada una es una página autocontenida que corre entera en tu navegador.
     </p>
 
-    <div class="list-group my-4">
-      <a href="clocks/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-        <span>
-          <strong>🕐 Clocks... assemble!</strong>
-          <br>
-          <small class="text-body-secondary">Reloj mundial para trackear la hora de tu equipo o contactos.</small>
-        </span>
-        <span aria-hidden="true">→</span>
-      </a>
-      <a href="truth/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-        <span>
-          <strong>✔ Tablas de Verdad</strong>
-          <br>
-          <small class="text-body-secondary">Generador de tablas de verdad a partir de una expresión booleana.</small>
-        </span>
-        <span aria-hidden="true">→</span>
-      </a>
-      <a href="csv-a-grafico/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-        <span>
-          <strong>📊 CSV a Gráfico</strong>
-          <br>
-          <small class="text-body-secondary">Convierte un CSV pegado en un gráfico de torta, series o líneas.</small>
-        </span>
-        <span aria-hidden="true">→</span>
-      </a>
-      <a href="pseditor/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-        <span>
-          <strong>⌨ PSEditor</strong>
-          <br>
-          <small class="text-body-secondary">Editor de pseudocódigo con resaltado, indentación y operadores Unicode.</small>
-        </span>
-        <span aria-hidden="true">→</span>
-      </a>
-      <a href="basket/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-        <span>
-          <strong>🛒 Compra-o-matic</strong>
-          <br>
-          <small class="text-body-secondary">Lista de compras, con cantidades y orden personalizado.</small>
-        </span>
-        <span aria-hidden="true">→</span>
-      </a>
-      <a href="gsd/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-        <span>
-          <strong>✅ Get Sh*t Done</strong>
-          <br>
-          <small class="text-body-secondary">Lista de tareas con fecha de creación y fecha de tildado.</small>
-        </span>
-        <span aria-hidden="true">→</span>
-      </a>
-      <a href="checksmith/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-        <span>
-          <strong>⚒️ Checksmith</strong>
-          <br>
-          <small class="text-body-secondary">Forja de checklists: plantillas para instanciar en Get Sh*t Done.</small>
-        </span>
-        <span aria-hidden="true">→</span>
-      </a>
-      <a href="hojitas/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-        <span>
-          <strong>📄 Hojitas</strong>
-          <br>
-          <small class="text-body-secondary">Hojas A4 para imprimir: puntitos, renglones o cuadrícula.</small>
-        </span>
-        <span aria-hidden="true">→</span>
-      </a>
-      <a href="eqtex/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-        <span>
-          <strong>∑ EqTeX</strong>
-          <br>
-          <small class="text-body-secondary">Editor de ecuaciones LaTeX con vista previa y PNG transparente.</small>
-        </span>
-        <span aria-hidden="true">→</span>
-      </a>
-      <a href="markpress/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-        <span>
-          <strong>📰 MarkPress</strong>
-          <br>
-          <small class="text-body-secondary">Editor markdown de dos paneles con tablas, LaTeX y salida a PDF.</small>
-        </span>
-        <span aria-hidden="true">→</span>
-      </a>
+    <div class="my-4">
+      <input id="filter" class="form-control" type="search" placeholder="🔍 Filtrar por nombre o descripción…" aria-label="Filtrar herramientas" autocomplete="off">
     </div>
+
+    <div id="no-results" class="alert alert-secondary d-none" role="status">Sin resultados para esa búsqueda.</div>
+
+    <section class="tool-group mb-4">
+      <h2 class="h6 text-body-secondary mb-2">📝 Documentos</h2>
+      <div class="list-group">
+        <a href="markpress/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+          <span>
+            <strong>📰 MarkPress</strong>
+            <br>
+            <small class="text-body-secondary">Editor markdown de dos paneles con tablas, LaTeX y salida a PDF.</small>
+          </span>
+          <span aria-hidden="true">→</span>
+        </a>
+        <a href="pseditor/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+          <span>
+            <strong>⌨ PSEditor</strong>
+            <br>
+            <small class="text-body-secondary">Editor de pseudocódigo con resaltado, indentación y operadores Unicode.</small>
+          </span>
+          <span aria-hidden="true">→</span>
+        </a>
+        <a href="eqtex/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+          <span>
+            <strong>∑ EqTeX</strong>
+            <br>
+            <small class="text-body-secondary">Editor de ecuaciones LaTeX con vista previa y PNG transparente.</small>
+          </span>
+          <span aria-hidden="true">→</span>
+        </a>
+        <a href="hojitas/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+          <span>
+            <strong>📄 Hojitas</strong>
+            <br>
+            <small class="text-body-secondary">Hojas A4 para imprimir: puntitos, renglones o cuadrícula.</small>
+          </span>
+          <span aria-hidden="true">→</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="tool-group mb-4">
+      <h2 class="h6 text-body-secondary mb-2">📊 Datos y lógica</h2>
+      <div class="list-group">
+        <a href="truth/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+          <span>
+            <strong>✔ Tablas de Verdad</strong>
+            <br>
+            <small class="text-body-secondary">Generador de tablas de verdad a partir de una expresión booleana.</small>
+          </span>
+          <span aria-hidden="true">→</span>
+        </a>
+        <a href="csv-a-grafico/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+          <span>
+            <strong>📊 CSV a Gráfico</strong>
+            <br>
+            <small class="text-body-secondary">Convierte un CSV pegado en un gráfico de torta, series o líneas.</small>
+          </span>
+          <span aria-hidden="true">→</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="tool-group mb-4">
+      <h2 class="h6 text-body-secondary mb-2">✅ Organización</h2>
+      <div class="list-group">
+        <a href="gsd/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+          <span>
+            <strong>✅ Get Sh*t Done</strong>
+            <br>
+            <small class="text-body-secondary">Lista de tareas con fecha de creación y fecha de tildado.</small>
+          </span>
+          <span aria-hidden="true">→</span>
+        </a>
+        <a href="checksmith/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+          <span>
+            <strong>⚒️ Checksmith</strong>
+            <br>
+            <small class="text-body-secondary">Forja de checklists: plantillas para instanciar en Get Sh*t Done.</small>
+          </span>
+          <span aria-hidden="true">→</span>
+        </a>
+        <a href="basket/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+          <span>
+            <strong>🛒 Compra-o-matic</strong>
+            <br>
+            <small class="text-body-secondary">Lista de compras, con cantidades y orden personalizado.</small>
+          </span>
+          <span aria-hidden="true">→</span>
+        </a>
+        <a href="clocks/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+          <span>
+            <strong>🕐 Clocks... assemble!</strong>
+            <br>
+            <small class="text-body-secondary">Reloj mundial para trackear la hora de tu equipo o contactos.</small>
+          </span>
+          <span aria-hidden="true">→</span>
+        </a>
+      </div>
+    </section>
 
     <footer class="text-body-secondary small border-top pt-3">
       <p>Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
@@ -135,6 +156,27 @@
         const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
         localStorage.setItem('theme', next);
         apply(next);
+      });
+    })();
+
+    (() => {
+      const input = document.getElementById('filter');
+      const empty = document.getElementById('no-results');
+      const normalize = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      input.addEventListener('input', () => {
+        const q = normalize(input.value.trim());
+        let visible = 0;
+        document.querySelectorAll('.tool-group').forEach(group => {
+          let groupVisible = 0;
+          group.querySelectorAll('.list-group-item').forEach(item => {
+            const match = !q || normalize(item.textContent).includes(q);
+            item.classList.toggle('d-none', !match);
+            if (match) groupVisible++;
+          });
+          group.classList.toggle('d-none', groupVisible === 0);
+          visible += groupVisible;
+        });
+        empty.classList.toggle('d-none', visible > 0);
       });
     })();
   </script>

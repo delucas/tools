@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f3ed%3B%3C/text%3E%3C/svg%3E">
+  <title>DocFactory — Combinar correspondencia</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    .mono-input {
+      font-family: var(--bs-font-monospace);
+      font-size: 0.85rem;
+    }
+
+    #preview {
+      min-height: 240px;
+    }
+
+    .signature {
+      font-size: 0.8em;
+    }
+  </style>
+</head>
+<body>
+  <main class="container py-4">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">🏭 DocFactory</h1>
+        <p class="text-body-secondary mb-0">Combiná una plantilla con un CSV y generá un documento por fila.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="share" class="btn btn-outline-secondary btn-sm" type="button">🔗 Compartir</button>
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div id="notice" class="alert py-2 d-none" role="status"></div>
+
+    <div class="card mb-3">
+      <div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+          <label for="template" class="form-label mb-0">Plantilla (Markdown con <code>{{marcadores}}</code>)</label>
+          <span class="form-text mt-0">El nombre debe coincidir exacto con el encabezado del CSV.</span>
+        </div>
+        <textarea id="template" class="form-control mono-input" rows="8" aria-label="Plantilla"></textarea>
+        <div id="chips" class="d-flex flex-wrap gap-1 mt-2" aria-label="Campos disponibles"></div>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-body">
+        <label for="csv" class="form-label">Datos (CSV con encabezados, separado por comas)</label>
+        <textarea id="csv" class="form-control mono-input" rows="6" aria-label="Datos CSV"></textarea>
+        <div id="csv-status" class="form-text"></div>
+      </div>
+    </div>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+      <h2 class="h5 mb-0">Documentos <span id="count" class="badge text-bg-secondary fw-normal">0</span></h2>
+      <div class="d-flex flex-wrap align-items-center gap-2">
+        <button id="prev" class="btn btn-outline-secondary btn-sm" type="button">← Anterior</button>
+        <select id="doc-select" class="form-select form-select-sm" style="width:auto" aria-label="Documento visible"></select>
+        <button id="next" class="btn btn-outline-secondary btn-sm" type="button">Siguiente →</button>
+        <button id="copy-doc" class="btn btn-primary btn-sm" type="button">📋 Copiar</button>
+        <button id="download-doc" class="btn btn-outline-secondary btn-sm" type="button">⬇️ .md</button>
+        <button id="download-all" class="btn btn-outline-secondary btn-sm" type="button">⬇️ Todos</button>
+      </div>
+    </div>
+
+    <div id="warnings" class="alert alert-warning py-2 d-none" role="status"></div>
+
+    <div class="card mb-4">
+      <div id="preview" class="card-body"></div>
+    </div>
+
+    <hr>
+    <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/18.0.13/lib/marked.umd.min.js"
+    integrity="sha512-kHavuYjOa82OKvUxD8j04s+kMIH84FmETnuIgj0yFyY9LWU10sXNwU54Iozpewat8VxAzH4aXiwTEZMRrpwfBw=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script>
+    (() => {
+      const STORAGE_KEY = 'docfactory-estado';
+      const MARKER_PATTERN = /\{\{\s*([\p{L}\p{N}_][\p{L}\p{N}_.-]*)\s*\}\}/gu;
+
+      const DEFAULT_STATE = {
+        template: `# ¡Hola, {{nombre}}! 🎓\n\nTe confirmamos tu lugar en el **grupo de estudio de {{materia}}**.\n\n- 📅 Primer encuentro: {{dia}}\n- 📍 Aula: {{aula}}\n- ☕ Traé mate (o café, no juzgamos)\n\n¡Nos vemos y éxitos en la cursada!`,
+        csv: `nombre,materia,dia,aula\nLucía Fernández,Álgebra I,lunes 18:00,Aula 204\nMartín Gómez,Física II,miércoles 16:00,Aula 101\nSofía Pérez,Historia del Arte,viernes 10:00,`,
+        index: 0
+      };
+
+      const templateEl = document.getElementById('template');
+      const csvEl = document.getElementById('csv');
+      const chipsEl = document.getElementById('chips');
+      const csvStatus = document.getElementById('csv-status');
+      const countEl = document.getElementById('count');
+      const docSelect = document.getElementById('doc-select');
+      const warningsEl = document.getElementById('warnings');
+      const previewEl = document.getElementById('preview');
+      const notice = document.getElementById('notice');
+      let noticeTimeout;
+
+      /* ---------- CSV: comas + comillas RFC 4180 ---------- */
+
+      function parseLine(line) {
+        const fields = [];
+        let field = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          if (inQuotes) {
+            if (char === '"') {
+              if (line[i + 1] === '"') {
+                field += '"';
+                i++;
+              } else {
+                inQuotes = false;
+              }
+            } else {
+              field += char;
+            }
+          } else if (char === '"') {
+            inQuotes = true;
+          } else if (char === ',') {
+            fields.push(field);
+            field = '';
+          } else {
+            field += char;
+          }
+        }
+        fields.push(field);
+        return fields;
+      }
+
+      function parseCSV(text) {
+        const clean = text.replace(/^\uFEFF/, '');
+        const lines = clean.split(/\r?\n/);
+        const rows = [];
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          rows.push(parseLine(line));
+        }
+        if (!rows.length) return { headers: [], rows: [] };
+        const headers = rows[0].map(header => header.trim());
+        const data = rows.slice(1).map(cells => {
+          const row = cells.slice(0, headers.length).map(cell => cell.trim());
+          while (row.length < headers.length) row.push('');
+          return row;
+        });
+        return { headers, rows: data };
+      }
+
+      /* ---------- Combinación ---------- */
+
+      function findMarkers(template) {
+        const names = [];
+        const seen = new Set();
+        for (const match of template.matchAll(MARKER_PATTERN)) {
+          if (!seen.has(match[1])) {
+            seen.add(match[1]);
+            names.push(match[1]);
+          }
+        }
+        return names;
+      }
+
+      function columnIndex(headers) {
+        const index = new Map();
+        const dupes = [];
+        headers.forEach((header, i) => {
+          if (!header) return;
+          if (index.has(header)) dupes.push(header);
+          else index.set(header, i);
+        });
+        return { index, dupes };
+      }
+
+      function mergeRow(template, columns, row) {
+        const missing = [];
+        const seenMissing = new Set();
+        const text = template.replace(MARKER_PATTERN, (whole, name) => {
+          if (!columns.has(name)) {
+            if (!seenMissing.has(name)) {
+              seenMissing.add(name);
+              missing.push(name);
+            }
+            return whole;
+          }
+          const value = row[columns.get(name)] ?? '';
+          if (!value) {
+            if (!seenMissing.has(name)) {
+              seenMissing.add(name);
+              missing.push(name);
+            }
+            return whole;
+          }
+          return value;
+        });
+        return { text, missing };
+      }
+
+      /* ---------- Estado ---------- */
+
+      function loadState() {
+        const params = new URLSearchParams(window.location.search);
+        const fromUrl = params.get('data');
+        if (fromUrl) {
+          try {
+            const parsed = JSON.parse(fromUrl);
+            if (typeof parsed.template === 'string' && typeof parsed.csv === 'string') {
+              return {
+                template: parsed.template,
+                csv: parsed.csv,
+                index: Number.isInteger(parsed.index) && parsed.index >= 0 ? parsed.index : 0
+              };
+            }
+          } catch { /* Se usa el estado local si la URL no es válida. */ }
+        }
+        try {
+          const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+          if (stored && typeof stored.template === 'string' && typeof stored.csv === 'string') {
+            return {
+              template: stored.template,
+              csv: stored.csv,
+              index: Number.isInteger(stored.index) && stored.index >= 0 ? stored.index : 0
+            };
+          }
+        } catch { /* Se usa el ejemplo si el estado guardado no es válido. */ }
+        return { ...DEFAULT_STATE };
+      }
+
+      let state = loadState();
+      let docs = [];
+
+      function save() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      }
+
+      function showNotice(message, kind = 'success') {
+        clearTimeout(noticeTimeout);
+        notice.textContent = message;
+        notice.className = `alert py-2 alert-${kind === 'error' ? 'danger' : 'success'}`;
+        notice.classList.remove('d-none');
+        noticeTimeout = setTimeout(() => notice.classList.add('d-none'), 2600);
+      }
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, character =>
+          ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
+      }
+
+      function copyText(text) {
+        if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
+        const input = document.createElement('textarea');
+        input.value = text;
+        input.style.position = 'fixed';
+        document.body.append(input);
+        input.select();
+        document.execCommand('copy');
+        input.remove();
+        return Promise.resolve();
+      }
+
+      function download(filename, text) {
+        const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        link.click();
+        URL.revokeObjectURL(url);
+      }
+
+      /* ---------- Render ---------- */
+
+      function render() {
+        const { headers, rows } = parseCSV(state.csv);
+        const markers = findMarkers(state.template);
+        const { index: columns, dupes } = columnIndex(headers);
+
+        docs = rows.map(row => mergeRow(state.template, columns, row));
+        if (state.index >= docs.length) state.index = 0;
+
+        chipsEl.innerHTML = headers.filter(Boolean).map(header =>
+          `<button class="btn btn-outline-secondary btn-sm" type="button" data-chip="${escapeHtml(header)}">{{${escapeHtml(header)}}}</button>`
+        ).join('') || '<span class="form-text mt-0">Pegá un CSV con encabezados para ver los campos.</span>';
+
+        const fieldCount = headers.filter(Boolean).length;
+        csvStatus.textContent = headers.length
+          ? `${fieldCount} ${fieldCount === 1 ? 'campo' : 'campos'} · ${rows.length} ${rows.length === 1 ? 'fila' : 'filas'}`
+            + (dupes.length ? ` · encabezado duplicado: ${dupes.join(', ')} (se usa la primera columna)` : '')
+          : 'Pegá un CSV con encabezados en la primera fila.';
+
+        countEl.textContent = String(docs.length);
+        docSelect.innerHTML = docs.map((_, i) => `<option value="${i}">Documento ${i + 1} de ${docs.length}</option>`).join('');
+        docSelect.value = String(state.index);
+        const hasDocs = docs.length > 0;
+        docSelect.disabled = !hasDocs;
+        document.getElementById('prev').disabled = !hasDocs;
+        document.getElementById('next').disabled = !hasDocs;
+        document.getElementById('copy-doc').disabled = !hasDocs;
+        document.getElementById('download-doc').disabled = !hasDocs;
+        document.getElementById('download-all').disabled = !hasDocs;
+
+        if (!hasDocs) {
+          previewEl.innerHTML = '<span class="text-body-secondary">Todavía no hay documentos: pegá un CSV con al menos una fila de datos.</span>';
+          warningsEl.classList.add('d-none');
+          return;
+        }
+
+        const doc = docs[state.index];
+        if (typeof window.marked !== 'undefined') {
+          previewEl.innerHTML = window.marked.parse(doc.text);
+        } else {
+          previewEl.innerHTML = `<pre class="mb-0">${escapeHtml(doc.text)}</pre>`;
+        }
+
+        if (doc.missing.length) {
+          warningsEl.innerHTML = `Fila ${state.index + 1}: sin dato para ${doc.missing.map(name => `<code>{{${escapeHtml(name)}}}</code>`).join(', ')}.`;
+          warningsEl.classList.remove('d-none');
+        } else {
+          warningsEl.classList.add('d-none');
+        }
+      }
+
+      function setIndex(next) {
+        if (!docs.length) return;
+        state.index = (next + docs.length) % docs.length;
+        save();
+        render();
+      }
+
+      /* ---------- Eventos ---------- */
+
+      templateEl.addEventListener('input', () => {
+        state.template = templateEl.value;
+        save();
+        render();
+      });
+
+      csvEl.addEventListener('input', () => {
+        state.csv = csvEl.value;
+        state.index = 0;
+        save();
+        render();
+      });
+
+      chipsEl.addEventListener('click', event => {
+        const button = event.target.closest('button[data-chip]');
+        if (!button) return;
+        const insert = `{{${button.dataset.chip}}}`;
+        const start = templateEl.selectionStart ?? templateEl.value.length;
+        const end = templateEl.selectionEnd ?? start;
+        templateEl.value = templateEl.value.slice(0, start) + insert + templateEl.value.slice(end);
+        templateEl.focus();
+        templateEl.selectionStart = templateEl.selectionEnd = start + insert.length;
+        state.template = templateEl.value;
+        save();
+        render();
+      });
+
+      document.getElementById('prev').addEventListener('click', () => setIndex(state.index - 1));
+      document.getElementById('next').addEventListener('click', () => setIndex(state.index + 1));
+      docSelect.addEventListener('change', () => {
+        state.index = Number(docSelect.value) || 0;
+        save();
+        render();
+      });
+
+      document.getElementById('copy-doc').addEventListener('click', async () => {
+        if (!docs.length) return;
+        try {
+          await copyText(docs[state.index].text);
+          showNotice('Documento copiado.');
+        } catch {
+          showNotice('No se pudo copiar el documento.', 'error');
+        }
+      });
+
+      document.getElementById('download-doc').addEventListener('click', () => {
+        if (!docs.length) return;
+        download(`doc-${state.index + 1}.md`, docs[state.index].text);
+        showNotice('Documento descargado.');
+      });
+
+      document.getElementById('download-all').addEventListener('click', () => {
+        if (!docs.length) return;
+        download('documentos.md', docs.map(doc => doc.text).join('\n\n---\n\n'));
+        showNotice('Documentos descargados.');
+      });
+
+      document.getElementById('reset').addEventListener('click', () => {
+        localStorage.removeItem(STORAGE_KEY);
+        state = { ...DEFAULT_STATE };
+        window.history.replaceState(null, '', window.location.pathname);
+        templateEl.value = state.template;
+        csvEl.value = state.csv;
+        render();
+        showNotice('Se restauró el ejemplo inicial.');
+      });
+
+      document.getElementById('share').addEventListener('click', async () => {
+        const url = new URL(window.location.href);
+        url.search = '';
+        url.searchParams.set('data', JSON.stringify(state));
+        try {
+          await copyText(url.toString());
+          showNotice('Se copió el enlace con plantilla y datos.');
+        } catch {
+          showNotice('No se pudo copiar el enlace.', 'error');
+        }
+      });
+
+      const root = document.documentElement;
+      const themeButton = document.getElementById('theme-toggle');
+      const storedTheme = localStorage.getItem('theme');
+      function applyTheme(theme) {
+        root.setAttribute('data-bs-theme', theme);
+        themeButton.textContent = theme === 'dark' ? '☀️' : '🌙';
+      }
+      applyTheme(storedTheme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+      themeButton.addEventListener('click', () => {
+        const nextTheme = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', nextTheme);
+        applyTheme(nextTheme);
+      });
+
+      templateEl.value = state.template;
+      csvEl.value = state.csv;
+      render();
+    })();
+  </script>
+</body>
+</html>

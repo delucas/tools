@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f517%3B%3C/text%3E%3C/svg%3E">
+  <title>LinkDB — Mis links en cualquier lado</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    .link-url {
+      overflow-wrap: anywhere;
+    }
+
+    .signature {
+      font-size: 0.8em;
+    }
+  </style>
+</head>
+<body>
+  <main class="container py-4">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">🔗 LinkDB</h1>
+        <p class="text-body-secondary mb-0">Tus favoritos, accesibles desde cualquier navegador.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="share" class="btn btn-outline-secondary btn-sm" type="button">🔗 Compartir</button>
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div id="notice" class="alert py-2 d-none" role="status"></div>
+
+    <div class="alert alert-warning py-2 small" role="note">
+      Los links con la insignia <span class="badge text-bg-warning fw-normal">solo en este navegador</span>
+      viven en este dispositivo: si cambiás de navegador o borrás sus datos, se pierden.
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-body">
+        <label for="url-input" class="form-label">Agregar link</label>
+        <div class="input-group">
+          <input id="url-input" class="form-control" type="url" inputmode="url" autocomplete="off"
+            placeholder="https://ejemplo.com/articulo" aria-label="URL del link">
+          <button id="fetch-btn" class="btn btn-primary" type="button">Agregar</button>
+        </div>
+        <div class="form-text">El título se obtiene automáticamente; lo podés corregir antes de guardar.</div>
+        <div id="pending-box" class="d-none mt-3">
+          <div id="pending-loading" class="text-body-secondary d-none">
+            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            Obteniendo el título…
+          </div>
+          <div id="pending-form" class="d-none">
+            <label for="pending-title" class="form-label small mb-1">Título para <span id="pending-url" class="link-url text-body-secondary"></span></label>
+            <div class="input-group">
+              <input id="pending-title" class="form-control" type="text" maxlength="200" aria-label="Título del link">
+              <button id="pending-save" class="btn btn-primary" type="button">Guardar</button>
+              <button id="pending-cancel" class="btn btn-outline-secondary" type="button">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <input id="search" class="form-control" type="search" placeholder="🔍 Filtrar por título o URL…" aria-label="Filtrar links" autocomplete="off">
+    </div>
+
+    <div id="no-results" class="alert alert-secondary d-none" role="status">Sin links para esa búsqueda.</div>
+
+    <section id="fixed-section" class="mb-4">
+      <h2 class="h5 mb-2">📌 Fijos <span id="fixed-count" class="badge text-bg-secondary fw-normal">0</span></h2>
+      <div id="fixed-list" class="list-group"></div>
+    </section>
+
+    <section id="local-section" class="mb-4">
+      <h2 class="h5 mb-2">💾 En este navegador <span id="local-count" class="badge text-bg-secondary fw-normal">0</span></h2>
+      <div id="local-empty" class="border rounded p-4 text-body-secondary text-center">Todavía no agregaste links en este navegador.</div>
+      <div id="local-list" class="list-group"></div>
+    </section>
+
+    <hr>
+    <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'linkdb-links';
+      const FETCH_TIMEOUT = 12000;
+
+      // Links fijos: viajan con la página a cualquier navegador.
+      // Para agregar más, sumar objetos { title, url } a esta lista.
+      const DEFAULT_LINKS = [
+        { title: 'Spin the Wheel — Ruleta aleatoria online', url: 'https://spinthewheel.io/es' },
+        { title: 'RANDOM.ORG - True Random Number Service', url: 'https://www.random.org/' },
+        { title: 'ASCII Table Generator', url: 'https://ozh.github.io/ascii-tables/' },
+        { title: 'Excalidraw — Collaborative whiteboarding made easy', url: 'https://excalidraw.com/' },
+        { title: 'Upside Down Text | Flip Text, Type Upside Down', url: 'https://www.upsidedowntext.com/' },
+        { title: 'Generate Customized QR Codes | QR.io', url: 'https://qr.io/' },
+        { title: 'IT Tools - Handy online tools for developers', url: 'https://it-tools.tech/' },
+        { title: 'Matty’s Internet Toolbox | McStumble', url: 'https://mcstumble.com/tools' }
+      ];
+
+      const urlInput = document.getElementById('url-input');
+      const fetchBtn = document.getElementById('fetch-btn');
+      const pendingBox = document.getElementById('pending-box');
+      const pendingLoading = document.getElementById('pending-loading');
+      const pendingForm = document.getElementById('pending-form');
+      const pendingUrl = document.getElementById('pending-url');
+      const pendingTitle = document.getElementById('pending-title');
+      const searchInput = document.getElementById('search');
+      const fixedList = document.getElementById('fixed-list');
+      const localList = document.getElementById('local-list');
+      const localEmpty = document.getElementById('local-empty');
+      const noResults = document.getElementById('no-results');
+      const notice = document.getElementById('notice');
+      let noticeTimeout;
+      let pending = null;
+      let editingId = null;
+
+      function newId() {
+        return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+      }
+
+      /* ---------- URLs: normalizar y duplicados ---------- */
+
+      function normalizeUrl(raw) {
+        let value = raw.trim();
+        if (!value) return { ok: false };
+        if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) value = 'https://' + value;
+        let parsed;
+        try {
+          parsed = new URL(value);
+        } catch {
+          return { ok: false };
+        }
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return { ok: false };
+        parsed.hash = '';
+        let href = parsed.toString();
+        if (parsed.pathname === '/' && !parsed.search) {
+          href = `${parsed.protocol}//${parsed.host}/`;
+        }
+        return { ok: true, href, host: parsed.host };
+      }
+
+      function allUrls(excludeId = null) {
+        const fixed = DEFAULT_LINKS.map(link => normalizeUrl(link.url)).filter(result => result.ok).map(result => result.href);
+        const locals = state.locals.filter(item => item.id !== excludeId).map(item => item.url);
+        return new Set([...fixed, ...locals]);
+      }
+
+      function isDuplicate(href, excludeId = null) {
+        return allUrls(excludeId).has(href);
+      }
+
+      /* ---------- Título automático: Microlink, luego proxy, luego manual ---------- */
+
+      async function fetchWithTimeout(url) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+        try {
+          const response = await fetch(url, { signal: controller.signal });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return await response.json();
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+
+      async function titleFromMicrolink(url) {
+        const data = await fetchWithTimeout(`https://api.microlink.io?url=${encodeURIComponent(url)}`);
+        if (data && data.status === 'success' && data.data && data.data.title) return data.data.title.trim();
+        throw new Error('Sin título');
+      }
+
+      async function titleFromProxy(url) {
+        const data = await fetchWithTimeout(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
+        if (!data || typeof data.contents !== 'string' || !data.contents) throw new Error('Sin contenido');
+        const doc = new DOMParser().parseFromString(data.contents, 'text/html');
+        const og = doc.querySelector('meta[property="og:title"]');
+        const title = (og && og.getAttribute('content')) || doc.title;
+        if (title && title.trim()) return title.trim();
+        throw new Error('Sin título');
+      }
+
+      async function lookupTitle(url, host) {
+        try {
+          return await titleFromMicrolink(url);
+        } catch { /* Se intenta con el proxy. */ }
+        try {
+          return await titleFromProxy(url);
+        } catch { /* Queda el título manual. */ }
+        return host;
+      }
+
+      /* ---------- Estado ---------- */
+
+      function normalizeItem(item) {
+        if (!item) return null;
+        const parsed = normalizeUrl(typeof item.url === 'string' ? item.url : '');
+        if (!parsed.ok) return null;
+        if (typeof item.title !== 'string' || !item.title.trim()) return null;
+        return {
+          id: typeof item.id === 'string' ? item.id : newId(),
+          url: parsed.href,
+          title: item.title.trim().slice(0, 200),
+          addedAt: typeof item.addedAt === 'number' ? item.addedAt : Date.now()
+        };
+      }
+
+      function loadState() {
+        const params = new URLSearchParams(window.location.search);
+        const fromUrl = params.get('data');
+        if (fromUrl) {
+          try {
+            const parsed = JSON.parse(fromUrl);
+            if (parsed && Array.isArray(parsed.locals)) {
+              const items = parsed.locals.map(normalizeItem).filter(Boolean);
+              return { locals: dedupe(items) };
+            }
+          } catch { /* Se usa el estado local si la URL no es válida. */ }
+        }
+        try {
+          const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+          if (stored && Array.isArray(stored.locals)) {
+            return { locals: dedupe(stored.locals.map(normalizeItem).filter(Boolean)) };
+          }
+        } catch { /* Se usa la lista vacía si el estado guardado no es válido. */ }
+        return { locals: [] };
+      }
+
+      function dedupe(items) {
+        const seen = new Set();
+        return items.filter(item => {
+          if (seen.has(item.url)) return false;
+          seen.add(item.url);
+          return true;
+        });
+      }
+
+      let state = loadState();
+
+      function save() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ locals: state.locals }));
+      }
+
+      function showNotice(message, kind = 'success') {
+        clearTimeout(noticeTimeout);
+        notice.textContent = message;
+        notice.className = `alert py-2 alert-${kind === 'error' ? 'danger' : 'success'}`;
+        notice.classList.remove('d-none');
+        noticeTimeout = setTimeout(() => notice.classList.add('d-none'), 2600);
+      }
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, character =>
+          ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
+      }
+
+      function normalizeSearch(value) {
+        return value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      }
+
+      /* ---------- Render ---------- */
+
+      function fixedItemMarkup(link) {
+        return `<a href="${escapeHtml(link.url)}" target="_blank" rel="noopener" class="list-group-item list-group-item-action">
+          <span class="d-block fw-semibold">${escapeHtml(link.title)}</span>
+          <small class="link-url text-body-secondary">${escapeHtml(link.url)}</small>
+        </a>`;
+      }
+
+      function localItemMarkup(item) {
+        if (editingId === item.id) {
+          return `<div class="list-group-item" data-id="${item.id}">
+            <div class="vstack gap-2">
+              <input class="form-control form-control-sm" type="text" maxlength="200" value="${escapeHtml(item.title)}" data-role="edit-title" aria-label="Título">
+              <input class="form-control form-control-sm" type="url" value="${escapeHtml(item.url)}" data-role="edit-url" aria-label="URL">
+              <div class="d-flex gap-2">
+                <button class="btn btn-primary btn-sm" type="button" data-action="save-edit">Guardar</button>
+                <button class="btn btn-outline-secondary btn-sm" type="button" data-action="cancel-edit">Cancelar</button>
+              </div>
+            </div>
+          </div>`;
+        }
+        return `<div class="list-group-item" data-id="${item.id}">
+          <div class="d-flex gap-2 align-items-start">
+            <div class="flex-grow-1 min-w-0">
+              <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener" class="d-block fw-semibold text-decoration-none">${escapeHtml(item.title)}</a>
+              <small class="link-url text-body-secondary">${escapeHtml(item.url)}</small>
+              <span class="badge text-bg-warning fw-normal ms-1">solo en este navegador</span>
+            </div>
+            <div class="d-flex gap-1 flex-shrink-0">
+              <button class="btn btn-outline-secondary btn-sm" type="button" data-action="edit" title="Editar">✏️</button>
+              <button class="btn btn-outline-danger btn-sm" type="button" data-action="delete" title="Borrar">✕</button>
+            </div>
+          </div>
+        </div>`;
+      }
+
+      function matches(item, query) {
+        if (!query) return true;
+        return normalizeSearch(`${item.title} ${item.url}`).includes(query);
+      }
+
+      function render() {
+        const query = normalizeSearch(searchInput.value.trim());
+        const fixed = DEFAULT_LINKS.map(link => ({ title: link.title, url: link.url })).filter(item => matches(item, query));
+        const locals = state.locals.filter(item => matches(item, query));
+
+        fixedList.innerHTML = fixed.map(fixedItemMarkup).join('');
+        localList.innerHTML = locals.map(localItemMarkup).join('');
+        document.getElementById('fixed-count').textContent = String(DEFAULT_LINKS.length);
+        document.getElementById('local-count').textContent = String(state.locals.length);
+        document.getElementById('fixed-section').classList.toggle('d-none', fixed.length === 0 && query !== '');
+        localEmpty.classList.toggle('d-none', !(state.locals.length === 0 && !query));
+        noResults.classList.toggle('d-none', fixed.length > 0 || locals.length > 0);
+      }
+
+      /* ---------- Alta con confirmación de título ---------- */
+
+      function showPendingForm(url, host, title) {
+        pendingUrl.textContent = url;
+        pendingTitle.value = title;
+        pendingLoading.classList.add('d-none');
+        pendingForm.classList.remove('d-none');
+        pendingTitle.focus();
+        pendingTitle.select();
+      }
+
+      fetchBtn.addEventListener('click', async () => {
+        const parsed = normalizeUrl(urlInput.value);
+        if (!parsed.ok) {
+          showNotice('Esa URL no parece válida. Revisala.', 'error');
+          return;
+        }
+        if (isDuplicate(parsed.href)) {
+          showNotice('Ese link ya está en tu lista.');
+          return;
+        }
+        pending = { url: parsed.href, host: parsed.host };
+        pendingBox.classList.remove('d-none');
+        pendingForm.classList.add('d-none');
+        pendingLoading.classList.remove('d-none');
+        fetchBtn.disabled = true;
+        const title = await lookupTitle(parsed.href, parsed.host);
+        fetchBtn.disabled = false;
+        if (!pending || pending.url !== parsed.href) return;
+        showPendingForm(parsed.href, parsed.host, title);
+        if (title === parsed.host) {
+          showNotice('No se pudo obtener el título automáticamente: revisalo antes de guardar.');
+        }
+      });
+
+      urlInput.addEventListener('keydown', event => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          fetchBtn.click();
+        }
+      });
+
+      pendingTitle.addEventListener('keydown', event => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          document.getElementById('pending-save').click();
+        }
+      });
+
+      document.getElementById('pending-save').addEventListener('click', () => {
+        if (!pending) return;
+        const title = pendingTitle.value.trim();
+        if (!title) {
+          showNotice('El título no puede quedar vacío.', 'error');
+          return;
+        }
+        state.locals.unshift({ id: newId(), url: pending.url, title: title.slice(0, 200), addedAt: Date.now() });
+        pending = null;
+        pendingBox.classList.add('d-none');
+        urlInput.value = '';
+        save();
+        render();
+        showNotice('Link agregado en este navegador.');
+      });
+
+      document.getElementById('pending-cancel').addEventListener('click', () => {
+        pending = null;
+        pendingBox.classList.add('d-none');
+      });
+
+      /* ---------- Editar y borrar locales ---------- */
+
+      localList.addEventListener('click', event => {
+        const button = event.target.closest('button[data-action]');
+        if (!button) return;
+        const row = button.closest('[data-id]');
+        const item = state.locals.find(candidate => candidate.id === row.dataset.id);
+        if (!item) return;
+        if (button.dataset.action === 'delete') {
+          state.locals = state.locals.filter(candidate => candidate.id !== item.id);
+          if (editingId === item.id) editingId = null;
+          save();
+          render();
+          showNotice('Link borrado.');
+        }
+        if (button.dataset.action === 'edit') {
+          editingId = item.id;
+          render();
+          localList.querySelector(`[data-id="${item.id}"] [data-role="edit-title"]`)?.focus();
+        }
+        if (button.dataset.action === 'save-edit') {
+          const titleBox = row.querySelector('[data-role="edit-title"]');
+          const urlBox = row.querySelector('[data-role="edit-url"]');
+          const parsed = normalizeUrl(urlBox ? urlBox.value : '');
+          if (!parsed.ok) {
+            showNotice('Esa URL no parece válida.', 'error');
+            return;
+          }
+          const title = titleBox ? titleBox.value.trim() : '';
+          if (!title) {
+            showNotice('El título no puede quedar vacío.', 'error');
+            return;
+          }
+          if (isDuplicate(parsed.href, item.id)) {
+            showNotice('Esa URL ya está en tu lista.', 'error');
+            return;
+          }
+          item.title = title.slice(0, 200);
+          item.url = parsed.href;
+          editingId = null;
+          save();
+          render();
+          showNotice('Link actualizado.');
+        }
+        if (button.dataset.action === 'cancel-edit') {
+          editingId = null;
+          render();
+        }
+      });
+
+      searchInput.addEventListener('input', render);
+
+      document.getElementById('reset').addEventListener('click', () => {
+        localStorage.removeItem(STORAGE_KEY);
+        state = { locals: [] };
+        pending = null;
+        editingId = null;
+        pendingBox.classList.add('d-none');
+        window.history.replaceState(null, '', window.location.pathname);
+        render();
+        showNotice('Se borraron los links de este navegador.');
+      });
+
+      document.getElementById('share').addEventListener('click', async () => {
+        if (!state.locals.length) {
+          showNotice('No hay links locales para compartir todavía.', 'error');
+          return;
+        }
+        const url = new URL(window.location.href);
+        url.search = '';
+        url.searchParams.set('data', JSON.stringify({ locals: state.locals }));
+        try {
+          if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(url.toString());
+          else throw new Error('Sin portapapeles');
+          showNotice('Se copió el enlace con tus links.');
+        } catch {
+          showNotice('No se pudo copiar el enlace.', 'error');
+        }
+      });
+
+      const root = document.documentElement;
+      const themeButton = document.getElementById('theme-toggle');
+      const storedTheme = localStorage.getItem('theme');
+      function applyTheme(theme) {
+        root.setAttribute('data-bs-theme', theme);
+        themeButton.textContent = theme === 'dark' ? '☀️' : '🌙';
+      }
+      applyTheme(storedTheme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+      themeButton.addEventListener('click', () => {
+        const nextTheme = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', nextTheme);
+        applyTheme(nextTheme);
+      });
+
+      render();
+    })();
+  </script>
+</body>
+</html>

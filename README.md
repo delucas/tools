@@ -19,5 +19,6 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`eqtex`](./eqtex) | Editor de ecuaciones LaTeX con vista previa y descarga en PNG transparente. |
 | [`markpress`](./markpress) | Editor markdown de dos paneles con tablas, LaTeX y salida a PDF. |
 | [`apacalypse`](./apacalypse) | Generador de bibliografía APA 7 a partir del ISBN del libro. |
+| [`linkdb`](./linkdb) | Tus links favoritos con título automático y agregados locales por navegador. |
 
 Cada carpeta tiene su propio `README.md` con el detalle de uso.

@@ -5,9 +5,9 @@ Editor de pseudocódigo en español construido con CodeMirror 6. Resalta sintaxi
 ## Uso
 
 1. Escribí las palabras reservadas en mayúsculas. `ALGORITMO`, `FUNCION`, `SI`, `SI NO`, `PARA` y `MIENTRAS` abren bloques delimitados solo con indentación; Enter indenta automáticamente la línea siguiente.
-2. Usá `#` para comentarios. Los operadores `<=`, `>=`, `!=`, `<-` y `->` se convierten automáticamente a Unicode.
+2. Usá `#` para comentarios. Los operadores `<=`, `>=`, `!=`, `<-` y `->` se convierten automáticamente a Unicode, y las palabras `infinito` o `infinity` (en cualquier mayúscula) a `∞`.
 3. Luego de `ALGORITMO`, los nombres en PascalCase se resaltan como públicos y los nombres en camelCase como privados. El tamaño de un arreglo se expresa como `|arreglo|`.
-4. Los bucles admiten `PARA i = inicio HASTA fin HACER` y un salto opcional con `PASO`, por ejemplo `PARA i = 10 HASTA 0 PASO -2 HACER`.
+4. Los bucles admiten `PARA i = inicio HASTA fin HACER` y un salto opcional con `PASO`, por ejemplo `PARA i = 10 HASTA 0 PASO -2 HACER`. También podés recorrer con `PARA CADA elemento EN lista HACER`.
 5. Activá o desactivá Mostrar números de línea para cambiar tanto el editor como la copia con formato.
 6. Copiar con formato copia el archivo activo completo con el tema actual, listo para pegar en diapositivas. Incluye una versión de texto plano como respaldo.
 7. Creá, renombrá, elegí o eliminá archivos desde la barra lateral. Los archivos de ejemplo y los nuevos usan la extensión `.pse`; todos se guardan en el navegador.

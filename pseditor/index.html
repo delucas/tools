@@ -102,7 +102,7 @@
       <summary class="text-body-secondary">Sintaxis incluida</summary>
       <div class="mt-2 small">
         <p class="mb-2">Los bloques se delimitan solo mediante indentación. Las palabras reservadas se escriben en mayúsculas y los comentarios comienzan con <code>#</code>.</p>
-        <p class="mb-0">Al escribir se sustituyen <code>&lt;=</code>, <code>&gt;=</code>, <code>!=</code>, <code>&lt;-</code> y <code>-&gt;</code> por sus operadores Unicode. Podés crear varios archivos: se guardan en este navegador. Guardar workspace genera un Markdown legible que contiene todos los archivos.</p>
+        <p class="mb-0">Al escribir se sustituyen <code>&lt;=</code>, <code>&gt;=</code>, <code>!=</code>, <code>&lt;-</code> y <code>-&gt;</code> por sus operadores Unicode, y las palabras <code>infinito</code> o <code>infinity</code> por <code>∞</code>. Podés crear varios archivos: se guardan en este navegador. Guardar workspace genera un Markdown legible que contiene todos los archivos.</p>
       </div>
     </details>
 
@@ -120,17 +120,21 @@
 
     // Editar este objeto alcanza para adaptar el vocabulario y los operadores del lenguaje.
     const PSEUDOCODE_CONFIG = {
-      keywords: ['ALGORITMO', 'SI', 'NO', 'SINO', 'MIENTRAS', 'PARA', 'HASTA', 'PASO', 'HACER', 'FUNCION', 'RETORNAR', 'EN', 'RANGO', 'ROMPER', 'CONTINUAR', 'MOSTRAR'],
-      literals: ['VERDADERO', 'FALSO', 'NULO'],
+      keywords: ['ALGORITMO', 'SI', 'NO', 'SINO', 'MIENTRAS', 'PARA', 'CADA', 'HASTA', 'PASO', 'HACER', 'FUNCION', 'RETORNAR', 'EN', 'RANGO', 'ROMPER', 'CONTINUAR', 'MOSTRAR'],
+      literals: ['VERDADERO', 'FALSO', 'NULO', 'INFINITO', 'INFINITY', 'infinito', 'infinity'],
       blockKeywords: ['ALGORITMO', 'SI', 'SINO', 'MIENTRAS', 'PARA', 'FUNCION'],
       dedentKeywords: ['SI NO', 'SINO'],
-      operators: ['+', '-', '*', '/', '%', '=', '!=', '<', '>', '<=', '>=', '<-', '->', '≠', '≤', '≥', '←', '→', '∧', '∨', '¬'],
+      operators: ['+', '-', '*', '/', '%', '=', '!=', '<', '>', '<=', '>=', '<-', '->', '≠', '≤', '≥', '←', '→', '∧', '∨', '¬', '∞'],
       autoReplacements: [
         ['<=', '≤'],
         ['>=', '≥'],
         ['!=', '≠'],
         ['<-', '←'],
         ['->', '→']
+      ],
+      wordReplacements: [
+        ['infinito', '∞'],
+        ['infinity', '∞']
       ]
     };
 
@@ -164,6 +168,17 @@ ALGORITMO SumaDePares
         (result, [ascii, unicode]) => result.replaceAll(ascii, unicode),
         text
       );
+    }
+
+    function replaceWordSymbols(text) {
+      return PSEUDOCODE_CONFIG.wordReplacements.reduce((result, [word, symbol]) => {
+        const pattern = new RegExp(`(?<![\\p{L}\\p{N}_])${word}(?![\\p{L}\\p{N}_])`, 'giu');
+        return result.replace(pattern, symbol);
+      }, text);
+    }
+
+    function replaceSymbols(text) {
+      return replaceWordSymbols(replaceAsciiOperators(text));
     }
 
     function lexLine(line) {
@@ -493,18 +508,21 @@ ALGORITMO SumaDePares
       deleteFileButton.disabled = workspace.files.length === 1;
     }
 
-    const maxOperatorLength = Math.max(...PSEUDOCODE_CONFIG.autoReplacements.map(([ascii]) => ascii.length));
+    const maxSymbolLength = Math.max(
+      ...PSEUDOCODE_CONFIG.autoReplacements.map(([ascii]) => ascii.length),
+      ...PSEUDOCODE_CONFIG.wordReplacements.map(([word]) => word.length)
+    );
     const inputReplacement = EditorView.inputHandler.of((view, from, to, text) => {
-      const start = Math.max(0, from - maxOperatorLength + 1);
-      const end = Math.min(view.state.doc.length, to + maxOperatorLength - 1);
+      const start = Math.max(0, from - maxSymbolLength + 1);
+      const end = Math.min(view.state.doc.length, to + maxSymbolLength - 1);
       const prefix = view.state.sliceDoc(start, from);
       const suffix = view.state.sliceDoc(to, end);
-      const replacement = replaceAsciiOperators(prefix + text + suffix);
+      const replacement = replaceSymbols(prefix + text + suffix);
 
       if (replacement === prefix + text + suffix) return false;
       view.dispatch({
         changes: { from: start, to: end, insert: replacement },
-        selection: { anchor: start + replaceAsciiOperators(prefix + text).length },
+        selection: { anchor: start + replaceSymbols(prefix + text).length },
         userEvent: 'input.type'
       });
       return true;

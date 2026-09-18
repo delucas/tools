@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f4da%3B%3C/text%3E%3C/svg%3E">
+  <title>APAcalypse — Generador de bibliografía APA</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    .citation {
+      padding-left: 2rem;
+      text-indent: -2rem;
+    }
+
+    .signature {
+      font-size: 0.8em;
+    }
+  </style>
+</head>
+<body>
+  <main class="container py-4">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">📚 APAcalypse</h1>
+        <p class="text-body-secondary mb-0">Pegá un ISBN y llevate la cita en formato APA 7.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="share" class="btn btn-outline-secondary btn-sm" type="button">🔗 Compartir</button>
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div id="notice" class="alert alert-success py-2 d-none" role="status"></div>
+
+    <div class="card mb-4">
+      <div class="card-body">
+        <label for="isbn-input" class="form-label">Agregar libro por ISBN</label>
+        <div class="input-group">
+          <input id="isbn-input" class="form-control" type="text" inputmode="numeric" autocomplete="off"
+            placeholder="978-3-16-148410-0" aria-label="ISBN del libro">
+          <button id="add-btn" class="btn btn-primary" type="button">Agregar</button>
+        </div>
+        <div class="form-text">Acepta ISBN-10 e ISBN-13, con o sin guiones. Si cargás las dos variantes del mismo libro, se guarda una sola vez. Probá con <code>9780451526533</code>.</div>
+      </div>
+    </div>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+      <h2 class="h5 mb-0">Mis citas <span id="count" class="badge text-bg-secondary fw-normal">0</span></h2>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="select-all" class="btn btn-outline-secondary btn-sm" type="button">Todas</button>
+        <button id="select-none" class="btn btn-outline-secondary btn-sm" type="button">Ninguna</button>
+        <button id="sort-az" class="btn btn-outline-secondary btn-sm" type="button">Ordenar A–Z</button>
+        <button id="copy-selected" class="btn btn-primary btn-sm" type="button">📋 Copiar seleccionadas</button>
+      </div>
+    </div>
+
+    <div id="empty-list" class="border rounded p-4 text-body-secondary text-center">Todavía no agregaste citas. Pegá un ISBN arriba para empezar.</div>
+    <div id="citation-list" class="vstack gap-2"></div>
+
+    <hr>
+    <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'apacalypse-citas';
+      const OL_BASE = 'https://openlibrary.org';
+      const GB_BASE = 'https://www.googleapis.com/books/v1/volumes';
+      const FETCH_TIMEOUT = 12000;
+
+      const isbnInput = document.getElementById('isbn-input');
+      const addBtn = document.getElementById('add-btn');
+      const citationList = document.getElementById('citation-list');
+      const emptyList = document.getElementById('empty-list');
+      const count = document.getElementById('count');
+      const notice = document.getElementById('notice');
+      let noticeTimeout;
+
+      /* ---------- ISBN: normalizar, validar y forma canónica ---------- */
+
+      function cleanIsbn(value) {
+        return value.replace(/[\s-]/g, '').toUpperCase();
+      }
+
+      function isValidIsbn10(isbn) {
+        if (!/^\d{9}[\dX]$/.test(isbn)) return false;
+        let sum = 0;
+        for (let i = 0; i < 10; i++) {
+          sum += (10 - i) * (isbn[i] === 'X' ? 10 : Number(isbn[i]));
+        }
+        return sum % 11 === 0;
+      }
+
+      function isValidIsbn13(isbn) {
+        if (!/^\d{13}$/.test(isbn)) return false;
+        let sum = 0;
+        for (let i = 0; i < 13; i++) {
+          sum += Number(isbn[i]) * (i % 2 === 0 ? 1 : 3);
+        }
+        return sum % 10 === 0;
+      }
+
+      function isbn10to13(isbn10) {
+        const core = '978' + isbn10.slice(0, 9);
+        let sum = 0;
+        for (let i = 0; i < 12; i++) {
+          sum += Number(core[i]) * (i % 2 === 0 ? 1 : 3);
+        }
+        return core + String((10 - (sum % 10)) % 10);
+      }
+
+      function isbn13to10(isbn13) {
+        if (!isbn13.startsWith('978')) return null;
+        const core = isbn13.slice(3, 12);
+        let sum = 0;
+        for (let i = 0; i < 9; i++) {
+          sum += (10 - i) * Number(core[i]);
+        }
+        const check = (11 - (sum % 11)) % 11;
+        return core + (check === 10 ? 'X' : String(check));
+      }
+
+      // Devuelve el ISBN-13 canónico o null si el valor no es un ISBN válido.
+      function canonicalIsbn(value) {
+        const clean = cleanIsbn(value);
+        if (isValidIsbn13(clean)) return clean;
+        if (isValidIsbn10(clean)) return isbn10to13(clean);
+        return null;
+      }
+
+      /* ---------- Formato APA 7 ---------- */
+
+      function formatAuthorName(full) {
+        const tokens = full.trim().split(/\s+/).filter(Boolean);
+        if (tokens.length === 0) return '';
+        if (tokens.length === 1) return tokens[0];
+        // Heurística: si hay tokens intermedios con punto ("R."), el apellido es
+        // el último token; si no, se toman los dos últimos (compuesto español).
+        const middle = tokens.slice(1, -1);
+        const surnameCount = (tokens.length > 2 && !middle.some(t => t.endsWith('.'))) ? 2 : 1;
+        const surname = tokens.slice(-surnameCount).join(' ');
+        const initials = tokens.slice(0, -surnameCount)
+          .map(t => t.replace(/\./g, ''))
+          .filter(Boolean)
+          .map(t => t[0].toUpperCase() + '.')
+          .join(' ');
+        return initials ? `${surname}, ${initials}` : surname;
+      }
+
+      function formatAuthorsApa(authors) {
+        const formatted = authors.map(formatAuthorName).filter(Boolean);
+        if (formatted.length === 0) return '';
+        if (formatted.length === 1) return formatted[0];
+        if (formatted.length <= 20) {
+          return formatted.slice(0, -1).join(', ') + ', & ' + formatted[formatted.length - 1];
+        }
+        return formatted.slice(0, 19).join(', ') + ', . . . ' + formatted[formatted.length - 1];
+      }
+
+      function sentenceCase(value) {
+        const lowered = value.toLowerCase();
+        return lowered.replace(/(^\p{L})|([:?!]\s+\p{L})/gu, match => match.toUpperCase());
+      }
+
+      function extractYear(value) {
+        if (!value) return '';
+        const match = String(value).match(/(19|20)\d{2}/);
+        return match ? match[0] : '';
+      }
+
+      function buildCitation({ authors, year, title, subtitle, publisher }) {
+        const authorPart = formatAuthorsApa(authors);
+        const yearPart = year || 's. f.';
+        const titleFull = subtitle ? `${sentenceCase(title)}: ${sentenceCase(subtitle)}` : sentenceCase(title);
+        const parts = authorPart
+          ? [authorPart, `(${yearPart}).`, `${titleFull}.`]
+          : [`${titleFull}.`, `(${yearPart}).`];
+        if (publisher) parts.push(publisher.endsWith('.') ? publisher : `${publisher}.`);
+        return parts.join(' ').replace(/\s+/g, ' ').trim();
+      }
+
+      /* ---------- Metadatos: Open Library primero, Google Books de respaldo ---------- */
+
+      async function fetchJson(url) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+        try {
+          const response = await fetch(url, { signal: controller.signal });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return await response.json();
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+
+      async function lookupOpenLibrary(clean) {
+        const edition = await fetchJson(`${OL_BASE}/isbn/${clean}.json`);
+        const authorNames = [];
+        const keys = Array.isArray(edition.authors) ? edition.authors.map(a => a.key).filter(Boolean) : [];
+        const uniqueKeys = [...new Set(keys)].slice(0, 20);
+        const settled = await Promise.allSettled(uniqueKeys.map(key => fetchJson(`${OL_BASE}${key}.json`)));
+        for (const result of settled) {
+          if (result.status === 'fulfilled' && result.value.name) authorNames.push(result.value.name);
+        }
+        const publishers = Array.isArray(edition.publishers) ? edition.publishers.filter(Boolean) : [];
+        return {
+          title: edition.title || '',
+          subtitle: edition.subtitle || '',
+          authors: authorNames,
+          year: extractYear(edition.publish_date),
+          publisher: publishers[0] || '',
+          source: 'Open Library'
+        };
+      }
+
+      async function lookupGoogleBooks(clean) {
+        const data = await fetchJson(`${GB_BASE}?q=isbn:${encodeURIComponent(clean)}&maxResults=1&printType=books`);
+        const info = data.items?.[0]?.volumeInfo;
+        if (!info || !info.title) throw new Error('Sin resultados');
+        return {
+          title: info.title || '',
+          subtitle: info.subtitle || '',
+          authors: Array.isArray(info.authors) ? info.authors : [],
+          year: extractYear(info.publishedDate),
+          publisher: info.publisher || '',
+          source: 'Google Books'
+        };
+      }
+
+      async function lookupMetadata(attempts) {
+        const isbns = [...new Set(attempts.filter(Boolean))];
+        for (const isbn of isbns) {
+          try {
+            const meta = await lookupOpenLibrary(isbn);
+            if (meta.title) return meta;
+          } catch { /* Se intenta la siguiente fuente. */ }
+        }
+        for (const isbn of isbns) {
+          try {
+            return await lookupGoogleBooks(isbn);
+          } catch { /* Se intenta la siguiente fuente. */ }
+        }
+        throw new Error('No se encontró ese ISBN en Open Library ni en Google Books.');
+      }
+
+      function lookupAttempts(rawClean, canonical) {
+        return [...new Set([rawClean, canonical, isbn13to10(canonical)].filter(Boolean))];
+      }
+
+      /* ---------- Estado ---------- */
+
+      function normalizeItem(item) {
+        if (!item || typeof item.isbn13 !== 'string' || !isValidIsbn13(item.isbn13)) return null;
+        if (typeof item.cita !== 'string' || !item.cita) return null;
+        return {
+          id: typeof item.id === 'string' ? item.id : newId(),
+          isbn13: item.isbn13,
+          title: typeof item.title === 'string' ? item.title : '',
+          year: typeof item.year === 'string' ? item.year : '',
+          publisher: typeof item.publisher === 'string' ? item.publisher : '',
+          source: typeof item.source === 'string' ? item.source : '',
+          cita: item.cita,
+          edited: item.edited === true,
+          selected: item.selected !== false
+        };
+      }
+
+      function loadState() {
+        const params = new URLSearchParams(window.location.search);
+        const fromUrl = params.get('isbns');
+        if (fromUrl) {
+          const items = fromUrl.split(',')
+            .map(canonicalIsbn)
+            .filter(Boolean)
+            .filter((value, index, all) => all.indexOf(value) === index)
+            .map(isbn13 => ({ id: newId(), isbn13, title: '', year: '', publisher: '', source: '', cita: '', selected: true, pending: true }));
+          if (items.length) return { items };
+        }
+        try {
+          const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+          if (stored && Array.isArray(stored.items)) {
+            return { items: stored.items.map(normalizeItem).filter(Boolean) };
+          }
+        } catch { /* Se usa la lista vacía si el estado guardado no es válido. */ }
+        return { items: [] };
+      }
+
+      let state = loadState();
+      let editingId = null;
+
+      function newId() {
+        return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+      }
+
+      function save() {
+        const persistable = state.items
+          .filter(item => !item.pending && item.cita)
+          .map(({ id, isbn13, title, year, publisher, source, cita, edited, selected }) =>
+            ({ id, isbn13, title, year, publisher, source, cita, edited, selected }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ items: persistable }));
+      }
+
+      function showNotice(message, kind = 'success') {
+        clearTimeout(noticeTimeout);
+        notice.textContent = message;
+        notice.className = `alert py-2 alert-${kind === 'error' ? 'danger' : 'success'}`;
+        notice.classList.remove('d-none');
+        noticeTimeout = setTimeout(() => notice.classList.add('d-none'), 2600);
+      }
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, character =>
+          ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
+      }
+
+      function citationPreviewHtml(cita) {
+        // La cita guardada es texto plano; se divide en crudo y se escapa
+        // cada parte por separado para envolver el título en cursiva.
+        const match = String(cita).match(/^(.*\(\S+?\)\.\s)(.*?)(\.\s.*)?$/);
+        if (!match) return escapeHtml(cita);
+        const [, head, title, tail] = match;
+        const tailText = tail ? tail.slice(1).trimStart() : '';
+        return `${escapeHtml(head)}<em>${escapeHtml(title)}.</em>${tailText ? ` ${escapeHtml(tailText)}` : ''}`;
+      }
+
+      function copyText(text) {
+        if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
+        const input = document.createElement('textarea');
+        input.value = text;
+        input.style.position = 'fixed';
+        document.body.append(input);
+        input.select();
+        document.execCommand('copy');
+        input.remove();
+        return Promise.resolve();
+      }
+
+      // Copia las citas con formato (título en cursiva) para Word/Docs,
+      // incluyendo siempre la versión en texto plano como alternativa.
+      // Devuelve 'rich', 'plain' o 'fail' según lo que el navegador permitió.
+      async function copyCitations(citas) {
+        const plain = citas.join('\n\n');
+        const html = citas.map(cita => `<p>${citationPreviewHtml(cita)}</p>`).join('');
+        if (window.ClipboardItem && navigator.clipboard?.write) {
+          try {
+            await navigator.clipboard.write([
+              new ClipboardItem({
+                'text/html': new Blob([html], { type: 'text/html' }),
+                'text/plain': new Blob([plain], { type: 'text/plain' })
+              })
+            ]);
+            return 'rich';
+          } catch { /* Se reintenta como texto plano. */ }
+        }
+        try {
+          await copyText(plain);
+          return 'plain';
+        } catch {
+          return 'fail';
+        }
+      }
+
+      /* ---------- Render ---------- */
+
+      function itemMarkup(item) {
+        const checkId = `sel-${item.id}`;
+        const isEditing = editingId === item.id;
+        let body;
+        let actions;
+        if (item.pending) {
+          body = '<p class="mb-1 text-body-secondary"><span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Buscando metadatos…</p>';
+          actions = '';
+        } else if (isEditing) {
+          body = `<textarea class="form-control form-control-sm" rows="3" data-role="edit-box" aria-label="Editar cita">${escapeHtml(item.cita)}</textarea>`;
+          actions = `<button class="btn btn-primary btn-sm" type="button" data-action="save-edit">Guardar</button>
+                <button class="btn btn-outline-secondary btn-sm" type="button" data-action="cancel-edit">Cancelar</button>`;
+        } else {
+          body = `<p class="citation mb-1">${citationPreviewHtml(item.cita)}</p>
+             <p class="mb-0 small text-body-secondary">ISBN ${escapeHtml(item.isbn13)}${item.source ? ` · ${escapeHtml(item.source)}` : ''}${item.edited ? ' · <span class="badge text-bg-warning fw-normal">editada</span>' : ''}</p>`;
+          actions = `<button class="btn btn-outline-secondary btn-sm" type="button" data-action="copy" title="Copiar cita">📋</button>
+                <button class="btn btn-outline-secondary btn-sm" type="button" data-action="edit" title="Editar cita">✏️</button>
+                <button class="btn btn-outline-danger btn-sm" type="button" data-action="delete" title="Eliminar cita">✕</button>`;
+        }
+        return `<div class="card" data-id="${item.id}">
+          <div class="card-body py-2">
+            <div class="d-flex gap-2 align-items-start">
+              <input class="form-check-input mt-1 flex-shrink-0" type="checkbox" id="${checkId}" data-action="selected"${item.selected ? ' checked' : ''} aria-label="Seleccionar cita">
+              <div class="flex-grow-1 min-w-0">
+                <label for="${checkId}" class="visually-hidden">Seleccionar cita de ${escapeHtml(item.title || item.isbn13)}</label>
+                ${body}
+              </div>
+              <div class="d-flex gap-1 flex-shrink-0">
+                ${actions}
+              </div>
+            </div>
+          </div>
+        </div>`;
+      }
+
+      function render() {
+        const draftBox = editingId
+          ? citationList.querySelector(`[data-id="${editingId}"] [data-role="edit-box"]`)
+          : null;
+        const draft = draftBox ? draftBox.value : null;
+        citationList.innerHTML = state.items.map(itemMarkup).join('');
+        if (draft !== null && editingId) {
+          const box = citationList.querySelector(`[data-id="${editingId}"] [data-role="edit-box"]`);
+          if (box) box.value = draft;
+        }
+        emptyList.classList.toggle('d-none', state.items.length > 0);
+        const selectable = state.items.filter(item => !item.pending && item.cita);
+        count.textContent = String(state.items.length);
+        document.getElementById('copy-selected').disabled = !selectable.some(item => item.selected);
+      }
+
+      function selectedCitas() {
+        return state.items
+          .filter(item => item.selected && !item.pending && item.cita)
+          .map(item => item.cita);
+      }
+
+      async function hydrate(item) {
+        try {
+          const meta = await lookupMetadata(lookupAttempts(item.isbn13, item.isbn13));
+          if (!meta.title) throw new Error('Sin título');
+          item.title = meta.title;
+          item.year = meta.year;
+          item.publisher = meta.publisher;
+          item.source = meta.source;
+          item.cita = buildCitation(meta);
+          item.pending = false;
+          save();
+          render();
+        } catch {
+          state.items = state.items.filter(candidate => candidate.id !== item.id);
+          save();
+          render();
+          showNotice(`No se encontró el ISBN ${item.isbn13}. Revisalo e intentá de nuevo.`, 'error');
+        }
+      }
+
+      async function addIsbn(raw) {
+        const canonical = canonicalIsbn(raw);
+        if (!canonical) {
+          showNotice('Ese ISBN no parece válido. Revisá los dígitos.', 'error');
+          return;
+        }
+        if (state.items.some(item => item.isbn13 === canonical)) {
+          showNotice('Ese libro ya está en tu lista (ISBN-10/13 del mismo libro).');
+          return;
+        }
+        const item = { id: newId(), isbn13: canonical, title: '', year: '', publisher: '', source: '', cita: '', selected: true, pending: true };
+        state.items.unshift(item);
+        isbnInput.value = '';
+        render();
+        setLoading(true);
+        try {
+          const meta = await lookupMetadata(lookupAttempts(cleanIsbn(raw), canonical));
+          if (!meta.title) throw new Error('Sin título');
+          Object.assign(item, { title: meta.title, year: meta.year, publisher: meta.publisher, source: meta.source, cita: buildCitation(meta), pending: false });
+          save();
+          render();
+          showNotice(meta.publisher && meta.year ? 'Cita agregada.' : 'Cita agregada, pero faltan datos: revisala antes de usarla.');
+        } catch {
+          state.items = state.items.filter(candidate => candidate.id !== item.id);
+          render();
+          showNotice('No se encontró ese ISBN en Open Library ni en Google Books.', 'error');
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      function setLoading(loading) {
+        addBtn.disabled = loading;
+        addBtn.innerHTML = loading
+          ? '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Buscando…'
+          : 'Agregar';
+      }
+
+      /* ---------- Eventos ---------- */
+
+      addBtn.addEventListener('click', () => {
+        const raw = isbnInput.value.trim();
+        if (!raw) return;
+        addIsbn(raw);
+      });
+
+      isbnInput.addEventListener('keydown', event => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          addBtn.click();
+        }
+      });
+
+      citationList.addEventListener('click', async event => {
+        const button = event.target.closest('button[data-action]');
+        if (!button) return;
+        const row = button.closest('[data-id]');
+        const item = state.items.find(candidate => candidate.id === row.dataset.id);
+        if (!item) return;
+        if (button.dataset.action === 'delete') {
+          state.items = state.items.filter(candidate => candidate.id !== item.id);
+          if (editingId === item.id) editingId = null;
+          save();
+          render();
+          showNotice('Cita eliminada.');
+        }
+        if (button.dataset.action === 'edit') {
+          editingId = item.id;
+          render();
+          citationList.querySelector(`[data-id="${item.id}"] [data-role="edit-box"]`)?.focus();
+        }
+        if (button.dataset.action === 'save-edit') {
+          const box = row.querySelector('[data-role="edit-box"]');
+          const value = box ? box.value.trim() : '';
+          if (!value) {
+            showNotice('La cita no puede quedar vacía.', 'error');
+            return;
+          }
+          item.cita = value;
+          item.edited = true;
+          editingId = null;
+          save();
+          render();
+          showNotice('Cita actualizada.');
+        }
+        if (button.dataset.action === 'cancel-edit') {
+          editingId = null;
+          render();
+        }
+        if (button.dataset.action === 'copy') {
+          const result = await copyCitations([item.cita]);
+          if (result === 'rich') showNotice('Cita copiada con formato.');
+          else if (result === 'plain') showNotice('Cita copiada (este navegador solo permite texto plano).');
+          else showNotice('No se pudo copiar la cita.', 'error');
+        }
+      });
+
+      citationList.addEventListener('change', event => {
+        const control = event.target;
+        if (!control.dataset || control.dataset.action !== 'selected') return;
+        const row = control.closest('[data-id]');
+        const item = state.items.find(candidate => candidate.id === row.dataset.id);
+        if (!item) return;
+        item.selected = control.checked;
+        save();
+        render();
+      });
+
+      document.getElementById('select-all').addEventListener('click', () => {
+        state.items.forEach(item => { item.selected = true; });
+        save();
+        render();
+      });
+
+      document.getElementById('select-none').addEventListener('click', () => {
+        state.items.forEach(item => { item.selected = false; });
+        save();
+        render();
+      });
+
+      document.getElementById('sort-az').addEventListener('click', () => {
+        state.items.sort((a, b) => (a.cita || a.isbn13).localeCompare(b.cita || b.isbn13, 'es'));
+        save();
+        render();
+        showNotice('Citas ordenadas alfabéticamente.');
+      });
+
+      document.getElementById('copy-selected').addEventListener('click', async () => {
+        const citas = selectedCitas();
+        if (!citas.length) {
+          showNotice('No hay citas seleccionadas para copiar.', 'error');
+          return;
+        }
+        const result = await copyCitations(citas);
+        if (result === 'rich') showNotice('Citas seleccionadas copiadas con formato.');
+        else if (result === 'plain') showNotice('Citas copiadas (este navegador solo permite texto plano).');
+        else showNotice('No se pudieron copiar las citas.', 'error');
+      });
+
+      document.getElementById('reset').addEventListener('click', () => {
+        localStorage.removeItem(STORAGE_KEY);
+        state = { items: [] };
+        editingId = null;
+        window.history.replaceState(null, '', window.location.pathname);
+        render();
+        showNotice('Se borraron todas las citas.');
+      });
+
+      document.getElementById('share').addEventListener('click', async () => {
+        const ready = state.items.filter(item => !item.pending && item.cita);
+        if (!ready.length) {
+          showNotice('No hay citas para compartir todavía.', 'error');
+          return;
+        }
+        const url = new URL(window.location.href);
+        url.search = '';
+        url.searchParams.set('isbns', ready.map(item => item.isbn13).join(','));
+        try {
+          await copyText(url.toString());
+          showNotice('Se copió el enlace con tus ISBN.');
+        } catch {
+          showNotice('No se pudo copiar el enlace.', 'error');
+        }
+      });
+
+      const root = document.documentElement;
+      const themeButton = document.getElementById('theme-toggle');
+      const storedTheme = localStorage.getItem('theme');
+      function applyTheme(theme) {
+        root.setAttribute('data-bs-theme', theme);
+        themeButton.textContent = theme === 'dark' ? '☀️' : '🌙';
+      }
+      applyTheme(storedTheme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+      themeButton.addEventListener('click', () => {
+        const nextTheme = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', nextTheme);
+        applyTheme(nextTheme);
+      });
+
+      render();
+      state.items.filter(item => item.pending).forEach(hydrate);
+    })();
+  </script>
+</body>
+</html>

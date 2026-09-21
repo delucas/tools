@@ -189,6 +189,29 @@
       </div>
     </section>
 
+    <section class="card mb-4" id="escritorio">
+      <div class="card-body">
+        <h2 class="h6 mb-1">💾 Escritorio</h2>
+        <p class="text-body-secondary small mb-3">Llevate todas tus herramientas a otro navegador o máquina: exportá un archivo JSON con el estado completo e importalo donde quieras.</p>
+        <p class="small mb-3" id="escritorio-status" role="status">Detectando datos guardados…</p>
+        <div class="d-flex flex-wrap gap-2 mb-2">
+          <button id="escritorio-export" class="btn btn-outline-secondary btn-sm" type="button">💾 Exportar</button>
+          <button id="escritorio-import" class="btn btn-outline-secondary btn-sm" type="button">📥 Importar</button>
+          <button id="escritorio-wipe" class="btn btn-outline-danger btn-sm" type="button">🗑️ Borrar todo</button>
+          <input id="escritorio-file" class="d-none" type="file" accept=".json,application/json">
+        </div>
+        <div id="escritorio-preview" class="d-none">
+          <p class="small mb-2" id="escritorio-preview-text"></p>
+          <div class="d-flex flex-wrap gap-2">
+            <button id="escritorio-confirm" class="btn btn-primary btn-sm" type="button">Sí, reemplazar mi escritorio</button>
+            <button id="escritorio-cancel" class="btn btn-outline-secondary btn-sm" type="button">Cancelar</button>
+          </div>
+          <p class="text-body-secondary small mt-2 mb-0">Antes de reemplazar se descarga automáticamente una copia de seguridad de tu estado actual.</p>
+        </div>
+        <p class="small mt-2 mb-0 d-none" id="escritorio-notice" role="status"></p>
+      </div>
+    </section>
+
     <footer class="text-body-secondary small border-top pt-3">
       <p>Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
       <p class="mb-0">
@@ -237,6 +260,220 @@
       };
       input.addEventListener('input', update);
       update();
+    })();
+
+    (() => {
+      // Escritorio: exporta/importa el estado de todas las herramientas de una vez.
+      // Cada herramienta guarda todo en UNA sola clave igual a su slug de carpeta
+      // (ver AGENTS.md). Los valores se copian en crudo, sin parsear.
+      // MIGRACIÓN (2026-09-21): LEGACY cubre las claves viejas durante la transición. Eliminar en 2027-03.
+      const SLUGS = ['apacalypse', 'basket', 'checksmith', 'clocks', 'csv-a-grafico', 'docfactory', 'ducky', 'eqtex', 'gsd', 'hojitas', 'linkdb', 'markpress', 'pseditor', 'qrlabs', 'textwrangler', 'truth'];
+      const LEGACY = {
+        apacalypse: ['apacalypse-citas'],
+        basket: ['basket-lista'],
+        checksmith: ['checksmith-plantillas'],
+        clocks: ['people', 'clocks-intro'],
+        'csv-a-grafico': ['csv-grafico-csv', 'csv-grafico-type', 'csv-grafico-title'],
+        docfactory: ['docfactory-estado'],
+        ducky: ['rubber-ducky-messages'],
+        eqtex: ['eqtex-formulas', 'eqtex-actual'],
+        gsd: ['gsd-tareas'],
+        hojitas: ['hojitas-config'],
+        linkdb: ['linkdb-links'],
+        markpress: ['markpress-doc'],
+        pseditor: ['pseditor-archivos', 'pseditor-codigo', 'pseditor-mostrar-numeros'],
+        qrlabs: ['qrlabs-state'],
+        textwrangler: ['textwrangler-text'],
+        truth: ['truth-expression']
+      };
+      const APP = 'tools-escritorio';
+
+      const status = document.getElementById('escritorio-status');
+      const notice = document.getElementById('escritorio-notice');
+      const preview = document.getElementById('escritorio-preview');
+      const previewText = document.getElementById('escritorio-preview-text');
+      const fileInput = document.getElementById('escritorio-file');
+      let pending = null;
+      let wipeStep = 0;
+      let wipeTimer = null;
+
+      function showNotice(text) {
+        notice.textContent = text;
+        notice.classList.remove('d-none');
+        clearTimeout(showNotice.timer);
+        showNotice.timer = setTimeout(() => notice.classList.add('d-none'), 4000);
+      }
+
+      function storedRaw(slug) {
+        // Nueva primero; si no hay, se lee la vieja y se migra (guardar en nueva + borrar vieja).
+        const fresh = localStorage.getItem(slug);
+        if (fresh !== null) return fresh;
+        for (const k of (LEGACY[slug] || [])) {
+          const v = localStorage.getItem(k);
+          if (v !== null) {
+            try { localStorage.setItem(slug, v); } catch {}
+            (LEGACY[slug] || []).forEach(x => { try { localStorage.removeItem(x); } catch {} });
+            return v;
+          }
+        }
+        return null;
+      }
+
+      function collect() {
+        const tools = {};
+        SLUGS.forEach(slug => {
+          const v = storedRaw(slug);
+          if (v !== null) tools[slug] = v;
+        });
+        const theme = localStorage.getItem('theme');
+        return { tools, theme: theme !== null ? theme : undefined };
+      }
+
+      function refreshStatus() {
+        const { tools } = collect();
+        const n = Object.keys(tools).length;
+        status.textContent = n
+          ? `Hay datos guardados en ${n} de ${SLUGS.length} herramientas.`
+          : `No hay datos guardados todavía (0 de ${SLUGS.length} herramientas).`;
+      }
+
+      function download(name, obj) {
+        const blob = new Blob([JSON.stringify(obj)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = name;
+        document.body.append(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      }
+
+      function stamp() {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      }
+
+      document.getElementById('escritorio-export').addEventListener('click', () => {
+        const { tools, theme } = collect();
+        if (!Object.keys(tools).length && theme === undefined) {
+          showNotice('No hay nada para exportar: ninguna herramienta tiene datos guardados.');
+          return;
+        }
+        const payload = { app: APP, v: 1, exportedAt: new Date().toISOString(), tools };
+        if (theme !== undefined) payload.theme = theme;
+        download(`escritorio-${stamp()}.json`, payload);
+        showNotice(`Escritorio exportado (${Object.keys(tools).length} herramientas).`);
+      });
+
+      document.getElementById('escritorio-import').addEventListener('click', () => fileInput.click());
+
+      fileInput.addEventListener('change', () => {
+        const file = fileInput.files[0];
+        fileInput.value = '';
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          let data;
+          try { data = JSON.parse(reader.result); } catch { showNotice('Ese archivo no es un JSON válido.'); return; }
+          const problems = validate(data);
+          if (problems) { showNotice(problems); return; }
+          pending = data;
+          const names = Object.keys(data.tools);
+          previewText.textContent = names.length
+            ? `El archivo trae datos de ${names.length} herramienta(s): ${names.join(', ')}.${data.theme ? ' Incluye tema.' : ''} ¿Reemplazar tu escritorio actual?`
+            : 'El archivo no trae datos de herramientas. No hay nada para importar.';
+          preview.classList.toggle('d-none', !names.length);
+          if (!names.length) pending = null;
+        };
+        reader.readAsText(file);
+      });
+
+      function validate(data) {
+        if (!data || typeof data !== 'object') return 'Archivo inválido: formato desconocido.';
+        if (data.app !== APP) return 'Archivo inválido: no es un respaldo del escritorio.';
+        if (!data.tools || typeof data.tools !== 'object') return 'Archivo inválido: le faltan las herramientas.';
+        const names = Object.keys(data.tools);
+        const unknown = names.filter(n => !SLUGS.includes(n));
+        if (unknown.length) return `Archivo inválido: herramientas desconocidas (${unknown.join(', ')}).`;
+        for (const n of names) {
+          if (typeof data.tools[n] !== 'string') return `Archivo inválido: el estado de "${n}" está corrupto.`;
+        }
+        if (data.theme !== undefined && data.theme !== 'dark' && data.theme !== 'light') return 'Archivo inválido: tema desconocido.';
+        if (JSON.stringify(data).length > 4500000) return 'Archivo demasiado grande (límite ~4,5 MB).';
+        return null;
+      }
+
+      document.getElementById('escritorio-cancel').addEventListener('click', () => {
+        pending = null;
+        preview.classList.add('d-none');
+      });
+
+      document.getElementById('escritorio-confirm').addEventListener('click', () => {
+        if (!pending) return;
+        // Copia de seguridad del estado actual antes de reemplazar.
+        const current = collect();
+        if (Object.keys(current.tools).length) {
+          const backup = { app: APP, v: 1, exportedAt: new Date().toISOString(), tools: current.tools };
+          if (current.theme !== undefined) backup.theme = current.theme;
+          download(`escritorio-respaldo-${stamp()}.json`, backup);
+        }
+        const names = Object.keys(pending.tools);
+        try {
+          names.forEach(n => {
+            localStorage.setItem(n, pending.tools[n]);
+            (LEGACY[n] || []).forEach(k => { try { localStorage.removeItem(k); } catch {} });
+          });
+          if (pending.theme !== undefined) localStorage.setItem('theme', pending.theme);
+        } catch {
+          showNotice('No se pudo importar: el navegador no deja guardar (cuota llena o modo privado).');
+          return;
+        }
+        pending = null;
+        preview.classList.add('d-none');
+        refreshStatus();
+        showNotice(`Escritorio restaurado (${names.length} herramientas). Abrí cada herramienta para verla.`);
+      });
+
+      document.getElementById('escritorio-wipe').addEventListener('click', (e) => {
+        const btn = e.currentTarget;
+        const label = '🗑️ Borrar todo';
+        const disarm = () => {
+          wipeStep = 0;
+          btn.textContent = label;
+          btn.classList.remove('btn-danger');
+          btn.classList.add('btn-outline-danger');
+        };
+        const rearm = () => {
+          clearTimeout(wipeTimer);
+          wipeTimer = setTimeout(disarm, 5000);
+        };
+        if (wipeStep === 0) {
+          wipeStep = 1;
+          btn.textContent = '¿Seguro? Tocá de nuevo para confirmar';
+          rearm();
+          return;
+        }
+        if (wipeStep === 1) {
+          wipeStep = 2;
+          btn.textContent = '⚠️ Último aviso: se borra todo. Tocá para borrar';
+          btn.classList.remove('btn-outline-danger');
+          btn.classList.add('btn-danger');
+          rearm();
+          return;
+        }
+        clearTimeout(wipeTimer);
+        disarm();
+        SLUGS.forEach(slug => {
+          try { localStorage.removeItem(slug); } catch {}
+          (LEGACY[slug] || []).forEach(k => { try { localStorage.removeItem(k); } catch {} });
+        });
+        pending = null;
+        preview.classList.add('d-none');
+        refreshStatus();
+        showNotice('Se borraron los datos de todas las herramientas (el tema se mantiene).');
+      });
+
+      refreshStatus();
     })();
   </script>
 </body>

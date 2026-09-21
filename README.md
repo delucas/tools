@@ -21,5 +21,8 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`apacalypse`](./apacalypse) | Generador de bibliografía APA 7 a partir del ISBN del libro. |
 | [`linkdb`](./linkdb) | Tus links favoritos con título automático y agregados locales por navegador. |
 | [`docfactory`](./docfactory) | Combinar correspondencia: plantilla con marcadores más CSV, un documento por fila. |
+| [`textwrangler`](./textwrangler) | Domá tu texto: ordenar, mezclar, numerar líneas y cambiar mayúsculas. |
+| [`qrlabs`](./qrlabs) | Generador de QR de URL, texto, Wi-Fi y email, con descarga en PNG o SVG. |
+| [`ducky`](./ducky) | Patito de goma para depurar en voz alta: no responde, pero ayuda igual. |
 
 Cada carpeta tiene su propio `README.md` con el detalle de uso.

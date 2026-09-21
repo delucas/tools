@@ -326,17 +326,15 @@
       });
 
       const root = document.documentElement;
-      const themeButton = document.getElementById('theme-toggle');
-      const storedTheme = localStorage.getItem('theme');
-      function applyTheme(theme) {
-        root.setAttribute('data-bs-theme', theme);
-        themeButton.textContent = theme === 'dark' ? '☀️' : '🌙';
-      }
-      applyTheme(storedTheme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
-      themeButton.addEventListener('click', () => {
-        const nextTheme = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
-        localStorage.setItem('theme', nextTheme);
-        applyTheme(nextTheme);
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
       });
 
       localStorage.setItem(STORAGE_KEY, JSON.stringify(config));

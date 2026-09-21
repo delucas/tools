@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f9ea%3B%3C/text%3E%3C/svg%3E">
+  <title>QRlabs</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    #qr-canvas {
+      max-width: 100%;
+      height: auto;
+    }
+
+    @media (max-width: 576px) {
+      #f-text {
+        font-size: 16px;
+      }
+    }
+
+    p.signature {
+      font-size: 0.8em;
+    }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">🧪 QRlabs</h1>
+        <p class="text-body-secondary mb-0">Elegí el tipo, completá los datos y llevate el QR.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="share" class="btn btn-outline-secondary btn-sm" type="button">🔗 Compartir</button>
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+    <hr>
+
+    <div class="row g-4">
+      <div class="col-12 col-lg-5">
+        <span class="form-label" id="type-label">Tipo de QR</span>
+        <div class="d-flex flex-wrap gap-2 mb-3" role="group" aria-labelledby="type-label">
+          <input type="radio" class="btn-check" name="tipo" id="type-url" value="url" checked>
+          <label class="btn btn-outline-primary" for="type-url">🔗 URL</label>
+          <input type="radio" class="btn-check" name="tipo" id="type-text" value="texto">
+          <label class="btn btn-outline-primary" for="type-text">📝 Texto</label>
+          <input type="radio" class="btn-check" name="tipo" id="type-wifi" value="wifi">
+          <label class="btn btn-outline-primary" for="type-wifi">📶 Wi-Fi</label>
+          <input type="radio" class="btn-check" name="tipo" id="type-email" value="email">
+          <label class="btn btn-outline-primary" for="type-email">✉️ Email</label>
+        </div>
+
+        <div id="panel-url">
+          <label for="f-url" class="form-label">URL</label>
+          <input id="f-url" class="form-control" type="url" inputmode="url" placeholder="https://ejemplo.com" autocomplete="off">
+          <div class="form-text">Si no tiene esquema, se antepone <code>https://</code>.</div>
+        </div>
+
+        <div id="panel-texto" class="d-none">
+          <label for="f-text" class="form-label">Texto</label>
+          <textarea id="f-text" class="form-control" rows="4" placeholder="Lo que quieras codificar…"></textarea>
+        </div>
+
+        <div id="panel-wifi" class="d-none">
+          <div class="mb-2">
+            <label for="f-ssid" class="form-label">Nombre de la red (SSID)</label>
+            <input id="f-ssid" class="form-control" type="text" maxlength="32" placeholder="MiRed" autocomplete="off">
+          </div>
+          <div class="mb-2">
+            <label for="f-sec" class="form-label">Seguridad</label>
+            <select id="f-sec" class="form-select">
+              <option value="WPA" selected>WPA/WPA2</option>
+              <option value="WEP">WEP</option>
+              <option value="nopass">Sin contraseña</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label for="f-pass" class="form-label">Contraseña</label>
+            <input id="f-pass" class="form-control" type="text" maxlength="63" placeholder="Clave de la red" autocomplete="off">
+          </div>
+          <div class="form-check">
+            <input id="f-hidden" class="form-check-input" type="checkbox">
+            <label for="f-hidden" class="form-check-label">Red oculta</label>
+          </div>
+        </div>
+
+        <div id="panel-email" class="d-none">
+          <label for="f-email" class="form-label">Email</label>
+          <input id="f-email" class="form-control" type="email" inputmode="email" placeholder="alguien@ejemplo.com" autocomplete="off">
+        </div>
+      </div>
+
+      <div class="col-12 col-lg-7">
+        <span class="form-label" id="size-label">Tamaño</span>
+        <div class="d-flex flex-wrap gap-2 mb-3" role="group" aria-labelledby="size-label">
+          <input type="radio" class="btn-check" name="tamano" id="size-s" value="128">
+          <label class="btn btn-outline-primary" for="size-s">S · 128px</label>
+          <input type="radio" class="btn-check" name="tamano" id="size-m" value="256" checked>
+          <label class="btn btn-outline-primary" for="size-m">M · 256px</label>
+          <input type="radio" class="btn-check" name="tamano" id="size-l" value="512">
+          <label class="btn btn-outline-primary" for="size-l">L · 512px</label>
+        </div>
+
+        <p id="hint" class="text-body-secondary">Completá los datos para ver el QR.</p>
+        <div id="preview" class="text-center d-none">
+          <canvas id="qr-canvas" class="border rounded"></canvas>
+          <p id="payload" class="text-body-secondary small text-break mt-2 mb-0"></p>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 mt-3">
+          <button id="copy" class="btn btn-primary btn-sm" type="button">📋 Copiar imagen</button>
+          <button id="dl-png" class="btn btn-outline-secondary btn-sm" type="button">⬇️ PNG</button>
+          <button id="dl-svg" class="btn btn-outline-secondary btn-sm" type="button">⬇️ SVG</button>
+        </div>
+      </div>
+    </div>
+
+    <hr>
+    <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.5.2/qrcode.min.js"
+    integrity="sha512-c3HC2N32Up+KwxhFN2dZkoDWSdxWqwzDJCnroUffjS/HBQHf5Ou1uFpqIT0rOIJ5fW8TxHmUpCDndH2A6xNhpQ=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'qrlabs-state';
+      const MARGIN = 1; // módulos de zona de silencio por lado
+      const DEFAULTS = { t: 'url', url: '', texto: '', ssid: '', pass: '', sec: 'WPA', hidden: false, email: '', size: '256' };
+
+      const $ = (id) => document.getElementById(id);
+      const fields = {
+        url: $('f-url'), texto: $('f-text'), ssid: $('f-ssid'),
+        pass: $('f-pass'), sec: $('f-sec'), hidden: $('f-hidden'), email: $('f-email')
+      };
+      const panels = { url: $('panel-url'), texto: $('panel-texto'), wifi: $('panel-wifi'), email: $('panel-email') };
+      const canvas = $('qr-canvas');
+      const preview = $('preview');
+      const hint = $('hint');
+      const payloadEl = $('payload');
+      const copyBtn = $('copy');
+      const pngBtn = $('dl-png');
+      const svgBtn = $('dl-svg');
+      let currentSvg = '';
+
+      function getQueryParam(param) {
+        return new URLSearchParams(window.location.search).get(param);
+      }
+
+      function loadState() {
+        const fromUrl = getQueryParam('d');
+        if (fromUrl !== null) {
+          try {
+            return { ...DEFAULTS, ...JSON.parse(fromUrl) };
+          } catch {
+            return { ...DEFAULTS };
+          }
+        }
+        try {
+          const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+          if (stored && typeof stored === 'object') return { ...DEFAULTS, ...stored };
+        } catch {
+          localStorage.removeItem(STORAGE_KEY);
+        }
+        return { ...DEFAULTS };
+      }
+
+      function readState() {
+        return {
+          t: document.querySelector('input[name="tipo"]:checked').value,
+          url: fields.url.value,
+          texto: fields.texto.value,
+          ssid: fields.ssid.value,
+          pass: fields.pass.value,
+          sec: fields.sec.value,
+          hidden: fields.hidden.checked,
+          email: fields.email.value,
+          size: document.querySelector('input[name="tamano"]:checked').value
+        };
+      }
+
+      function writeState(state) {
+        document.querySelector(`input[name="tipo"][value="${state.t}"]`).checked = true;
+        fields.url.value = state.url;
+        fields.texto.value = state.texto;
+        fields.ssid.value = state.ssid;
+        fields.pass.value = state.pass;
+        fields.sec.value = state.sec;
+        fields.hidden.checked = !!state.hidden;
+        fields.email.value = state.email;
+        document.querySelector(`input[name="tamano"][value="${state.size}"]`).checked = true;
+      }
+
+      function escapeWifi(text) {
+        return text.replace(/([\\;,":])/g, '\\$1');
+      }
+
+      // Contenido a codificar según el tipo, o '' si faltan datos.
+      function buildPayload(state) {
+        if (state.t === 'url') {
+          const url = state.url.trim();
+          if (!url) return '';
+          return /^[a-z][a-z0-9+.-]*:/i.test(url) ? url : `https://${url}`;
+        }
+        if (state.t === 'texto') return state.texto;
+        if (state.t === 'wifi') {
+          const ssid = state.ssid.trim();
+          if (!ssid) return '';
+          let payload = `WIFI:T:${state.sec};S:${escapeWifi(ssid)};`;
+          if (state.sec !== 'nopass' && state.pass) payload += `P:${escapeWifi(state.pass)};`;
+          payload += `H:${state.hidden ? 'true' : 'false'};;`;
+          return payload;
+        }
+        const email = state.email.trim();
+        return /.+@.+\..+/.test(email) ? `mailto:${email}` : '';
+      }
+
+      // Dibuja la matriz en el canvas al tamaño exacto y arma el SVG gemelo.
+      function drawModules(qr, size) {
+        const count = qr.getModuleCount();
+        const total = count + MARGIN * 2;
+        const scale = size / total;
+        const ctx = canvas.getContext('2d');
+        canvas.width = size;
+        canvas.height = size;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, size, size);
+        ctx.fillStyle = '#000000';
+        const px = (i) => Math.round(i * scale);
+        let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><rect width="${size}" height="${size}" fill="#ffffff"/>`;
+        for (let r = 0; r < count; r++) {
+          for (let c = 0; c < count; c++) {
+            if (!qr.isDark(r, c)) continue;
+            const x = px(c + MARGIN), y = px(r + MARGIN);
+            ctx.fillRect(x, y, px(c + MARGIN + 1) - x, px(r + MARGIN + 1) - y);
+            svg += `<rect x="${x}" y="${y}" width="${px(c + MARGIN + 1) - x}" height="${px(r + MARGIN + 1) - y}" fill="#000000"/>`;
+          }
+        }
+        return svg + '</svg>';
+      }
+
+      function render() {
+        const state = readState();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        Object.entries(panels).forEach(([key, panel]) => panel.classList.toggle('d-none', key !== state.t));
+        fields.pass.disabled = state.sec === 'nopass';
+        const payload = buildPayload(state);
+        const ready = payload !== '';
+        hint.classList.toggle('d-none', ready);
+        preview.classList.toggle('d-none', !ready);
+        [copyBtn, pngBtn, svgBtn].forEach(btn => { btn.disabled = !ready; });
+        if (!ready) return;
+        const qr = qrcode(0, 'M');
+        qr.addData(payload);
+        qr.make();
+        currentSvg = drawModules(qr, parseInt(state.size, 10));
+        payloadEl.textContent = payload;
+      }
+
+      function flash(btn, text) {
+        const original = btn.textContent;
+        btn.textContent = text;
+        setTimeout(() => { btn.textContent = original; }, 1500);
+      }
+
+      function download(href, name) {
+        const a = document.createElement('a');
+        a.href = href;
+        a.download = name;
+        a.click();
+      }
+
+      copyBtn.addEventListener('click', () => {
+        if (typeof ClipboardItem === 'undefined') {
+          flash(copyBtn, 'Copiado no soportado');
+          return;
+        }
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            flash(copyBtn, 'No se pudo copiar');
+            return;
+          }
+          navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+            .then(() => flash(copyBtn, '¡Copiado!'))
+            .catch(() => flash(copyBtn, 'No se pudo copiar'));
+        }, 'image/png');
+      });
+
+      pngBtn.addEventListener('click', () => {
+        canvas.toBlob((blob) => {
+          if (!blob) return;
+          const url = URL.createObjectURL(blob);
+          download(url, 'qr.png');
+          setTimeout(() => URL.revokeObjectURL(url), 4000);
+        }, 'image/png');
+      });
+
+      svgBtn.addEventListener('click', () => {
+        const url = URL.createObjectURL(new Blob([currentSvg], { type: 'image/svg+xml' }));
+        download(url, 'qr.svg');
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+      });
+
+      $('share').addEventListener('click', (e) => {
+        const url = `${window.location.origin}${window.location.pathname}?d=${encodeURIComponent(JSON.stringify(readState()))}`;
+        navigator.clipboard.writeText(url);
+        flash(e.currentTarget, '¡Copiado!');
+      });
+
+      $('reset').addEventListener('click', () => {
+        localStorage.removeItem(STORAGE_KEY);
+        writeState({ ...DEFAULTS });
+        history.replaceState(null, '', window.location.pathname);
+        render();
+      });
+
+      document.querySelectorAll('input[name="tipo"], input[name="tamano"]').forEach(el => {
+        el.addEventListener('change', render);
+      });
+      Object.values(fields).forEach(el => {
+        el.addEventListener('input', render);
+        el.addEventListener('change', render);
+      });
+
+      writeState(loadState());
+      render();
+    })();
+  </script>
+
+  <script>
+    // theme toggle: Bootstrap's native data-bs-theme, remembered per browser
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

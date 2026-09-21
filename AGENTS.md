@@ -36,8 +36,10 @@ Este repositorio reúne herramientas web autocontenidas. Cada herramienta vive e
 
 Para herramientas con listas, formularios u opciones editables:
 
-- Persistir los cambios en una clave propia de `localStorage`.
+- Persistir los cambios en una sola clave de `localStorage` igual al slug de la carpeta (p. ej. la herramienta `gsd` guarda en la clave `gsd`). La única excepción global es `theme`.
 - Inicializar con prioridad `URL > localStorage > valores por defecto`.
+- Cuando el estado viene de la URL, no tocar el `localStorage` (un link compartido no debe borrar ni sobrescribir lo guardado).
+- La sección `💾 Escritorio` del `index.html` raíz exporta/importa esas claves de una vez (`{ slug: valorEnCrudo }` más `theme` opcional); al agregar una herramienta, sumar su slug a `SLUGS` (y a `LEGACY` solo si reemplaza claves viejas).
 - Usar parámetros legibles para estado simple y un único parámetro JSON codificado para estado complejo.
 - Ofrecer reset: elimina el estado guardado, restaura valores predeterminados y limpia el query string con `history.replaceState`.
 - Cuando corresponda, ofrecer compartir: copiar la URL con el estado codificado al portapapeles.

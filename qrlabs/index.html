@@ -124,6 +124,16 @@
       </div>
     </div>
 
+    <section class="mt-4" aria-label="Historial de QR">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+        <h2 class="h6 mb-0">🕘 Historial</h2>
+        <button id="history-clear" class="btn btn-outline-danger btn-sm d-none" type="button">Borrar historial</button>
+      </div>
+      <p id="history-empty" class="text-body-secondary small">Todavía no hay QR guardados. Se guardan solos a medida que los generás.</p>
+      <div id="history-list" class="list-group"></div>
+      <p class="text-body-secondary small mt-2 mb-0">La lista muestra tipo y contenido sin renderizar el QR: tocá uno para cargarlo y verlo.</p>
+    </section>
+
     <hr>
     <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
   </main>
@@ -136,25 +146,20 @@
     (() => {
       const STORAGE_KEY = 'qrlabs';
       const LEGACY_KEYS = ['qrlabs-state']; // MIGRACIÓN (2026-09-21): leer vieja, guardar en nueva y borrar vieja. Eliminar este bloque en 2027-03.
-      function readStoredRaw() {
-        const fresh = localStorage.getItem(STORAGE_KEY);
-        if (fresh !== null) return fresh;
-        for (const k of LEGACY_KEYS) {
-          const v = localStorage.getItem(k);
-          if (v !== null) {
-            try { localStorage.setItem(STORAGE_KEY, v); } catch {}
-            LEGACY_KEYS.forEach(x => { try { localStorage.removeItem(x); } catch {} });
-            return v;
-          }
-        }
-        return null;
-      }
-      function removeStored() {
-        try { localStorage.removeItem(STORAGE_KEY); } catch {}
-        LEGACY_KEYS.forEach(x => { try { localStorage.removeItem(x); } catch {} });
-      }
       const MARGIN = 1; // módulos de zona de silencio por lado
       const DEFAULTS = { t: 'url', url: '', texto: '', ssid: '', pass: '', sec: 'WPA', hidden: false, email: '', size: '256' };
+      const MAX_HISTORY = 50; // tope de QR guardados (los más nuevos primero)
+      const SAVE_DELAY = 1500; // pausa de escritura antes de guardar al historial
+      const TYPE_LABELS = { url: '🔗 URL', texto: '📝 Texto', wifi: '📶 Wi-Fi', email: '✉️ Email' };
+
+      function escapeHtml(text) {
+        return String(text).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
+      }
+
+      function nid() {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+        return `id-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+      }
 
       const $ = (id) => document.getElementById(id);
       const fields = {
@@ -175,22 +180,71 @@
         return new URLSearchParams(window.location.search).get(param);
       }
 
+      function cleanForm(value) {
+        if (!value || typeof value !== 'object') return null;
+        return { ...DEFAULTS, ...value };
+      }
+
+      function cleanEntry(value) {
+        if (!value || typeof value !== 'object') return null;
+        if (typeof value.payload !== 'string' || !value.payload) return null;
+        if (typeof value.id !== 'string' || !value.id) return null;
+        const form = cleanForm(value.form);
+        if (!form) return null;
+        return {
+          id: value.id,
+          t: TYPE_LABELS[value.t] ? value.t : form.t,
+          payload: value.payload,
+          size: value.size === '128' || value.size === '512' ? value.size : '256',
+          ts: typeof value.ts === 'number' ? value.ts : Date.now(),
+          form
+        };
+      }
+
+      // Normaliza lo guardado a { form, history }: acepta el formato nuevo,
+      // el plano anterior (solo formulario) y la clave legacy.
+      function readStore() {
+        const fallback = { form: { ...DEFAULTS }, history: [] };
+        let raw = null;
+        try {
+          raw = localStorage.getItem(STORAGE_KEY);
+          if (raw === null) {
+            for (const k of LEGACY_KEYS) {
+              const v = localStorage.getItem(k);
+              if (v !== null) { raw = v; break; }
+            }
+          }
+          if (raw === null) return fallback;
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object' && parsed.form) {
+            const form = cleanForm(parsed.form);
+            const history = Array.isArray(parsed.history) ? parsed.history.map(cleanEntry).filter(Boolean).slice(0, MAX_HISTORY) : [];
+            if (!form) return fallback;
+            return { form, history };
+          }
+          const form = cleanForm(parsed);
+          if (!form) return fallback;
+          return { form, history: [] };
+        } catch { return fallback; }
+      }
+
+      function writeStore(form, history) {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({ form, history }));
+          LEGACY_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch {} });
+        } catch { /* modo privado: se sigue sin guardar */ }
+      }
+
       function loadState() {
         const fromUrl = getQueryParam('d');
         if (fromUrl !== null) {
           try {
-            return { ...DEFAULTS, ...JSON.parse(fromUrl) };
+            return { form: { ...DEFAULTS, ...JSON.parse(fromUrl) }, history: readStore().history };
           } catch {
-            return { ...DEFAULTS };
+            return { form: { ...DEFAULTS }, history: readStore().history };
           }
         }
-        try {
-          const stored = JSON.parse(readStoredRaw());
-          if (stored && typeof stored === 'object') return { ...DEFAULTS, ...stored };
-        } catch {
-          removeStored();
-        }
-        return { ...DEFAULTS };
+        return readStore();
       }
 
       function readState() {
@@ -269,7 +323,7 @@
 
       function render() {
         const state = readState();
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        writeStore(state, readStore().history);
         Object.entries(panels).forEach(([key, panel]) => panel.classList.toggle('d-none', key !== state.t));
         fields.pass.disabled = state.sec === 'nopass';
         const payload = buildPayload(state);
@@ -283,7 +337,94 @@
         qr.make();
         currentSvg = drawModules(qr, parseInt(state.size, 10));
         payloadEl.textContent = payload;
+        scheduleHistorySave();
       }
+
+      // Guarda al historial cuando el QR lleva un rato estable (evita una
+      // entrada por cada letra mientras se escribe). Sin duplicar el último.
+      let historyTimer = null;
+      function scheduleHistorySave() {
+        clearTimeout(historyTimer);
+        historyTimer = setTimeout(saveHistoryNow, SAVE_DELAY);
+      }
+
+      function saveHistoryNow() {
+        const state = readState();
+        const payload = buildPayload(state);
+        if (!payload) return;
+        const store = readStore();
+        if (store.history.length && store.history[0].payload === payload) return;
+        store.history.unshift({ id: nid(), t: state.t, payload, size: state.size, ts: Date.now(), form: state });
+        writeStore(store.form, store.history.slice(0, MAX_HISTORY));
+        renderHistory();
+      }
+
+      function fmtDate(ts) {
+        try {
+          return new Date(ts).toLocaleString(undefined, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        } catch { return ''; }
+      }
+
+      function renderHistory() {
+        const { history } = readStore();
+        const list = $('history-list');
+        const empty = $('history-empty');
+        const clearBtn = $('history-clear');
+        empty.classList.toggle('d-none', history.length > 0);
+        clearBtn.classList.toggle('d-none', history.length === 0);
+        list.innerHTML = history.map(entry => {
+          const short = entry.payload.length > 60 ? entry.payload.slice(0, 60) + '…' : entry.payload;
+          return `<div class="list-group-item d-flex justify-content-between align-items-center gap-2">` +
+            `<button type="button" class="btn btn-link text-start text-decoration-none p-0 flex-grow-1" data-load="${escapeHtml(entry.id)}">` +
+            `<span class="badge text-bg-secondary me-1">${TYPE_LABELS[entry.t] || entry.t}</span>` +
+            `<span class="text-body small text-break">${escapeHtml(short)}</span><br>` +
+            `<small class="text-body-secondary">${escapeHtml(fmtDate(entry.ts))}</small>` +
+            `</button>` +
+            `<button type="button" class="btn btn-outline-danger btn-sm flex-shrink-0" data-del="${escapeHtml(entry.id)}" aria-label="Borrar QR">✕</button>` +
+            `</div>`;
+        }).join('');
+      }
+
+      $('history-list').addEventListener('click', (e) => {
+        const loadBtn = e.target.closest('[data-load]');
+        if (loadBtn) {
+          const store = readStore();
+          const idx = store.history.findIndex(entry => entry.id === loadBtn.dataset.load);
+          if (idx < 0) return;
+          const [entry] = store.history.splice(idx, 1);
+          store.history.unshift(entry);
+          writeStore(entry.form, store.history);
+          writeState(entry.form);
+          history.replaceState(null, '', window.location.pathname);
+          render();
+          renderHistory();
+          return;
+        }
+        const delBtn = e.target.closest('[data-del]');
+        if (delBtn) {
+          const store = readStore();
+          writeStore(store.form, store.history.filter(entry => entry.id !== delBtn.dataset.del));
+          renderHistory();
+        }
+      });
+
+      let clearArmed = false;
+      let clearTimer = null;
+      $('history-clear').addEventListener('click', (e) => {
+        const btn = e.currentTarget;
+        if (!clearArmed) {
+          clearArmed = true;
+          btn.textContent = '¿Seguro? Tocá de nuevo';
+          clearTimeout(clearTimer);
+          clearTimer = setTimeout(() => { clearArmed = false; btn.textContent = 'Borrar historial'; }, 4000);
+          return;
+        }
+        clearTimeout(clearTimer);
+        clearArmed = false;
+        btn.textContent = 'Borrar historial';
+        writeStore(readStore().form, []);
+        renderHistory();
+      });
 
       function flash(btn, text) {
         const original = btn.textContent;
@@ -336,7 +477,7 @@
       });
 
       $('reset').addEventListener('click', () => {
-        removeStored();
+        writeStore({ ...DEFAULTS }, readStore().history);
         writeState({ ...DEFAULTS });
         history.replaceState(null, '', window.location.pathname);
         render();
@@ -350,8 +491,10 @@
         el.addEventListener('change', render);
       });
 
-      writeState(loadState());
+      const boot = loadState();
+      writeState(boot.form);
       render();
+      renderHistory();
     })();
   </script>
 

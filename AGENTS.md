@@ -14,6 +14,7 @@ Este repositorio reúne herramientas web autocontenidas. Cada herramienta vive e
 
 ## Interfaz
 
+- Todo debe ser mobile friendly: verificar a 360px de ancho (cabeceras con `flex-wrap`, columnas con base `col-12`, tablas dentro de `.table-responsive`, botones que envuelvan en vez de desbordar, e inputs a 16px para evitar el auto-zoom de iOS al enfocar).
 - Usar Bootstrap por CDN como base visual y sus clases/utilidades antes de crear CSS propio.
 - Mantener el estilo predeterminado de Bootstrap: sin paletas, temas ni branding personalizados. Incluir CSS personalizado solo cuando Bootstrap no alcance.
 - Cargar `bootstrap.bundle.min.js` únicamente si se usan componentes que lo requieren. Usar Font Awesome por CDN solo si un ícono aporta funcionalidad.

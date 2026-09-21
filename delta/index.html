@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f500%3B%3C/text%3E%3C/svg%3E">
+  <title>Delta</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    .mono {
+      font-family: var(--bs-font-monospace);
+    }
+
+    textarea.mono {
+      font-size: 0.9rem;
+    }
+
+    @media (max-width: 576px) {
+      textarea.mono {
+        font-size: 16px;
+      }
+    }
+
+    .diff-pane {
+      overflow: auto;
+      max-height: 60vh;
+      font-size: 0.85rem;
+    }
+
+    .diff-row {
+      display: flex;
+      line-height: 1.5;
+      min-height: 1.5em;
+      white-space: pre;
+    }
+
+    .diff-ln {
+      flex: 0 0 3.5ch;
+      text-align: right;
+      padding-right: 0.5rem;
+      user-select: none;
+      opacity: 0.45;
+    }
+
+    .diff-gap {
+      background-color: var(--bs-tertiary-bg);
+    }
+
+    .diff-row.diff-current {
+      outline: 2px solid var(--bs-primary);
+      outline-offset: -2px;
+    }
+
+    p.signature {
+      font-size: 0.8em;
+    }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">🔀 Delta</h1>
+        <p class="text-body-secondary mb-0">¿Qué cambió entre estas versiones? Compará dos textos o inspeccioná un merge.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2 align-items-center">
+        <div class="btn-group btn-group-sm" role="group" aria-label="Modo">
+          <input type="radio" class="btn-check" name="mode" id="mode-cmp" autocomplete="off" checked>
+          <label class="btn btn-outline-secondary" for="mode-cmp">Comparar</label>
+          <input type="radio" class="btn-check" name="mode" id="mode-mrg" autocomplete="off">
+          <label class="btn btn-outline-secondary" for="mode-mrg">Mergear</label>
+        </div>
+        <button id="clear" class="btn btn-outline-secondary btn-sm" type="button">🧹 Limpiar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+    <hr>
+
+    <p id="notice" class="small d-none" role="status"></p>
+
+    <section id="sec-cmp" aria-label="Comparar dos textos">
+      <div class="row g-2 mb-2">
+        <div class="col-12 col-md-6">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-1">
+            <label for="ta-a" class="form-label mb-0">Origen A</label>
+            <div class="d-flex gap-2 align-items-center">
+              <span id="cnt-a" class="text-body-secondary small"></span>
+              <button class="btn btn-outline-secondary btn-sm" type="button" data-file="a" title="Cargar archivo .txt">📂</button>
+              <button class="btn btn-outline-secondary btn-sm" type="button" data-paste="a" title="Pegar desde el portapapeles">📋</button>
+            </div>
+          </div>
+          <textarea id="ta-a" class="form-control mono" rows="8" spellcheck="false" placeholder="Pegá o cargá el primer texto…"></textarea>
+        </div>
+        <div class="col-12 col-md-6">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-1">
+            <label for="ta-b" class="form-label mb-0">Origen B</label>
+            <div class="d-flex gap-2 align-items-center">
+              <span id="cnt-b" class="text-body-secondary small"></span>
+              <button class="btn btn-outline-secondary btn-sm" type="button" data-file="b" title="Cargar archivo .txt">📂</button>
+              <button class="btn btn-outline-secondary btn-sm" type="button" data-paste="b" title="Pegar desde el portapapeles">📋</button>
+            </div>
+          </div>
+          <textarea id="ta-b" class="form-control mono" rows="8" spellcheck="false" placeholder="Pegá o cargá el segundo texto…"></textarea>
+        </div>
+      </div>
+
+      <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <span id="diffcount-cmp" class="text-body-secondary small" role="status"></span>
+        <button id="prev-cmp" class="btn btn-outline-secondary btn-sm" type="button">↑ Anterior</button>
+        <button id="next-cmp" class="btn btn-outline-secondary btn-sm" type="button">↓ Siguiente</button>
+      </div>
+      <div class="row g-2">
+        <div class="col-12 col-md-6">
+          <div id="pane-cmp-a" class="diff-pane mono border rounded" tabindex="0" aria-label="Diferencias en Origen A"></div>
+        </div>
+        <div class="col-12 col-md-6">
+          <div id="pane-cmp-b" class="diff-pane mono border rounded" tabindex="0" aria-label="Diferencias en Origen B"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="sec-mrg" class="d-none" aria-label="Mergear tres textos">
+      <div class="row g-2 mb-2">
+        <div class="col-12 col-lg-4">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-1">
+            <label for="ta-ma" class="form-label mb-0">Origen A</label>
+            <div class="d-flex gap-2 align-items-center">
+              <span id="cnt-ma" class="text-body-secondary small"></span>
+              <button class="btn btn-outline-secondary btn-sm" type="button" data-file="ma" title="Cargar archivo .txt">📂</button>
+              <button class="btn btn-outline-secondary btn-sm" type="button" data-paste="ma" title="Pegar desde el portapapeles">📋</button>
+            </div>
+          </div>
+          <textarea id="ta-ma" class="form-control mono" rows="6" spellcheck="false" placeholder="Pegá o cargá el primer texto…"></textarea>
+        </div>
+        <div class="col-12 col-lg-4">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-1">
+            <label for="ta-mb" class="form-label mb-0">Origen B</label>
+            <div class="d-flex gap-2 align-items-center">
+              <span id="cnt-mb" class="text-body-secondary small"></span>
+              <button class="btn btn-outline-secondary btn-sm" type="button" data-file="mb" title="Cargar archivo .txt">📂</button>
+              <button class="btn btn-outline-secondary btn-sm" type="button" data-paste="mb" title="Pegar desde el portapapeles">📋</button>
+            </div>
+          </div>
+          <textarea id="ta-mb" class="form-control mono" rows="6" spellcheck="false" placeholder="Pegá o cargá el segundo texto…"></textarea>
+        </div>
+        <div class="col-12 col-lg-4">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-1">
+            <label for="ta-mr" class="form-label mb-0">Resultado</label>
+            <div class="d-flex gap-2 align-items-center">
+              <span id="cnt-mr" class="text-body-secondary small"></span>
+              <button class="btn btn-outline-secondary btn-sm" type="button" data-file="mr" title="Cargar archivo .txt">📂</button>
+              <button class="btn btn-outline-secondary btn-sm" type="button" data-paste="mr" title="Pegar desde el portapapeles">📋</button>
+            </div>
+          </div>
+          <textarea id="ta-mr" class="form-control mono" rows="6" spellcheck="false" placeholder="Pegá o cargá la versión arreglada…"></textarea>
+        </div>
+      </div>
+
+      <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <div class="btn-group btn-group-sm" role="group" aria-label="Qué comparar contra el Resultado">
+          <input type="radio" class="btn-check" name="view" id="view-a" autocomplete="off" checked>
+          <label class="btn btn-outline-secondary" for="view-a">R ↔ A</label>
+          <input type="radio" class="btn-check" name="view" id="view-b" autocomplete="off">
+          <label class="btn btn-outline-secondary" for="view-b">R ↔ B</label>
+        </div>
+        <span id="diffcount-mrg" class="text-body-secondary small" role="status"></span>
+        <button id="prev-mrg" class="btn btn-outline-secondary btn-sm" type="button">↑ Anterior</button>
+        <button id="next-mrg" class="btn btn-outline-secondary btn-sm" type="button">↓ Siguiente</button>
+      </div>
+      <div class="row g-2">
+        <div class="col-12 col-md-6">
+          <div id="pane-mrg-l" class="diff-pane mono border rounded" tabindex="0" aria-label="Diferencias lado izquierdo"></div>
+        </div>
+        <div class="col-12 col-md-6">
+          <div id="pane-mrg-r" class="diff-pane mono border rounded" tabindex="0" aria-label="Diferencias en Resultado"></div>
+        </div>
+      </div>
+    </section>
+
+    <input id="file-input" type="file" accept=".txt,text/plain" hidden>
+
+    <hr>
+    <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'delta';
+      const DEFAULT_A = 'Lista de compras\n- manzanas\n- peras\n- leche\nTotal: $240';
+      const DEFAULT_B = 'Lista de compras\n- manzanas\n- bananas\n- leche descremada\nTotal: $310';
+      const DEFAULT_R = 'Lista de compras\n- manzanas\n- bananas\n- leche descremada\n- yerba\nTotal: $310';
+
+      function escapeHtml(text) {
+        return text.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
+      }
+
+      // Myers O(ND) con recorte de prefijo/sufijo. ops: {t:'eq'|'del'|'add'|'mod', a?, b?}
+      function myers(a, b, off, ops) {
+        const n = a.length, m = b.length;
+        if (!n && !m) return;
+        const max = n + m;
+        const v = new Int32Array(2 * max + 1).fill(-1);
+        const O = max;
+        v[O + 1] = 0;
+        const trace = [];
+        let found = false;
+        for (let d = 0; d <= max; d++) {
+          for (let k = -d; k <= d; k += 2) {
+            let x;
+            if (k === -d || (k !== d && v[O + k - 1] < v[O + k + 1])) x = v[O + k + 1];
+            else x = v[O + k - 1] + 1;
+            let y = x - k;
+            while (x < n && y < m && a[x] === b[y]) { x++; y++; }
+            v[O + k] = x;
+            if (x >= n && y >= m) { found = true; break; }
+          }
+          trace.push(Array.from(v));
+          if (found) break;
+        }
+        let x = n, y = m;
+        const rev = [];
+        for (let d = trace.length - 1; d > 0; d--) {
+          const vv = trace[d - 1];
+          const k = x - y;
+          let prevK;
+          if (k === -d || (k !== d && vv[O + k - 1] < vv[O + k + 1])) prevK = k + 1;
+          else prevK = k - 1;
+          const prevX = vv[O + prevK];
+          const prevY = prevX - prevK;
+          while (x > prevX && y > prevY) { rev.push({ t: 'eq', a: off + x - 1, b: off + y - 1 }); x--; y--; }
+          if (x === prevX) rev.push({ t: 'add', b: off + y - 1 });
+          else rev.push({ t: 'del', a: off + x - 1 });
+          x = prevX; y = prevY;
+        }
+        while (x > 0 && y > 0) { rev.push({ t: 'eq', a: off + x - 1, b: off + y - 1 }); x--; y--; }
+        rev.reverse();
+        for (const o of rev) ops.push(o);
+      }
+
+      function pairMods(ops) {
+        let i = 0;
+        while (i < ops.length) {
+          if (ops[i].t === 'eq') { i++; continue; }
+          let j = i;
+          const dels = [], adds = [];
+          while (j < ops.length && ops[j].t !== 'eq') { (ops[j].t === 'del' ? dels : adds).push(ops[j]); j++; }
+          const k = Math.min(dels.length, adds.length);
+          const merged = [];
+          for (let p = 0; p < k; p++) merged.push({ t: 'mod', a: dels[p].a, b: adds[p].b });
+          for (let p = k; p < dels.length; p++) merged.push(dels[p]);
+          for (let p = k; p < adds.length; p++) merged.push(adds[p]);
+          ops.splice(i, j - i, ...merged);
+          i += merged.length;
+        }
+      }
+
+      function diffLines(a, b) {
+        const n = a.length, m = b.length;
+        let start = 0;
+        while (start < n && start < m && a[start] === b[start]) start++;
+        let endA = n - 1, endB = m - 1;
+        while (endA >= start && endB >= start && a[endA] === b[endB]) { endA--; endB--; }
+        const ops = [];
+        for (let i = 0; i < start; i++) ops.push({ t: 'eq', a: i, b: i });
+        const midA = endA + 1 - start, midB = endB + 1 - start;
+        if (midA > 0 || midB > 0) {
+          if (midA + midB > 30000) {
+            const k = Math.min(midA, midB);
+            for (let i = 0; i < k; i++) ops.push({ t: 'mod', a: start + i, b: start + i });
+            for (let i = k; i < midA; i++) ops.push({ t: 'del', a: start + i });
+            for (let i = k; i < midB; i++) ops.push({ t: 'add', b: start + i });
+          } else {
+            myers(a.slice(start, endA + 1), b.slice(start, endB + 1), start, ops);
+            pairMods(ops);
+          }
+        }
+        for (let i = endA + 1, j = endB + 1; i < n; i++, j++) ops.push({ t: 'eq', a: i, b: j });
+        return ops;
+      }
+
+      function complement(eq, len) {
+        const ranges = [];
+        let pos = 0;
+        for (const e of eq) { if (e > pos) ranges.push([pos, e]); pos = e + 1; }
+        if (pos < len) ranges.push([pos, len]);
+        return ranges;
+      }
+
+      function lcsChanged(ma, mb) {
+        const n = ma.length, m = mb.length;
+        if (n * m > 40000) return [[[0, n]], [[0, m]]];
+        const W = m + 1;
+        const dp = new Uint16Array((n + 1) * W);
+        for (let i = n - 1; i >= 0; i--) {
+          for (let j = m - 1; j >= 0; j--) {
+            dp[i * W + j] = ma[i] === mb[j] ? dp[(i + 1) * W + j + 1] + 1 : Math.max(dp[(i + 1) * W + j], dp[i * W + j + 1]);
+          }
+        }
+        const eqA = [], eqB = [];
+        let i = 0, j = 0;
+        while (i < n && j < m) {
+          if (ma[i] === mb[j]) { eqA.push(i); eqB.push(j); i++; j++; }
+          else if (dp[(i + 1) * W + j] >= dp[i * W + j + 1]) i++;
+          else j++;
+        }
+        return [complement(eqA, n), complement(eqB, m)];
+      }
+
+      function changedRanges(a, b) {
+        let p = 0;
+        while (p < a.length && p < b.length && a[p] === b[p]) p++;
+        let sa = a.length - 1, sb = b.length - 1;
+        while (sa >= p && sb >= p && a[sa] === b[sb]) { sa--; sb--; }
+        const ma = a.slice(p, sa + 1), mb = b.slice(p, sb + 1);
+        if (!ma && !mb) return [[], []];
+        if (!ma) return [[], [[p, sb + 1]]];
+        if (!mb) return [[[p, sa + 1]], []];
+        const [ra, rb] = lcsChanged(ma, mb);
+        return [ra.map(([s, e]) => [s + p, e + p]), rb.map(([s, e]) => [s + p, e + p])];
+      }
+
+      function hl(line, ranges) {
+        let out = '', pos = 0;
+        const sorted = ranges.slice().sort((x, y) => x[0] - y[0]);
+        for (const [s, e] of sorted) {
+          out += escapeHtml(line.slice(pos, s)) + '<mark>' + escapeHtml(line.slice(s, e)) + '</mark>';
+          pos = e;
+        }
+        return out + escapeHtml(line.slice(pos));
+      }
+
+      const $ = (id) => document.getElementById(id);
+      const notice = $('notice');
+      let noticeTimeout;
+
+      function showNotice(message) {
+        clearTimeout(noticeTimeout);
+        notice.textContent = message;
+        notice.classList.remove('d-none');
+        noticeTimeout = setTimeout(() => notice.classList.add('d-none'), 3500);
+      }
+
+      function loadState() {
+        const fallback = { mode: 'comparar', view: 'a', a: DEFAULT_A, b: DEFAULT_B, r: DEFAULT_R };
+        try {
+          const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+          if (!saved || typeof saved !== 'object') return fallback;
+          return {
+            mode: saved.mode === 'mergear' ? 'mergear' : 'comparar',
+            view: saved.view === 'b' ? 'b' : 'a',
+            a: typeof saved.a === 'string' ? saved.a : DEFAULT_A,
+            b: typeof saved.b === 'string' ? saved.b : DEFAULT_B,
+            r: typeof saved.r === 'string' ? saved.r : DEFAULT_R
+          };
+        } catch { return fallback; }
+      }
+
+      const state = loadState();
+      const taA = $('ta-a'), taB = $('ta-b'), taMA = $('ta-ma'), taMB = $('ta-mb'), taMR = $('ta-mr');
+      taA.value = state.a; taB.value = state.b;
+      taMA.value = state.a; taMB.value = state.b; taMR.value = state.r;
+      $('mode-mrg').checked = state.mode === 'mergear';
+      $('view-b').checked = state.view === 'b';
+
+      function save() {
+        state.a = taA.value; state.b = taB.value; state.r = taMR.value;
+        state.mode = $('mode-mrg').checked ? 'mergear' : 'comparar';
+        state.view = $('view-b').checked ? 'b' : 'a';
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* modo privado: se sigue sin guardar */ }
+      }
+
+      function split(text) {
+        return text.replace(/\r\n?/g, '\n').split('\n');
+      }
+
+      function counts(text) {
+        const lines = text === '' ? 0 : split(text).length;
+        return `${lines} ${lines === 1 ? 'línea' : 'líneas'} · ${text.length} ${text.length === 1 ? 'carácter' : 'caracteres'}`;
+      }
+
+      function updateCounts() {
+        $('cnt-a').textContent = counts(taA.value);
+        $('cnt-b').textContent = counts(taB.value);
+        $('cnt-ma').textContent = counts(taMA.value);
+        $('cnt-mb').textContent = counts(taMB.value);
+        $('cnt-mr').textContent = counts(taMR.value);
+      }
+
+      // nav: {hunks: [rowIdx...], cur: -1, panes: [el, el]}
+      function renderPair(leftLines, rightLines, paneL, paneR, counter, nav) {
+        let ops;
+        try {
+          ops = diffLines(leftLines, rightLines);
+        } catch {
+          showNotice('No se pudo calcular el diff (textos demasiado grandes o memoria).');
+          return;
+        }
+        const skipIntra = leftLines.join('\n').length + rightLines.join('\n').length > 1000000;
+        let htmlL = '', htmlR = '';
+        const hunks = [];
+        let hunk = -1;
+        ops.forEach((o, row) => {
+          if (o.t !== 'eq') {
+            if (row === 0 || ops[row - 1].t === 'eq') { hunk++; hunks.push(row); }
+          }
+          const h = o.t === 'eq' ? '' : ` data-h="${hunk}"`;
+          if (o.t === 'eq') {
+            htmlL += `<div class="diff-row"${h}><span class="diff-ln">${o.a + 1}</span><span>${escapeHtml(leftLines[o.a])}</span></div>`;
+            htmlR += `<div class="diff-row"${h}><span class="diff-ln">${o.b + 1}</span><span>${escapeHtml(rightLines[o.b])}</span></div>`;
+          } else if (o.t === 'del') {
+            htmlL += `<div class="diff-row bg-danger-subtle"${h}><span class="diff-ln">${o.a + 1}</span><span>${escapeHtml(leftLines[o.a])}</span></div>`;
+            htmlR += `<div class="diff-row diff-gap"${h}><span class="diff-ln"></span><span> </span></div>`;
+          } else if (o.t === 'add') {
+            htmlL += `<div class="diff-row diff-gap"${h}><span class="diff-ln"></span><span> </span></div>`;
+            htmlR += `<div class="diff-row bg-success-subtle"${h}><span class="diff-ln">${o.b + 1}</span><span>${escapeHtml(rightLines[o.b])}</span></div>`;
+          } else {
+            const [ra, rb] = skipIntra ? [[], []] : changedRanges(leftLines[o.a], rightLines[o.b]);
+            htmlL += `<div class="diff-row bg-warning-subtle"${h}><span class="diff-ln">${o.a + 1}</span><span>${hl(leftLines[o.a], ra)}</span></div>`;
+            htmlR += `<div class="diff-row bg-warning-subtle"${h}><span class="diff-ln">${o.b + 1}</span><span>${hl(rightLines[o.b], rb)}</span></div>`;
+          }
+        });
+        if (!ops.length) {
+          const empty = '<div class="diff-row"><span class="diff-ln"></span><span class="text-body-secondary">Pegá o cargá un texto para comparar…</span></div>';
+          htmlL = empty; htmlR = empty;
+        }
+        paneL.innerHTML = htmlL;
+        paneR.innerHTML = htmlR;
+        paneL.scrollTop = 0; paneR.scrollTop = 0;
+        nav.hunks = hunks;
+        nav.cur = -1;
+        counter.textContent = hunks.length
+          ? `${hunks.length} ${hunks.length === 1 ? 'diferencia' : 'diferencias'}`
+          : (ops.length ? 'Sin diferencias 🎉' : '');
+        if (skipIntra && hunks.length) showNotice('Textos muy grandes: se omite el resaltado dentro de la línea.');
+      }
+
+      const navCmp = { hunks: [], cur: -1 };
+      const navMrg = { hunks: [], cur: -1 };
+
+      function render() {
+        updateCounts();
+        if ($('mode-mrg').checked) {
+          const left = $('view-b').checked ? split(taMB.value) : split(taMA.value);
+          renderPair(left, split(taMR.value), $('pane-mrg-l'), $('pane-mrg-r'), $('diffcount-mrg'), navMrg);
+        } else {
+          renderPair(split(taA.value), split(taB.value), $('pane-cmp-a'), $('pane-cmp-b'), $('diffcount-cmp'), navCmp);
+        }
+      }
+
+      let renderTimer;
+      function scheduleRender() {
+        clearTimeout(renderTimer);
+        renderTimer = setTimeout(() => { save(); render(); }, 200);
+      }
+
+      function goto(nav, panes, counter, dir) {
+        if (!nav.hunks.length) return;
+        nav.cur = nav.cur < 0 ? (dir > 0 ? 0 : nav.hunks.length - 1) : (nav.cur + dir + nav.hunks.length) % nav.hunks.length;
+        panes.forEach(pane => {
+          pane.querySelectorAll('.diff-current').forEach(el => el.classList.remove('diff-current'));
+          const rows = pane.children;
+          const row = rows[nav.hunks[nav.cur]];
+          if (row) {
+            row.classList.add('diff-current');
+            pane.scrollTop = Math.max(0, row.offsetTop - pane.clientHeight / 2 + row.clientHeight);
+          }
+        });
+        counter.textContent = `${nav.hunks.length} ${nav.hunks.length === 1 ? 'diferencia' : 'diferencias'} · ${nav.cur + 1}/${nav.hunks.length}`;
+      }
+
+      $('prev-cmp').addEventListener('click', () => goto(navCmp, [$('pane-cmp-a'), $('pane-cmp-b')], $('diffcount-cmp'), -1));
+      $('next-cmp').addEventListener('click', () => goto(navCmp, [$('pane-cmp-a'), $('pane-cmp-b')], $('diffcount-cmp'), 1));
+      $('prev-mrg').addEventListener('click', () => goto(navMrg, [$('pane-mrg-l'), $('pane-mrg-r')], $('diffcount-mrg'), -1));
+      $('next-mrg').addEventListener('click', () => goto(navMrg, [$('pane-mrg-l'), $('pane-mrg-r')], $('diffcount-mrg'), 1));
+
+      // Scroll sincronizado entre paneles del mismo par
+      let syncing = false;
+      function syncScroll(source, targets) {
+        if (syncing) return;
+        syncing = true;
+        targets.forEach(t => { t.scrollTop = source.scrollTop; t.scrollLeft = source.scrollLeft; });
+        syncing = false;
+      }
+      const cmpPanes = [$('pane-cmp-a'), $('pane-cmp-b')];
+      const mrgPanes = [$('pane-mrg-l'), $('pane-mrg-r')];
+      cmpPanes.forEach(p => p.addEventListener('scroll', () => syncScroll(p, cmpPanes.filter(q => q !== p)), { passive: true }));
+      mrgPanes.forEach(p => p.addEventListener('scroll', () => syncScroll(p, mrgPanes.filter(q => q !== p)), { passive: true }));
+
+      // Los Orígenes A y B existen en ambos modos: se mantienen sincronizados.
+      const twins = [[taA, taMA], [taB, taMB]];
+      [taA, taB, taMA, taMB, taMR].forEach(ta => ta.addEventListener('input', () => {
+        twins.forEach(([x, y]) => {
+          if (ta === x) y.value = x.value;
+          else if (ta === y) x.value = y.value;
+        });
+        scheduleRender();
+      }));
+      $('mode-cmp').addEventListener('change', () => { $('sec-cmp').classList.remove('d-none'); $('sec-mrg').classList.add('d-none'); save(); render(); });
+      $('mode-mrg').addEventListener('change', () => { $('sec-mrg').classList.remove('d-none'); $('sec-cmp').classList.add('d-none'); save(); render(); });
+      $('view-a').addEventListener('change', () => { save(); render(); });
+      $('view-b').addEventListener('change', () => { save(); render(); });
+
+      // Cargar archivo .txt en el panel indicado
+      const fileInput = $('file-input');
+      let fileTarget = null;
+      const targets = { a: taA, b: taB, ma: taMA, mb: taMB, mr: taMR };
+      document.querySelectorAll('[data-file]').forEach(btn => btn.addEventListener('click', () => {
+        fileTarget = btn.dataset.file;
+        fileInput.click();
+      }));
+      fileInput.addEventListener('change', () => {
+        const file = fileInput.files[0];
+        fileInput.value = '';
+        if (!file || !fileTarget || !targets[fileTarget]) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          targets[fileTarget].value = String(reader.result || '');
+          save(); render();
+          showNotice(`Se cargó "${file.name}".`);
+        };
+        reader.onerror = () => showNotice('No se pudo leer el archivo.');
+        reader.readAsText(file);
+      });
+
+      // Pegar desde el portapapeles al final del panel (sin borrar lo que hay)
+      document.querySelectorAll('[data-paste]').forEach(btn => btn.addEventListener('click', async () => {
+        const ta = targets[btn.dataset.paste];
+        if (!ta) return;
+        try {
+          if (!navigator.clipboard?.readText) throw new Error('sin API');
+          const text = await navigator.clipboard.readText();
+          ta.value += (ta.value && !ta.value.endsWith('\n') ? '\n' : '') + text;
+          save(); render();
+        } catch { showNotice('El navegador no deja leer el portapapeles: pegá con Ctrl+V.'); }
+      }));
+
+      $('clear').addEventListener('click', () => {
+        [taA, taB, taMA, taMB, taMR].forEach(ta => { ta.value = ''; });
+        try { localStorage.removeItem(STORAGE_KEY); } catch { /* modo privado */ }
+        history.replaceState(null, '', window.location.pathname);
+        render();
+        taA.focus();
+      });
+
+      if (state.mode === 'mergear') { $('sec-mrg').classList.remove('d-none'); $('sec-cmp').classList.add('d-none'); }
+      render();
+    })();
+  </script>
+
+  <script>
+    // theme toggle: Bootstrap's native data-bs-theme, remembered per browser
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -24,5 +24,6 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`textwrangler`](./textwrangler) | Domá tu texto: ordenar, mezclar, numerar líneas y cambiar mayúsculas. |
 | [`qrlabs`](./qrlabs) | Generador de QR de URL, texto, Wi-Fi y email, con descarga en PNG o SVG. |
 | [`ducky`](./ducky) | Patito de goma para depurar en voz alta: no responde, pero ayuda igual. |
+| [`delta`](./delta) | Compará dos textos lado a lado o inspeccioná visualmente un merge de tres. |
 
 Cada carpeta tiene su propio `README.md` con el detalle de uso.

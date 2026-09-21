@@ -23,6 +23,16 @@
       min-height: 320px;
     }
 
+    @media (max-width: 576px) {
+      #csv {
+        font-size: 16px;
+      }
+      #chart-wrap {
+        height: 50vh;
+        min-height: 280px;
+      }
+    }
+
     p.signature {
       font-size: 0.8em;
     }
@@ -33,9 +43,9 @@
   <main class="container py-4">
     <div id="app">
       <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
-      <div class="d-flex justify-content-between align-items-start mb-3">
+      <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
         <h1 class="h3 mb-0">CSV a Gráfico</h1>
-        <div class="d-flex gap-2">
+        <div class="d-flex flex-wrap gap-2">
           <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ shared ? '¡Copiado!' : '🔗 Compartir' }}</button>
           <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset">🗑️ Reiniciar</button>
           <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
@@ -54,7 +64,7 @@
         <div class="col-12 col-lg-7">
           <input class="form-control mb-2" v-model="title" @input="update" placeholder="Título del gráfico (opcional)">
 
-          <div class="btn-group mb-2" role="group" aria-label="Tipo de gráfico">
+          <div class="d-flex flex-wrap gap-2 mb-2" role="group" aria-label="Tipo de gráfico">
             <input type="radio" class="btn-check" id="type-pie" value="pie" v-model="chartType" @change="update">
             <label class="btn btn-outline-primary" for="type-pie">🥧 Torta</label>
 
@@ -222,7 +232,7 @@
                 maintainAspectRatio: false,
                 plugins: {
                   title: titlePlugin,
-                  legend: { display: labels.length > 1, position: 'right', labels: { color: textColor } },
+                  legend: { display: labels.length > 1, position: window.matchMedia('(max-width: 576px)').matches ? 'bottom' : 'right', labels: { color: textColor } },
                   datalabels: {
                     color: '#fff',
                     font: { weight: 'bold' },

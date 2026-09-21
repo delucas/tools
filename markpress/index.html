@@ -384,6 +384,10 @@ $$f(x) = \\begin{cases}
       if (estilo === 'actual') {
         preview.querySelectorAll('table').forEach(table => {
           table.classList.add('table', 'table-bordered', 'table-sm');
+          const wrap = document.createElement('div');
+          wrap.className = 'table-responsive';
+          table.replaceWith(wrap);
+          wrap.appendChild(table);
         });
       }
       const length = input.value.length;

@@ -32,9 +32,9 @@
   <main class="container py-4">
     <div id="app">
       <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
-      <div class="d-flex justify-content-between align-items-start mb-3">
+      <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
         <h1 class="h3 mb-0">Generador de Tablas de Verdad</h1>
-        <div class="d-flex gap-2">
+        <div class="d-flex flex-wrap gap-2">
           <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ shared ? '¡Copiado!' : '🔗 Compartir' }}</button>
           <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset">🗑️ Reiniciar</button>
           <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
@@ -43,13 +43,13 @@
       <hr>
 
       <div class="row">
-        <div class="col-6">
+        <div class="col-12 col-md-6">
           <div class="mb-3">
             <label for="expression" class="form-label">Expresión booleana</label>
             <input class="form-control" id="expression" v-model="expression" @input="processExpression" placeholder="Ingresa una expresión booleana"/>
           </div>
         </div>
-        <div class="col-6">
+        <div class="col-12 col-md-6">
           <div v-if="variables.length > 0">
             <h3 class="h5">Variables identificadas</h3>
             <ul>
@@ -64,6 +64,7 @@
       <div class="row" v-if="variables.length > 0">
         <div class="col-12">
           <h3 class="h5">Desarrollo de la tabla</h3>
+          <div class="table-responsive">
           <table class="table table-bordered table-hover table-striped truth-table">
             <thead>
               <tr>
@@ -82,6 +83,7 @@
               </tr>
             </tbody>
           </table>
+          </div>
         </div>
       </div>
     </div>

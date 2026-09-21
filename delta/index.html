@@ -56,6 +56,16 @@
       outline-offset: -2px;
     }
 
+    /* El mark de Bootstrap (#fff3cd) es idéntico al fondo warning-subtle de la
+       fila: sin regla propia, el cambio intra-línea queda invisible. Ámbar fijo,
+       legible en modo claro y oscuro. */
+    .diff-row mark {
+      padding: 0 0.1em;
+      border-radius: 3px;
+      background-color: #ffc107;
+      color: #212529;
+    }
+
     p.signature {
       font-size: 0.8em;
     }

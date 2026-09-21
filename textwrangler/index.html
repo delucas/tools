@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f94b%3B%3C/text%3E%3C/svg%3E">
+  <title>TextWrangler</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    #editor {
+      font-family: var(--bs-font-monospace);
+      font-size: 0.9rem;
+    }
+
+    @media (max-width: 576px) {
+      #editor {
+        font-size: 16px;
+      }
+    }
+
+    p.signature {
+      font-size: 0.8em;
+    }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">🥋 TextWrangler</h1>
+        <p class="text-body-secondary mb-0">Ningún texto se le resiste: pegá, seleccioná (o no) y aplicá.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="share" class="btn btn-outline-secondary btn-sm" type="button">🔗 Compartir</button>
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+    <hr>
+
+    <p id="stats" class="text-body-secondary small" role="status"></p>
+    <label for="editor" class="form-label">Texto</label>
+    <textarea id="editor" class="form-control" rows="12" spellcheck="false" placeholder="Pegá tu texto acá…"></textarea>
+    <div class="form-text mb-3">Sin selección, cada acción aplica a todo el texto. Con selección, aplica solo a lo seleccionado.</div>
+
+    <section class="mb-3" aria-label="Operaciones de líneas">
+      <h2 class="h6 text-body-secondary mb-2">Líneas</h2>
+      <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-op="sortAZ">Ordenar A→Z</button>
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-op="sortZA">Ordenar Z→A</button>
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-op="shuffle">🔀 Mezclar</button>
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-op="reverse">Invertir orden</button>
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-op="dedupe">Quitar duplicadas</button>
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-op="removeBlanks">Quitar líneas vacías</button>
+      </div>
+    </section>
+
+    <section class="mb-3" aria-label="Operaciones de espacios">
+      <h2 class="h6 text-body-secondary mb-2">Espacios</h2>
+      <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-op="trimLines">Recortar extremos</button>
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-op="collapseSpaces">Colapsar espacios</button>
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-op="trimTrailing">Quitar espacios al final</button>
+      </div>
+    </section>
+
+    <section class="mb-3" aria-label="Numeración de líneas">
+      <h2 class="h6 text-body-secondary mb-2">Números</h2>
+      <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-op="addNumbers">Agregar números</button>
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-op="stripNumbers">Quitar números</button>
+      </div>
+    </section>
+
+    <section class="mb-3" aria-label="Cambio de mayúsculas">
+      <h2 class="h6 text-body-secondary mb-2">Mayúsculas</h2>
+      <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-op="upper">ABC MAYÚSCULAS</button>
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-op="lower">abc minúsculas</button>
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-op="sentence">Sentence case</button>
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-op="title">Title Case</button>
+      </div>
+    </section>
+
+    <div class="d-flex flex-wrap gap-2 mb-3">
+      <button id="undo" class="btn btn-outline-primary btn-sm" type="button" disabled>↩️ Deshacer</button>
+    </div>
+
+    <hr>
+    <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'textwrangler-text';
+      const DEFAULT_TEXT = 'el orden es importante\n  los espacios sobran   \nmezclar estas líneas con   dobles espacios\n\nEL ORDEN ES IMPORTANTE\nel orden es importante\n3. una línea numerada';
+      const UNDO_LIMIT = 50;
+
+      const editor = document.getElementById('editor');
+      const stats = document.getElementById('stats');
+      const undoBtn = document.getElementById('undo');
+      const shareBtn = document.getElementById('share');
+      const resetBtn = document.getElementById('reset');
+      const undoStack = [];
+      let sharedLabel = null;
+
+      function getQueryParam(param) {
+        return new URLSearchParams(window.location.search).get(param);
+      }
+
+      function loadInitial() {
+        const fromUrl = getQueryParam('t');
+        if (fromUrl !== null) return fromUrl;
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored !== null) return stored;
+        return DEFAULT_TEXT;
+      }
+
+      function persist() {
+        localStorage.setItem(STORAGE_KEY, editor.value);
+      }
+
+      function updateStats() {
+        const text = editor.value;
+        const lines = text === '' ? 0 : text.split('\n').length;
+        const words = (text.trim().match(/\S+/g) || []).length;
+        stats.textContent = `${lines} ${lines === 1 ? 'línea' : 'líneas'} · ${words} ${words === 1 ? 'palabra' : 'palabras'} · ${text.length} ${text.length === 1 ? 'carácter' : 'caracteres'}`;
+      }
+
+      function updateUndo() {
+        undoBtn.disabled = undoStack.length === 0;
+      }
+
+      // Rango objetivo: selección tal cual para texto, expandida a líneas
+      // completas para operaciones de líneas. Sin selección, todo el texto.
+      function target(expandLines) {
+        const value = editor.value;
+        let start = editor.selectionStart ?? 0;
+        let end = editor.selectionEnd ?? value.length;
+        if (start === end) {
+          start = 0;
+          end = value.length;
+        } else if (expandLines) {
+          if (value[end - 1] === '\n') end--;
+          start = value.lastIndexOf('\n', start - 1) + 1;
+          const next = value.indexOf('\n', end);
+          end = next === -1 ? value.length : next;
+        }
+        return { start, end };
+      }
+
+      function replace({ start, end }, replacement) {
+        undoStack.push(editor.value);
+        if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+        editor.value = editor.value.slice(0, start) + replacement + editor.value.slice(end);
+        editor.focus();
+        editor.setSelectionRange(start, start + replacement.length);
+        persist();
+        updateStats();
+        updateUndo();
+      }
+
+      function applyToLines(fn) {
+        const { start, end } = target(true);
+        const result = fn(editor.value.slice(start, end).split('\n')).join('\n');
+        replace({ start, end }, result);
+      }
+
+      function applyToText(fn) {
+        const { start, end } = target(false);
+        replace({ start, end }, fn(editor.value.slice(start, end)));
+      }
+
+      function shuffle(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+      }
+
+      const ops = {
+        sortAZ: () => applyToLines(lines => [...lines].sort((a, b) => a.localeCompare(b, 'es'))),
+        sortZA: () => applyToLines(lines => [...lines].sort((a, b) => b.localeCompare(a, 'es'))),
+        shuffle: () => applyToLines(lines => shuffle([...lines])),
+        reverse: () => applyToLines(lines => [...lines].reverse()),
+        dedupe: () => applyToLines(lines => [...new Set(lines)]),
+        removeBlanks: () => applyToLines(lines => lines.filter(line => line.trim() !== '')),
+        trimLines: () => applyToLines(lines => lines.map(line => line.trim())),
+        collapseSpaces: () => applyToText(text => text.replace(/[ \t]{2,}/g, ' ')),
+        trimTrailing: () => applyToText(text => text.replace(/[ \t]+$/gm, '')),
+        addNumbers: () => applyToLines(lines => lines.map((line, i) => `${i + 1}. ${line}`)),
+        stripNumbers: () => applyToLines(lines => lines.map(line => line.replace(/^\s*\d+[.)]\s?/, ''))),
+        upper: () => applyToText(text => text.toUpperCase()),
+        lower: () => applyToText(text => text.toLowerCase()),
+        sentence: () => applyToText(text => text.toLowerCase().replace(/(^\s*\p{Ll}|[.!?…¡¿]\s*\p{Ll})/gu, m => m.toUpperCase())),
+        title: () => applyToText(text => text.split(/(\s+)/).map(chunk => /^\s*$/.test(chunk) ? chunk : chunk.charAt(0).toUpperCase() + chunk.slice(1).toLowerCase()).join(''))
+      };
+
+      document.querySelectorAll('[data-op]').forEach(btn => {
+        btn.addEventListener('click', () => ops[btn.dataset.op]());
+      });
+
+      undoBtn.addEventListener('click', () => {
+        if (!undoStack.length) return;
+        editor.value = undoStack.pop();
+        editor.focus();
+        persist();
+        updateStats();
+        updateUndo();
+      });
+
+      shareBtn.addEventListener('click', () => {
+        const url = `${window.location.origin}${window.location.pathname}?t=${encodeURIComponent(editor.value)}`;
+        navigator.clipboard.writeText(url);
+        if (sharedLabel === null) sharedLabel = shareBtn.textContent;
+        shareBtn.textContent = '¡Copiado!';
+        setTimeout(() => { shareBtn.textContent = sharedLabel; }, 1500);
+      });
+
+      resetBtn.addEventListener('click', () => {
+        localStorage.removeItem(STORAGE_KEY);
+        undoStack.length = 0;
+        editor.value = DEFAULT_TEXT;
+        history.replaceState(null, '', window.location.pathname);
+        updateStats();
+        updateUndo();
+      });
+
+      editor.addEventListener('input', () => {
+        persist();
+        updateStats();
+      });
+
+      editor.value = loadInitial();
+      updateStats();
+      updateUndo();
+    })();
+  </script>
+
+  <script>
+    // theme toggle: Bootstrap's native data-bs-theme, remembered per browser
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

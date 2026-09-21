@@ -25,5 +25,6 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`qrlabs`](./qrlabs) | Generador de QR de URL, texto, Wi-Fi y email, con descarga en PNG o SVG. |
 | [`ducky`](./ducky) | Patito de goma para depurar en voz alta: no responde, pero ayuda igual. |
 | [`delta`](./delta) | Compará dos textos lado a lado o inspeccioná visualmente un merge de tres. |
+| [`pre-flight`](./pre-flight) | Chequeo pre-llamada: cámara, micrófono y parlantes, sin grabar ni guardar nada. |
 
 Cada carpeta tiene su propio `README.md` con el detalle de uso.

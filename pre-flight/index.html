@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f6eb%3B%3C/text%3E%3C/svg%3E">
+  <title>Pre-flight</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    #preview {
+      max-width: 100%;
+      max-height: 50vh;
+      background-color: var(--bs-tertiary-bg);
+    }
+
+    #preview.mirror {
+      transform: scaleX(-1);
+    }
+
+    #level {
+      height: 1.25rem;
+    }
+
+    p.signature {
+      font-size: 0.8em;
+    }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">🛫 Pre-flight</h1>
+        <p class="text-body-secondary mb-0">Chequeo pre-llamada: cámara, micrófono y parlantes. Nada se graba ni se guarda.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+    <hr>
+
+    <p id="error" class="alert alert-warning d-none" role="alert"></p>
+
+    <div class="d-flex flex-wrap gap-2 mb-3">
+      <button id="start" class="btn btn-primary btn-sm" type="button">▶ Iniciar prueba</button>
+      <button id="stop" class="btn btn-outline-secondary btn-sm" type="button" disabled>⏹ Detener</button>
+      <button id="beep" class="btn btn-outline-secondary btn-sm" type="button">🔊 Probar parlantes</button>
+    </div>
+
+    <section class="mb-3" aria-label="Cámara">
+      <h2 class="h6 text-body-secondary mb-2">📷 Cámara</h2>
+      <video id="preview" class="border rounded w-100 d-none" autoplay playsinline muted></video>
+      <p id="no-video" class="text-body-secondary small">Todavía sin imagen: tocá Iniciar prueba.</p>
+      <p id="resolution" class="text-body-secondary small mb-2" role="status"></p>
+      <label for="cam-select" class="form-label small">Cámara</label>
+      <select id="cam-select" class="form-select form-select-sm" disabled>
+        <option value="">Se listan al autorizar…</option>
+      </select>
+    </section>
+
+    <section class="mb-3" aria-label="Micrófono">
+      <h2 class="h6 text-body-secondary mb-2">🎙️ Micrófono</h2>
+      <div id="level" class="progress mb-2" role="progressbar" aria-label="Nivel del micrófono" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div id="level-bar" class="progress-bar" style="width: 0%"></div>
+      </div>
+      <p id="level-hint" class="text-body-secondary small">Hablá para ver el nivel. Verde = se escucha bien.</p>
+      <label for="mic-select" class="form-label small">Micrófono</label>
+      <select id="mic-select" class="form-select form-select-sm" disabled>
+        <option value="">Se listan al autorizar…</option>
+      </select>
+    </section>
+
+    <hr>
+    <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script>
+    (() => {
+      // Sin memoria a propósito: nada se guarda (ni siquiera en localStorage).
+      const $ = (id) => document.getElementById(id);
+      const errorBox = $('error');
+      const startBtn = $('start'), stopBtn = $('stop'), beepBtn = $('beep');
+      const video = $('preview'), noVideo = $('no-video'), resolution = $('resolution');
+      const camSelect = $('cam-select'), micSelect = $('mic-select');
+      const levelBar = $('level-bar'), levelWrap = $('level');
+
+      let stream = null;
+      let audioCtx = null, analyser = null, meterTimer = null;
+
+      function showError(message) {
+        if (!message) {
+          errorBox.classList.add('d-none');
+          return;
+        }
+        errorBox.textContent = message;
+        errorBox.classList.remove('d-none');
+      }
+
+      function secureContextOk() {
+        return window.isSecureContext;
+      }
+
+      function stopTracks() {
+        if (stream) {
+          stream.getTracks().forEach(track => { try { track.stop(); } catch { /* ya cortado */ } });
+          stream = null;
+        }
+        video.srcObject = null;
+      }
+
+      function stopMeter() {
+        cancelAnimationFrame(meterTimer);
+        meterTimer = null;
+        if (audioCtx) {
+          audioCtx.close().catch(() => {});
+          audioCtx = null;
+          analyser = null;
+        }
+        levelBar.style.width = '0%';
+        levelWrap.setAttribute('aria-valuenow', '0');
+      }
+
+      function setRunning(running) {
+        startBtn.disabled = running;
+        stopBtn.disabled = !running;
+        camSelect.disabled = !running;
+        micSelect.disabled = !running;
+        video.classList.toggle('d-none', !running);
+        noVideo.classList.toggle('d-none', running);
+        if (!running) {
+          resolution.textContent = '';
+          video.classList.remove('mirror');
+        }
+      }
+
+      function fillDevices() {
+        return navigator.mediaDevices.enumerateDevices().then(devices => {
+          const cams = devices.filter(d => d.kind === 'videoinput');
+          const mics = devices.filter(d => d.kind === 'audioinput');
+          const fill = (select, list, fallback) => {
+            const current = select.value;
+            select.innerHTML = '';
+            if (!list.length) {
+              const opt = document.createElement('option');
+              opt.value = '';
+              opt.textContent = fallback;
+              select.append(opt);
+              return;
+            }
+            list.forEach((d, i) => {
+              const opt = document.createElement('option');
+              opt.value = d.deviceId;
+              opt.textContent = d.label || `${fallback} ${i + 1}`;
+              select.append(opt);
+            });
+            if ([...select.options].some(o => o.value === current)) select.value = current;
+          };
+          fill(camSelect, cams, 'Cámara');
+          fill(micSelect, mics, 'Micrófono');
+        }).catch(() => {});
+      }
+
+      function startMeter(audioTrack) {
+        stopMeter();
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioCtx.createMediaStreamSource(new MediaStream([audioTrack]));
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 512;
+        source.connect(analyser);
+        const data = new Uint8Array(analyser.fftSize);
+        const tick = () => {
+          analyser.getByteTimeDomainData(data);
+          let peak = 0;
+          for (let i = 0; i < data.length; i++) {
+            const v = Math.abs(data[i] - 128) / 128;
+            if (v > peak) peak = v;
+          }
+          const pct = Math.min(100, Math.round(peak * 140));
+          levelBar.style.width = `${pct}%`;
+          levelBar.classList.toggle('bg-success', pct < 70);
+          levelBar.classList.toggle('bg-warning', pct >= 70 && pct < 95);
+          levelBar.classList.toggle('bg-danger', pct >= 95);
+          levelWrap.setAttribute('aria-valuenow', String(pct));
+          meterTimer = requestAnimationFrame(tick);
+        };
+        tick();
+      }
+
+      function applyStream(next) {
+        stopTracks();
+        stopMeter();
+        stream = next;
+        const videoTrack = stream.getVideoTracks()[0];
+        const audioTrack = stream.getAudioTracks()[0];
+        if (videoTrack) {
+          video.srcObject = new MediaStream([videoTrack]);
+          const settings = videoTrack.getSettings();
+          video.classList.toggle('mirror', settings.facingMode !== 'environment');
+          const updateResolution = () => {
+            if (video.videoWidth) resolution.textContent = `${video.videoWidth}×${video.videoHeight}`;
+          };
+          video.onloadedmetadata = updateResolution;
+          updateResolution();
+        }
+        if (audioTrack) startMeter(audioTrack);
+        setRunning(true);
+        fillDevices();
+      }
+
+      function getSelected(select) {
+        return select.value || undefined;
+      }
+
+      function start() {
+        showError(null);
+        if (!navigator.mediaDevices?.getUserMedia) {
+          showError('Tu navegador no soporta cámara/micrófono web. Probá con una versión actual de Chrome, Firefox o Safari.');
+          return;
+        }
+        if (!secureContextOk()) {
+          showError('El navegador bloquea cámara y micrófono fuera de un contexto seguro: abrí esta página por https o con make serve en localhost, no como archivo.');
+          return;
+        }
+        const camId = getSelected(camSelect);
+        let micConstraint = getSelected(micSelect) ? { deviceId: { exact: getSelected(micSelect) } } : true;
+        // Escalera de resolución: pide UHD y, si la cámara no llega, baja de a un
+        // escalón hasta aceptar lo que haya. El permiso ya otorgado no se re-pide.
+        const rungs = [
+          { width: { exact: 3840 }, height: { exact: 2160 } },
+          { width: { exact: 2560 }, height: { exact: 1440 } },
+          { width: { exact: 1280 }, height: { exact: 720 } },
+          null
+        ];
+        let rung = 0;
+        const attempt = () => {
+          const video = rungs[rung] === null
+            ? (camId ? { deviceId: { exact: camId } } : true)
+            : { ...(camId ? { deviceId: { exact: camId } } : {}), ...rungs[rung] };
+          navigator.mediaDevices.getUserMedia({ video, audio: micConstraint }).then(applyStream).catch((err) => {
+            if (err && err.name === 'OverconstrainedError') {
+              if (err.constraint !== 'deviceId' && rung < rungs.length - 1) { rung++; attempt(); return; }
+              if (err.constraint === 'deviceId' && micConstraint !== true) { micConstraint = true; attempt(); return; }
+              showError('El dispositivo elegido ya no está disponible. Revisá los selectores e intentá de nuevo.');
+              return;
+            }
+            handleStartError(err);
+          });
+        };
+        attempt();
+      }
+
+      function handleStartError(err) {
+        if (err && (err.name === 'NotAllowedError' || err.name === 'SecurityError')) {
+          showError('Permiso denegado: permití cámara y micrófono en el navegador e intentá de nuevo.');
+        } else if (err && err.name === 'NotFoundError') {
+          showError('No se encontró cámara o micrófono en este dispositivo.');
+        } else if (err && (err.name === 'NotReadableError' || err.name === 'AbortError')) {
+          showError('La cámara o el micrófono están en uso por otra aplicación. Cerrala e intentá de nuevo.');
+        } else {
+          showError('No se pudo iniciar la prueba. Revisá los permisos del navegador.');
+        }
+      }
+
+      function stop() {
+        stopTracks();
+        stopMeter();
+        showError(null);
+        setRunning(false);
+      }
+
+      startBtn.addEventListener('click', start);
+      stopBtn.addEventListener('click', stop);
+      camSelect.addEventListener('change', () => { if (stream) start(); });
+      micSelect.addEventListener('change', () => { if (stream) start(); });
+      window.addEventListener('pagehide', () => { stopTracks(); stopMeter(); });
+
+      beepBtn.addEventListener('click', () => {
+        try {
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.frequency.value = 440;
+          gain.gain.setValueAtTime(0.2, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.35);
+          osc.onended = () => ctx.close().catch(() => {});
+        } catch {
+          showError('No se pudo reproducir el bip en este navegador.');
+        }
+      });
+    })();
+  </script>
+
+  <script>
+    // theme toggle: Bootstrap's native data-bs-theme, remembered per browser
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

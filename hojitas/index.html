@@ -140,7 +140,25 @@
 
   <script>
     (() => {
-      const STORAGE_KEY = 'hojitas-config';
+      const STORAGE_KEY = 'hojitas';
+      const LEGACY_KEYS = ['hojitas-config']; // MIGRACIÓN (2026-09-21): leer vieja, guardar en nueva y borrar vieja. Eliminar este bloque en 2027-03.
+      function readStoredRaw() {
+        const fresh = localStorage.getItem(STORAGE_KEY);
+        if (fresh !== null) return fresh;
+        for (const k of LEGACY_KEYS) {
+          const v = localStorage.getItem(k);
+          if (v !== null) {
+            try { localStorage.setItem(STORAGE_KEY, v); } catch {}
+            LEGACY_KEYS.forEach(x => { try { localStorage.removeItem(x); } catch {} });
+            return v;
+          }
+        }
+        return null;
+      }
+      function removeStored() {
+        try { localStorage.removeItem(STORAGE_KEY); } catch {}
+        LEGACY_KEYS.forEach(x => { try { localStorage.removeItem(x); } catch {} });
+      }
       const TIPOS = ['puntos', 'renglones', 'cuadricula'];
       const TONOS = { claro: '#d9d9d9', medio: '#bdbdbd', oscuro: '#8a8a8a' };
       const DEFAULTS = { tipo: 'puntos', distancia: 5, tono: 'medio', margen: false };
@@ -167,7 +185,7 @@
       function loadConfig() {
         // Prioridad: URL > localStorage > ejemplo (puntos 5mm, como la hoja original).
         return normalizeConfig(new URLSearchParams(window.location.search).get('data'))
-          ?? normalizeConfig(localStorage.getItem(STORAGE_KEY))
+          ?? normalizeConfig(readStoredRaw())
           ?? { ...DEFAULTS };
       }
 
@@ -296,7 +314,7 @@
       });
 
       document.getElementById('reset').addEventListener('click', () => {
-        localStorage.removeItem(STORAGE_KEY);
+        removeStored();
         Object.assign(config, DEFAULTS);
         document.querySelector(`input[name="tipo"][value="${config.tipo}"]`).checked = true;
         document.querySelector(`input[name="tono"][value="${config.tono}"]`).checked = true;

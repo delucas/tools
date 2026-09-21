@@ -72,7 +72,25 @@
 
   <script>
     (() => {
-      const STORAGE_KEY = 'apacalypse-citas';
+      const STORAGE_KEY = 'apacalypse';
+      const LEGACY_KEYS = ['apacalypse-citas']; // MIGRACIÓN (2026-09-21): leer vieja, guardar en nueva y borrar vieja. Eliminar este bloque en 2027-03.
+      function readStoredRaw() {
+        const fresh = localStorage.getItem(STORAGE_KEY);
+        if (fresh !== null) return fresh;
+        for (const k of LEGACY_KEYS) {
+          const v = localStorage.getItem(k);
+          if (v !== null) {
+            try { localStorage.setItem(STORAGE_KEY, v); } catch {}
+            LEGACY_KEYS.forEach(x => { try { localStorage.removeItem(x); } catch {} });
+            return v;
+          }
+        }
+        return null;
+      }
+      function removeStored() {
+        try { localStorage.removeItem(STORAGE_KEY); } catch {}
+        LEGACY_KEYS.forEach(x => { try { localStorage.removeItem(x); } catch {} });
+      }
       const OL_BASE = 'https://openlibrary.org';
       const GB_BASE = 'https://www.googleapis.com/books/v1/volumes';
       const FETCH_TIMEOUT = 12000;
@@ -286,7 +304,7 @@
           if (items.length) return { items };
         }
         try {
-          const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+          const stored = JSON.parse(readStoredRaw());
           if (stored && Array.isArray(stored.items)) {
             return { items: stored.items.map(normalizeItem).filter(Boolean) };
           }
@@ -588,7 +606,7 @@
       });
 
       document.getElementById('reset').addEventListener('click', () => {
-        localStorage.removeItem(STORAGE_KEY);
+        removeStored();
         state = { items: [] };
         editingId = null;
         window.history.replaceState(null, '', window.location.pathname);

@@ -118,13 +118,31 @@
       return urlParams.get(param);
     }
 
-    const STORAGE_KEY = 'truth-expression';
+    const STORAGE_KEY = 'truth';
+    const LEGACY_KEYS = ['truth-expression']; // MIGRACIÓN (2026-09-21): leer vieja, guardar en nueva y borrar vieja. Eliminar este bloque en 2027-03.
+    function readStoredRaw() {
+      const fresh = localStorage.getItem(STORAGE_KEY);
+      if (fresh !== null) return fresh;
+      for (const k of LEGACY_KEYS) {
+        const v = localStorage.getItem(k);
+        if (v !== null) {
+          try { localStorage.setItem(STORAGE_KEY, v); } catch {}
+          LEGACY_KEYS.forEach(x => { try { localStorage.removeItem(x); } catch {} });
+          return v;
+        }
+      }
+      return null;
+    }
+    function removeStored() {
+      try { localStorage.removeItem(STORAGE_KEY); } catch {}
+      LEGACY_KEYS.forEach(x => { try { localStorage.removeItem(x); } catch {} });
+    }
     const DEFAULT_EXPRESSION = '!(correoRecibido || mensajeNoLeido) && notificacionesActivadas';
 
     Vue.createApp({
       data() {
         return {
-          expression: getQueryParam('e') || localStorage.getItem(STORAGE_KEY) || DEFAULT_EXPRESSION,
+          expression: getQueryParam('e') || readStoredRaw() || DEFAULT_EXPRESSION,
           variables: [],
           truthTable: [],
           expressionTree: null,
@@ -147,7 +165,7 @@
           this.headers = this.generateHeaders();
         },
         reset() {
-          localStorage.removeItem(STORAGE_KEY);
+          removeStored();
           this.expression = DEFAULT_EXPRESSION;
           history.replaceState(null, '', window.location.pathname);
           this.processExpression();

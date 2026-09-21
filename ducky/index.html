@@ -147,10 +147,28 @@
 <script>
 const { createApp, ref, nextTick, watch } = Vue;
 
-const KEY = 'rubber-ducky-messages';
+const STORAGE_KEY = 'ducky';
+const LEGACY_KEYS = ['rubber-ducky-messages']; // MIGRACIÓN (2026-09-21): leer vieja, guardar en nueva y borrar vieja. Eliminar este bloque en 2027-03.
+function readStoredRaw() {
+  const fresh = localStorage.getItem(STORAGE_KEY);
+  if (fresh !== null) return fresh;
+  for (const k of LEGACY_KEYS) {
+    const v = localStorage.getItem(k);
+    if (v !== null) {
+      try { localStorage.setItem(STORAGE_KEY, v); } catch {}
+      LEGACY_KEYS.forEach(x => { try { localStorage.removeItem(x); } catch {} });
+      return v;
+    }
+  }
+  return null;
+}
+function removeStored() {
+  try { localStorage.removeItem(STORAGE_KEY); } catch {}
+  LEGACY_KEYS.forEach(x => { try { localStorage.removeItem(x); } catch {} });
+}
 const SHARE_SEED = 'Patito, tengo un problema...';
-const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch { return []; } };
-const save = (m) => { try { localStorage.setItem(KEY, JSON.stringify(m)); } catch {} };
+const load = () => { try { return JSON.parse(readStoredRaw()) || []; } catch { return []; } };
+const save = (m) => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(m)); } catch {} };
 const time = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
 function getQueryParam(param) {
@@ -234,7 +252,7 @@ createApp({
 
     function reset() {
       messages.value = [];
-      localStorage.removeItem(KEY);
+      removeStored();
       history.replaceState(null, '', window.location.pathname);
     }
 

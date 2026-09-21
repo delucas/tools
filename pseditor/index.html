@@ -138,9 +138,11 @@
       ]
     };
 
-    const STORAGE_KEY = 'pseditor-archivos';
-    const LEGACY_STORAGE_KEY = 'pseditor-codigo';
-    const LINE_NUMBERS_STORAGE_KEY = 'pseditor-mostrar-numeros';
+    const STORAGE_KEY = 'pseditor';
+    // MIGRACIÓN (2026-09-21): antes se usaban 'pseditor-archivos', 'pseditor-codigo' y 'pseditor-mostrar-numeros'. Leer viejas, guardar en nueva, borrar viejas. Eliminar este bloque en 2027-03.
+    const LEGACY_FILES_KEY = 'pseditor-archivos';
+    const LEGACY_CODE_KEY = 'pseditor-codigo';
+    const LEGACY_LINE_NUMBERS_KEY = 'pseditor-mostrar-numeros';
     const DEFAULT_CODE = `# Calcula la suma de los números pares
 ALGORITMO SumaDePares
   FUNCION suma_pares(limite)
@@ -323,6 +325,40 @@ ALGORITMO SumaDePares
       return { name, files, activeId, shared: false };
     }
 
+    function ensureMigrated() {
+      if (localStorage.getItem(STORAGE_KEY) !== null) return;
+      if (new URLSearchParams(window.location.search).get('codigo') !== null) return; // link compartido: no tocar el storage
+      const legacyFilesRaw = localStorage.getItem(LEGACY_FILES_KEY);
+      const legacyCode = localStorage.getItem(LEGACY_CODE_KEY);
+      const legacyNumbers = localStorage.getItem(LEGACY_LINE_NUMBERS_KEY);
+      if (legacyFilesRaw === null && legacyCode === null && legacyNumbers === null) return;
+      let migratedWorkspace = null;
+      let filesValid = false;
+      if (legacyFilesRaw !== null) {
+        try {
+          const saved = JSON.parse(legacyFilesRaw);
+          if (Array.isArray(saved?.files) && saved.files.length) {
+            const activeId = saved.files.some(file => file.id === saved.activeId) ? saved.activeId : saved.files[0].id;
+            migratedWorkspace = createWorkspace(saved.name || 'algoritmos', saved.files, activeId);
+            filesValid = true;
+          }
+        } catch { /* corrupta: se ignora sin borrar */ }
+      }
+      if (!filesValid && legacyCode === null && legacyNumbers === null) return;
+      if (!migratedWorkspace) {
+        const file = createFile('algoritmo.pse', legacyCode || DEFAULT_CODE);
+        migratedWorkspace = createWorkspace('algoritmos', [file], file.id);
+      }
+      const showLineNumbers = legacyNumbers === null ? true : legacyNumbers !== 'false';
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        workspace: { name: migratedWorkspace.name, files: migratedWorkspace.files, activeId: migratedWorkspace.activeId },
+        showLineNumbers
+      }));
+      if (filesValid) localStorage.removeItem(LEGACY_FILES_KEY);
+      if (legacyCode !== null) localStorage.removeItem(LEGACY_CODE_KEY);
+      if (legacyNumbers !== null) localStorage.removeItem(LEGACY_LINE_NUMBERS_KEY);
+    }
+
     function readWorkspace() {
       const params = new URLSearchParams(window.location.search);
       const sharedCode = params.get('codigo');
@@ -333,17 +369,51 @@ ALGORITMO SumaDePares
       }
 
       try {
-        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw !== null) {
+          const saved = JSON.parse(raw);
+          const data = saved?.workspace ?? saved;
+          if (Array.isArray(data?.files) && data.files.length) {
+            const activeId = data.files.some(file => file.id === data.activeId) ? data.activeId : data.files[0].id;
+            return createWorkspace(data.name || 'algoritmos', data.files, activeId);
+          }
+        }
+      } catch { /* Un dato inválido se reemplaza por el espacio inicial. */ }
+
+      try {
+        const saved = JSON.parse(localStorage.getItem(LEGACY_FILES_KEY));
         if (Array.isArray(saved?.files) && saved.files.length) {
           const activeId = saved.files.some(file => file.id === saved.activeId) ? saved.activeId : saved.files[0].id;
           return createWorkspace(saved.name || 'algoritmos', saved.files, activeId);
         }
       } catch { /* Un dato inválido se reemplaza por el espacio inicial. */ }
 
-      const legacyCode = localStorage.getItem(LEGACY_STORAGE_KEY);
+      const legacyCode = localStorage.getItem(LEGACY_CODE_KEY);
       const file = createFile('algoritmo.pse', legacyCode || DEFAULT_CODE);
       return createWorkspace('algoritmos', [file], file.id);
     }
+
+    function loadShowLineNumbers() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw !== null) {
+          const parsed = JSON.parse(raw);
+          if (typeof parsed?.showLineNumbers === 'boolean') return parsed.showLineNumbers;
+        }
+      } catch { /* se cae a la vieja */ }
+      const legacy = localStorage.getItem(LEGACY_LINE_NUMBERS_KEY);
+      if (legacy !== null) return legacy !== 'false';
+      return true;
+    }
+
+    function persistState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        workspace: { name: workspace.name, files: workspace.files, activeId: workspace.activeId },
+        showLineNumbers: shouldShowLineNumbers
+      }));
+    }
+
+    ensureMigrated();
 
     function copyText(text) {
       if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
@@ -461,7 +531,7 @@ ALGORITMO SumaDePares
     const lineNumbersCompartment = new Compartment();
     let noticeTimeout;
     let workspace = readWorkspace();
-    let shouldShowLineNumbers = localStorage.getItem(LINE_NUMBERS_STORAGE_KEY) !== 'false';
+    let shouldShowLineNumbers = loadShowLineNumbers();
     workspace.activeId ||= workspace.files[0].id;
 
     function isDarkTheme() {
@@ -485,8 +555,7 @@ ALGORITMO SumaDePares
     }
 
     function saveWorkspace() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ name: workspace.name, files: workspace.files, activeId: workspace.activeId }));
-      localStorage.removeItem(LEGACY_STORAGE_KEY);
+      persistState();
       workspace.shared = false;
     }
 
@@ -610,7 +679,7 @@ ALGORITMO SumaDePares
 
     showLineNumbers.addEventListener('change', () => {
       shouldShowLineNumbers = showLineNumbers.checked;
-      localStorage.setItem(LINE_NUMBERS_STORAGE_KEY, String(shouldShowLineNumbers));
+      persistState();
       editor.dispatch({ effects: lineNumbersCompartment.reconfigure(shouldShowLineNumbers ? lineNumbers() : []) });
     });
 
@@ -657,7 +726,9 @@ ALGORITMO SumaDePares
 
     document.getElementById('reset').addEventListener('click', () => {
       localStorage.removeItem(STORAGE_KEY);
-      localStorage.removeItem(LEGACY_STORAGE_KEY);
+      localStorage.removeItem(LEGACY_FILES_KEY);
+      localStorage.removeItem(LEGACY_CODE_KEY);
+      localStorage.removeItem(LEGACY_LINE_NUMBERS_KEY);
       const file = createFile('algoritmo.pse', DEFAULT_CODE);
       workspace = createWorkspace('algoritmos', [file], file.id);
       editor.destroy();

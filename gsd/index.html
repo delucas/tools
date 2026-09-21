@@ -170,7 +170,25 @@
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
 
   <script>
-    const STORAGE_KEY = 'gsd-tareas';
+    const STORAGE_KEY = 'gsd';
+    const LEGACY_KEYS = ['gsd-tareas']; // MIGRACIÓN (2026-09-21): leer vieja, guardar en nueva y borrar vieja. Eliminar este bloque en 2027-03.
+    function readStoredRaw() {
+      const fresh = localStorage.getItem(STORAGE_KEY);
+      if (fresh !== null) return fresh;
+      for (const k of LEGACY_KEYS) {
+        const v = localStorage.getItem(k);
+        if (v !== null) {
+          try { localStorage.setItem(STORAGE_KEY, v); } catch {}
+          LEGACY_KEYS.forEach(x => { try { localStorage.removeItem(x); } catch {} });
+          return v;
+        }
+      }
+      return null;
+    }
+    function removeStored() {
+      try { localStorage.removeItem(STORAGE_KEY); } catch {}
+      LEGACY_KEYS.forEach(x => { try { localStorage.removeItem(x); } catch {} });
+    }
 
     function newId() {
       return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
@@ -290,11 +308,14 @@
       const params = new URLSearchParams(window.location.search);
       // Prioridad: snapshot ?data={lists} > base (localStorage o ejemplo) + agregados (?addList y ?data legacy).
       // ?? (no ||) para respetar listas vacías guardadas.
-      const stored = cleanSnapshot(localStorage.getItem(STORAGE_KEY))
-        ?? migrateLegacyTasks(localStorage.getItem(STORAGE_KEY))
-        ?? null;
+      // Con snapshot de URL no se toca el storage (sin migración ni guardado).
       const snapshot = cleanSnapshot(params.get('data'));
       if (snapshot) return { ...snapshot, importedCount: 0, isSnapshot: true };
+
+      const raw = readStoredRaw();
+      const stored = cleanSnapshot(raw)
+        ?? migrateLegacyTasks(raw)
+        ?? null;
 
       const base = stored ?? { lists: defaultLists(), selectedId: null };
       if (!base.selectedId || !base.lists.some(l => l.id === base.selectedId)) {
@@ -486,7 +507,7 @@
           return `${age} ${age === 1 ? 'día' : 'días'}`;
         },
         reset() {
-          localStorage.removeItem(STORAGE_KEY);
+          removeStored();
           this.lists = defaultLists();
           this.selectedId = this.lists[0]?.id || null;
           this.newListName = '';

@@ -99,7 +99,25 @@
 
   <script>
     (() => {
-      const STORAGE_KEY = 'textwrangler-text';
+      const STORAGE_KEY = 'textwrangler';
+      const LEGACY_KEYS = ['textwrangler-text']; // MIGRACIÓN (2026-09-21): leer vieja, guardar en nueva y borrar vieja. Eliminar este bloque en 2027-03.
+      function readStoredRaw() {
+        const fresh = localStorage.getItem(STORAGE_KEY);
+        if (fresh !== null) return fresh;
+        for (const k of LEGACY_KEYS) {
+          const v = localStorage.getItem(k);
+          if (v !== null) {
+            try { localStorage.setItem(STORAGE_KEY, v); } catch {}
+            LEGACY_KEYS.forEach(x => { try { localStorage.removeItem(x); } catch {} });
+            return v;
+          }
+        }
+        return null;
+      }
+      function removeStored() {
+        try { localStorage.removeItem(STORAGE_KEY); } catch {}
+        LEGACY_KEYS.forEach(x => { try { localStorage.removeItem(x); } catch {} });
+      }
       const DEFAULT_TEXT = 'el orden es importante\n  los espacios sobran   \nmezclar estas líneas con   dobles espacios\n\nEL ORDEN ES IMPORTANTE\nel orden es importante\n3. una línea numerada';
       const UNDO_LIMIT = 50;
 
@@ -118,7 +136,7 @@
       function loadInitial() {
         const fromUrl = getQueryParam('t');
         if (fromUrl !== null) return fromUrl;
-        const stored = localStorage.getItem(STORAGE_KEY);
+        const stored = readStoredRaw();
         if (stored !== null) return stored;
         return DEFAULT_TEXT;
       }
@@ -226,7 +244,7 @@
       });
 
       resetBtn.addEventListener('click', () => {
-        localStorage.removeItem(STORAGE_KEY);
+        removeStored();
         undoStack.length = 0;
         editor.value = DEFAULT_TEXT;
         history.replaceState(null, '', window.location.pathname);

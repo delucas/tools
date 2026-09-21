@@ -207,7 +207,25 @@
     crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
   <script>
-    const STORAGE_KEY = 'markpress-doc';
+    const STORAGE_KEY = 'markpress';
+    const LEGACY_KEYS = ['markpress-doc']; // MIGRACIÓN (2026-09-21): leer vieja, guardar en nueva y borrar vieja. Eliminar este bloque en 2027-03.
+    function readStoredRaw() {
+      const fresh = localStorage.getItem(STORAGE_KEY);
+      if (fresh !== null) return fresh;
+      for (const k of LEGACY_KEYS) {
+        const v = localStorage.getItem(k);
+        if (v !== null) {
+          try { localStorage.setItem(STORAGE_KEY, v); } catch {}
+          LEGACY_KEYS.forEach(x => { try { localStorage.removeItem(x); } catch {} });
+          return v;
+        }
+      }
+      return null;
+    }
+    function removeStored() {
+      try { localStorage.removeItem(STORAGE_KEY); } catch {}
+      LEGACY_KEYS.forEach(x => { try { localStorage.removeItem(x); } catch {} });
+    }
     const DEFAULT_NAME = 'ejemplo';
     const ESTILOS = ['actual', 'latex', 'tufte'];
     const DEFAULT_ESTILO = 'latex';
@@ -273,7 +291,7 @@ $$f(x) = \\begin{cases}
 
     function loadDoc() {
       try {
-        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        const saved = JSON.parse(readStoredRaw());
         if (typeof saved?.markdown === 'string') {
           return { nombre: saved.nombre || DEFAULT_NAME, markdown: saved.markdown, estilo: validEstilo(saved.estilo) };
         }
@@ -443,7 +461,7 @@ $$f(x) = \\begin{cases}
     document.getElementById('pdf').addEventListener('click', () => window.print());
 
     document.getElementById('reset').addEventListener('click', () => {
-      localStorage.removeItem(STORAGE_KEY);
+      removeStored();
       docName.value = DEFAULT_NAME;
       input.value = DEFAULT_MARKDOWN;
       applyEstilo(DEFAULT_ESTILO);

@@ -116,13 +116,80 @@
       return p[i % p.length];
     }
 
-    const STORAGE_CSV = 'csv-grafico-csv';
-    const STORAGE_TYPE = 'csv-grafico-type';
-    const STORAGE_TITLE = 'csv-grafico-title';
+    const STORAGE_KEY = 'csv-a-grafico';
+    // MIGRACIÓN (2026-09-21): antes se usaban 'csv-grafico-csv', 'csv-grafico-type' y 'csv-grafico-title'. Leer viejas, guardar en nueva, borrar viejas. Eliminar este bloque en 2027-03.
+    const LEGACY_CSV_KEY = 'csv-grafico-csv';
+    const LEGACY_TYPE_KEY = 'csv-grafico-type';
+    const LEGACY_TITLE_KEY = 'csv-grafico-title';
     const DEFAULT_CSV = 'Mes,Ingresos,Gastos\nEnero,1200,800\nFebrero,1500,900\nMarzo,1100,950\nAbril,1800,1000';
 
     function getQueryParam(param) {
       return new URLSearchParams(window.location.search).get(param);
+    }
+
+    function readState() {
+      const urlData = getQueryParam('data');
+      const urlType = getQueryParam('type');
+      const urlTitle = getQueryParam('title');
+      const hasURL = urlData !== null || urlType !== null || urlTitle !== null;
+      if (hasURL) {
+        // Link compartido: no tocar el storage (ni guardar ni borrar).
+        let csv = DEFAULT_CSV, type = 'bar', title = '';
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (raw !== null) {
+            const parsed = JSON.parse(raw);
+            if (typeof parsed?.csv === 'string') csv = parsed.csv;
+            if (typeof parsed?.type === 'string') type = parsed.type;
+            if (typeof parsed?.title === 'string') title = parsed.title;
+          } else {
+            const legacyCsv = localStorage.getItem(LEGACY_CSV_KEY);
+            const legacyType = localStorage.getItem(LEGACY_TYPE_KEY);
+            const legacyTitle = localStorage.getItem(LEGACY_TITLE_KEY);
+            if (legacyCsv !== null) csv = legacyCsv;
+            if (legacyType !== null) type = legacyType;
+            if (legacyTitle !== null) title = legacyTitle;
+          }
+        } catch { /* lectura solo: no tocar el storage */ }
+        return {
+          csv: urlData ? decodeURIComponent(urlData) : csv,
+          type: urlType || type,
+          title: urlTitle ? decodeURIComponent(urlTitle) : title,
+          fromURL: true
+        };
+      }
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw !== null) {
+          const parsed = JSON.parse(raw);
+          if (parsed && (typeof parsed.csv === 'string' || typeof parsed.type === 'string' || typeof parsed.title === 'string')) {
+            return {
+              csv: typeof parsed.csv === 'string' ? parsed.csv : DEFAULT_CSV,
+              type: typeof parsed.type === 'string' ? parsed.type : 'bar',
+              title: typeof parsed.title === 'string' ? parsed.title : '',
+              fromURL: false
+            };
+          }
+        }
+      } catch {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+      const legacyCsv = localStorage.getItem(LEGACY_CSV_KEY);
+      const legacyType = localStorage.getItem(LEGACY_TYPE_KEY);
+      const legacyTitle = localStorage.getItem(LEGACY_TITLE_KEY);
+      if (legacyCsv !== null || legacyType !== null || legacyTitle !== null) {
+        const state = {
+          csv: legacyCsv !== null ? legacyCsv : DEFAULT_CSV,
+          type: legacyType !== null ? legacyType : 'bar',
+          title: legacyTitle !== null ? legacyTitle : ''
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        localStorage.removeItem(LEGACY_CSV_KEY);
+        localStorage.removeItem(LEGACY_TYPE_KEY);
+        localStorage.removeItem(LEGACY_TITLE_KEY);
+        return { ...state, fromURL: false };
+      }
+      return { csv: DEFAULT_CSV, type: 'bar', title: '', fromURL: false };
     }
 
     function detectDelimiter(text) {
@@ -153,12 +220,12 @@
 
     const app = Vue.createApp({
       data() {
-        const urlData = getQueryParam('data');
-        const urlTitle = getQueryParam('title');
+        const state = readState();
         return {
-          csvText: urlData ? decodeURIComponent(urlData) : (localStorage.getItem(STORAGE_CSV) || DEFAULT_CSV),
-          chartType: getQueryParam('type') || localStorage.getItem(STORAGE_TYPE) || 'bar',
-          title: urlTitle ? decodeURIComponent(urlTitle) : (localStorage.getItem(STORAGE_TITLE) || ''),
+          csvText: state.csv,
+          chartType: state.type,
+          title: state.title,
+          fromURL: state.fromURL,
           error: '',
           shared: false,
           chart: null
@@ -166,9 +233,11 @@
       },
       methods: {
         update() {
-          localStorage.setItem(STORAGE_CSV, this.csvText);
-          localStorage.setItem(STORAGE_TYPE, this.chartType);
-          localStorage.setItem(STORAGE_TITLE, this.title);
+          if (this.fromURL) {
+            this.fromURL = false;
+          } else {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ csv: this.csvText, type: this.chartType, title: this.title }));
+          }
           this.error = '';
 
           const delimiter = detectDelimiter(this.csvText);
@@ -307,9 +376,10 @@
           }
         },
         reset() {
-          localStorage.removeItem(STORAGE_CSV);
-          localStorage.removeItem(STORAGE_TYPE);
-          localStorage.removeItem(STORAGE_TITLE);
+          localStorage.removeItem(STORAGE_KEY);
+          localStorage.removeItem(LEGACY_CSV_KEY);
+          localStorage.removeItem(LEGACY_TYPE_KEY);
+          localStorage.removeItem(LEGACY_TITLE_KEY);
           this.csvText = DEFAULT_CSV;
           this.chartType = 'bar';
           this.title = '';

@@ -182,8 +182,10 @@
       return `${p.hour}:${p.minute}:${p.second}${suffix}`;
     }
 
-    const STORAGE_KEY = 'people';
-    const INTRO_KEY = 'clocks-intro';
+    const STORAGE_KEY = 'clocks';
+    // MIGRACIÓN (2026-09-21): antes se usaban 'people' y 'clocks-intro'. Leer viejas, guardar en nueva, borrar viejas. Eliminar este bloque en 2027-03.
+    const LEGACY_PEOPLE_KEY = 'people';
+    const LEGACY_INTRO_KEY = 'clocks-intro';
 
     function getQueryParam(param) {
       const urlParams = new URLSearchParams(window.location.search);
@@ -199,6 +201,53 @@
       } catch {
         return null;
       }
+    }
+
+    function getIntroHiddenReadOnly() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw !== null) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object' && typeof parsed.introHidden === 'boolean') return parsed.introHidden;
+        }
+      } catch { /* link compartido: no tocar el storage */ }
+      try {
+        return localStorage.getItem(LEGACY_INTRO_KEY) === 'hidden';
+      } catch {
+        return false;
+      }
+    }
+
+    function loadMigratedState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw !== null) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object' && Array.isArray(parsed.people)) {
+            return { people: parsed.people, introHidden: parsed.introHidden === true };
+          }
+        }
+      } catch {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+      const legacyPeopleRaw = localStorage.getItem(LEGACY_PEOPLE_KEY);
+      const legacyIntroRaw = localStorage.getItem(LEGACY_INTRO_KEY);
+      if (legacyPeopleRaw === null && legacyIntroRaw === null) return null;
+      let people = [];
+      if (legacyPeopleRaw !== null) {
+        try {
+          const parsed = JSON.parse(legacyPeopleRaw);
+          if (Array.isArray(parsed)) people = parsed;
+        } catch {
+          localStorage.removeItem(LEGACY_PEOPLE_KEY);
+        }
+      }
+      const introHidden = legacyIntroRaw === 'hidden';
+      const migrated = { people, introHidden };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+      localStorage.removeItem(LEGACY_PEOPLE_KEY);
+      localStorage.removeItem(LEGACY_INTRO_KEY);
+      return migrated;
     }
 
     function buildTimezoneList(date) {
@@ -221,7 +270,7 @@
           new_person: { pos: '', name: '', timezone: '', timezoneLabel: '', team: '' },
           people: [],
           shared: false,
-          showIntro: localStorage.getItem(INTRO_KEY) !== 'hidden'
+          showIntro: null
         };
       },
       methods: {
@@ -271,11 +320,14 @@
           setTimeout(() => this.updateTime(new Date()), 500);
         },
         savePeople() {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(this.people));
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({ people: this.people, introHidden: this.showIntro === false }));
         },
         reset() {
           this.people = [];
+          this.showIntro = true;
           localStorage.removeItem(STORAGE_KEY);
+          localStorage.removeItem(LEGACY_PEOPLE_KEY);
+          localStorage.removeItem(LEGACY_INTRO_KEY);
           history.replaceState(null, '', window.location.pathname);
         },
         share() {
@@ -286,11 +338,11 @@
         },
         dismissIntro() {
           this.showIntro = false;
-          localStorage.setItem(INTRO_KEY, 'hidden');
+          this.savePeople();
         },
         showIntroAgain() {
           this.showIntro = true;
-          localStorage.removeItem(INTRO_KEY);
+          this.savePeople();
         }
       },
       computed: {
@@ -310,13 +362,15 @@
         const fromURL = loadPeopleFromURL();
         if (fromURL) {
           this.people = fromURL;
-          this.savePeople();
+          this.showIntro = !getIntroHiddenReadOnly();
         } else {
-          try {
-            const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
-            if (Array.isArray(stored)) this.people = stored;
-          } catch {
-            localStorage.removeItem(STORAGE_KEY);
+          const stored = loadMigratedState();
+          if (stored) {
+            this.people = stored.people;
+            this.showIntro = !stored.introHidden;
+          } else {
+            this.people = [];
+            this.showIntro = true;
           }
         }
 

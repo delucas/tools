@@ -96,7 +96,25 @@
     crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script>
     (() => {
-      const STORAGE_KEY = 'docfactory-estado';
+      const STORAGE_KEY = 'docfactory';
+      const LEGACY_KEYS = ['docfactory-estado']; // MIGRACIÓN (2026-09-21): leer vieja, guardar en nueva y borrar vieja. Eliminar este bloque en 2027-03.
+      function readStoredRaw() {
+        const fresh = localStorage.getItem(STORAGE_KEY);
+        if (fresh !== null) return fresh;
+        for (const k of LEGACY_KEYS) {
+          const v = localStorage.getItem(k);
+          if (v !== null) {
+            try { localStorage.setItem(STORAGE_KEY, v); } catch {}
+            LEGACY_KEYS.forEach(x => { try { localStorage.removeItem(x); } catch {} });
+            return v;
+          }
+        }
+        return null;
+      }
+      function removeStored() {
+        try { localStorage.removeItem(STORAGE_KEY); } catch {}
+        LEGACY_KEYS.forEach(x => { try { localStorage.removeItem(x); } catch {} });
+      }
       const MARKER_PATTERN = /\{\{\s*([\p{L}\p{N}_][\p{L}\p{N}_.-]*)\s*\}\}/gu;
 
       const DEFAULT_STATE = {
@@ -233,7 +251,7 @@
           } catch { /* Se usa el estado local si la URL no es válida. */ }
         }
         try {
-          const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+          const stored = JSON.parse(readStoredRaw());
           if (stored && typeof stored.template === 'string' && typeof stored.csv === 'string') {
             return {
               template: stored.template,
@@ -406,7 +424,7 @@
       });
 
       document.getElementById('reset').addEventListener('click', () => {
-        localStorage.removeItem(STORAGE_KEY);
+        removeStored();
         state = { ...DEFAULT_STATE };
         window.history.replaceState(null, '', window.location.pathname);
         templateEl.value = state.template;

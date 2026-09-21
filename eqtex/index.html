@@ -154,8 +154,10 @@
     crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
   <script>
-    const FORMULAS_KEY = 'eqtex-formulas';
-    const DRAFT_KEY = 'eqtex-actual';
+    const STORAGE_KEY = 'eqtex';
+    // MIGRACIÓN (2026-09-21): antes se usaban 'eqtex-formulas' y 'eqtex-actual'. Leer viejas, guardar en nueva, borrar viejas. Eliminar este bloque en 2027-03.
+    const LEGACY_FORMULAS_KEY = 'eqtex-formulas';
+    const LEGACY_DRAFT_KEY = 'eqtex-actual';
     const DEFAULT_NOMBRE = 'Ejemplo con casos';
     const DEFAULT_LATEX = 'f(x) = \\begin{cases}\n  1 & \\text{si } x \\in A \\\\\n  0 & \\text{en otro caso}\n\\end{cases} \\Rightarrow E = m \\cdot c^{2}';
 
@@ -180,29 +182,79 @@
       return new URLSearchParams(window.location.search).get(param);
     }
 
-    function loadFormulas() {
-      try {
-        const saved = JSON.parse(localStorage.getItem(FORMULAS_KEY));
-        if (Array.isArray(saved)) return saved.filter(f => typeof f?.nombre === 'string' && typeof f?.latex === 'string');
-      } catch { /* dato inválido: se empieza vacío */ }
-      return [];
-    }
-
     function validTamano(value) {
       const n = Number(value);
       return [1, 2, 3].includes(n) ? n : 1;
+    }
+
+    function ensureMigrated() {
+      if (localStorage.getItem(STORAGE_KEY) !== null) return;
+      if (getQueryParam('latex') !== null) return; // link compartido: no tocar el storage
+      const rawFormulas = localStorage.getItem(LEGACY_FORMULAS_KEY);
+      const rawDraft = localStorage.getItem(LEGACY_DRAFT_KEY);
+      if (rawFormulas === null && rawDraft === null) return;
+      let formulas = null;
+      let draft = null;
+      if (rawFormulas !== null) {
+        try {
+          const parsed = JSON.parse(rawFormulas);
+          if (Array.isArray(parsed)) formulas = parsed.filter(f => typeof f?.nombre === 'string' && typeof f?.latex === 'string');
+        } catch { /* corrupta: se ignora sin borrar */ }
+      }
+      if (rawDraft !== null) {
+        try {
+          const parsed = JSON.parse(rawDraft);
+          if (typeof parsed?.latex === 'string') draft = { nombre: parsed.nombre || DEFAULT_NOMBRE, latex: parsed.latex, tamano: validTamano(parsed.tamano) };
+        } catch { /* corrupta: se ignora sin borrar */ }
+      }
+      if (formulas === null && draft === null) return;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        formulas: formulas ?? [],
+        draft: draft ?? { nombre: DEFAULT_NOMBRE, latex: DEFAULT_LATEX, tamano: 1 }
+      }));
+      if (formulas !== null) localStorage.removeItem(LEGACY_FORMULAS_KEY);
+      if (draft !== null) localStorage.removeItem(LEGACY_DRAFT_KEY);
+    }
+
+    function loadPersistedState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw !== null) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') return parsed;
+        }
+      } catch { /* se cae a las viejas */ }
+      return null;
+    }
+
+    function persistState(formulas, draft) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ formulas, draft }));
+    }
+
+    function loadFormulas() {
+      const persisted = loadPersistedState();
+      if (persisted && Array.isArray(persisted.formulas)) return persisted.formulas.filter(f => typeof f?.nombre === 'string' && typeof f?.latex === 'string');
+      try {
+        const saved = JSON.parse(localStorage.getItem(LEGACY_FORMULAS_KEY));
+        if (Array.isArray(saved)) return saved.filter(f => typeof f?.nombre === 'string' && typeof f?.latex === 'string');
+      } catch { /* dato inválido: se empieza vacío */ }
+      return [];
     }
 
     function loadDraft() {
       const sharedLatex = getQueryParam('latex');
       const sharedNombre = getQueryParam('nombre');
       if (sharedLatex !== null) return { nombre: (sharedNombre || 'compartida').trim() || 'compartida', latex: sharedLatex, tamano: validTamano(getQueryParam('t')) };
+      const persisted = loadPersistedState();
+      if (persisted && typeof persisted.draft?.latex === 'string') return { nombre: persisted.draft.nombre || DEFAULT_NOMBRE, latex: persisted.draft.latex, tamano: validTamano(persisted.draft.tamano) };
       try {
-        const saved = JSON.parse(localStorage.getItem(DRAFT_KEY));
+        const saved = JSON.parse(localStorage.getItem(LEGACY_DRAFT_KEY));
         if (typeof saved?.latex === 'string') return { nombre: saved.nombre || DEFAULT_NOMBRE, latex: saved.latex, tamano: validTamano(saved.tamano) };
       } catch { /* dato inválido: se usa el ejemplo */ }
       return { nombre: DEFAULT_NOMBRE, latex: DEFAULT_LATEX, tamano: 1 };
     }
+
+    ensureMigrated();
 
     function copyText(text) {
       if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
@@ -299,14 +351,14 @@
           this.render();
         },
         saveDraft() {
-          localStorage.setItem(DRAFT_KEY, JSON.stringify({ nombre: this.nombre, latex: this.latex, tamano: this.tamano }));
+          persistState(this.formulas, { nombre: this.nombre, latex: this.latex, tamano: this.tamano });
         },
         setTamano(n) {
           this.tamano = n;
           this.saveDraft();
         },
         saveFormulas() {
-          localStorage.setItem(FORMULAS_KEY, JSON.stringify(this.formulas));
+          persistState(this.formulas, { nombre: this.nombre, latex: this.latex, tamano: this.tamano });
         },
         insert(snippet) {
           const input = document.getElementById('latex-input');
@@ -360,8 +412,9 @@
           );
         },
         reset() {
-          localStorage.removeItem(FORMULAS_KEY);
-          localStorage.removeItem(DRAFT_KEY);
+          localStorage.removeItem(STORAGE_KEY);
+          localStorage.removeItem(LEGACY_FORMULAS_KEY);
+          localStorage.removeItem(LEGACY_DRAFT_KEY);
           this.formulas = [];
           this.nombre = DEFAULT_NOMBRE;
           this.latex = DEFAULT_LATEX;

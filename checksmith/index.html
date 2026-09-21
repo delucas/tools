@@ -130,7 +130,25 @@
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
 
   <script>
-    const STORAGE_KEY = 'checksmith-plantillas';
+    const STORAGE_KEY = 'checksmith';
+    const LEGACY_KEYS = ['checksmith-plantillas']; // MIGRACIÓN (2026-09-21): leer vieja, guardar en nueva y borrar vieja. Eliminar este bloque en 2027-03.
+    function readStoredRaw() {
+      const fresh = localStorage.getItem(STORAGE_KEY);
+      if (fresh !== null) return fresh;
+      for (const k of LEGACY_KEYS) {
+        const v = localStorage.getItem(k);
+        if (v !== null) {
+          try { localStorage.setItem(STORAGE_KEY, v); } catch {}
+          LEGACY_KEYS.forEach(x => { try { localStorage.removeItem(x); } catch {} });
+          return v;
+        }
+      }
+      return null;
+    }
+    function removeStored() {
+      try { localStorage.removeItem(STORAGE_KEY); } catch {}
+      LEGACY_KEYS.forEach(x => { try { localStorage.removeItem(x); } catch {} });
+    }
 
     function newId() {
       return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
@@ -196,7 +214,7 @@
     function loadCatalog() {
       // Prioridad: URL > localStorage > ejemplos. ?? (no ||) para respetar el catálogo vacío.
       return cleanCatalog(new URLSearchParams(window.location.search).get('data'))
-        ?? cleanCatalog(localStorage.getItem(STORAGE_KEY))
+        ?? cleanCatalog(readStoredRaw())
         ?? defaultTemplates();
     }
 
@@ -352,7 +370,7 @@
           }
         },
         reset() {
-          localStorage.removeItem(STORAGE_KEY);
+          removeStored();
           this.templates = defaultTemplates();
           this.selectedId = this.templates[0]?.id || null;
           this.newTemplateName = '';

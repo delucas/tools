@@ -93,7 +93,25 @@
 
   <script>
     (() => {
-      const STORAGE_KEY = 'linkdb-links';
+      const STORAGE_KEY = 'linkdb';
+      const LEGACY_KEYS = ['linkdb-links']; // MIGRACIÓN (2026-09-21): leer vieja, guardar en nueva y borrar vieja. Eliminar este bloque en 2027-03.
+      function readStoredRaw() {
+        const fresh = localStorage.getItem(STORAGE_KEY);
+        if (fresh !== null) return fresh;
+        for (const k of LEGACY_KEYS) {
+          const v = localStorage.getItem(k);
+          if (v !== null) {
+            try { localStorage.setItem(STORAGE_KEY, v); } catch {}
+            LEGACY_KEYS.forEach(x => { try { localStorage.removeItem(x); } catch {} });
+            return v;
+          }
+        }
+        return null;
+      }
+      function removeStored() {
+        try { localStorage.removeItem(STORAGE_KEY); } catch {}
+        LEGACY_KEYS.forEach(x => { try { localStorage.removeItem(x); } catch {} });
+      }
       const FETCH_TIMEOUT = 12000;
 
       // Links fijos: viajan con la página a cualquier navegador.
@@ -228,7 +246,7 @@
           } catch { /* Se usa el estado local si la URL no es válida. */ }
         }
         try {
-          const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+          const stored = JSON.parse(readStoredRaw());
           if (stored && Array.isArray(stored.locals)) {
             return { locals: dedupe(stored.locals.map(normalizeItem).filter(Boolean)) };
           }
@@ -447,7 +465,7 @@
       searchInput.addEventListener('input', render);
 
       document.getElementById('reset').addEventListener('click', () => {
-        localStorage.removeItem(STORAGE_KEY);
+        removeStored();
         state = { locals: [] };
         pending = null;
         editingId = null;

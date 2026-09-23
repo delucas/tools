@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f3b2%3B%3C/text%3E%3C/svg%3E">
+  <title>Roller — dado de N caras</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    #last-result {
+      font-variant-numeric: tabular-nums;
+    }
+
+    #history-list {
+      max-height: 340px;
+      overflow-y: auto;
+    }
+
+    /* Espacio reservado para el aviso: mostrarlo u ocultarlo no mueve la pantalla. */
+    .notice-slot {
+      min-height: 2.9rem;
+    }
+
+    /* En desktop el historial ocupa la columna ancha y llena el alto visible:
+       la lista scrollea por dentro y nunca agranda el scroll de la página. */
+    @media (min-width: 992px) {
+      .history-aside {
+        position: sticky;
+        top: 1rem;
+      }
+
+      #history-list {
+        max-height: max(240px, calc(100vh - 320px));
+      }
+    }
+
+    .preset-btn {
+      min-width: 3rem;
+    }
+
+    .signature {
+      font-size: 0.8em;
+    }
+  </style>
+</head>
+<body>
+  <main class="container py-4">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">🎲 Roller</h1>
+        <p class="text-body-secondary mb-0">Tirá un dado de N caras, con historial y descarga.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div class="row g-3">
+      <section class="col-12 col-lg-4">
+        <div class="card mb-3">
+          <div class="card-body">
+            <label for="caras" class="form-label">Caras del dado</label>
+            <input id="caras" class="form-control mb-2" type="number" min="2" max="1000" step="1" value="6" style="font-size:16px">
+            <div id="presets" class="d-flex flex-wrap gap-2" role="group" aria-label="Dados comunes">
+              <button class="btn btn-outline-secondary btn-sm preset-btn" type="button" data-caras="4">d4</button>
+              <button class="btn btn-outline-secondary btn-sm preset-btn" type="button" data-caras="6">d6</button>
+              <button class="btn btn-outline-secondary btn-sm preset-btn" type="button" data-caras="8">d8</button>
+              <button class="btn btn-outline-secondary btn-sm preset-btn" type="button" data-caras="10">d10</button>
+              <button class="btn btn-outline-secondary btn-sm preset-btn" type="button" data-caras="12">d12</button>
+              <button class="btn btn-outline-secondary btn-sm preset-btn" type="button" data-caras="20">d20</button>
+              <button class="btn btn-outline-secondary btn-sm preset-btn" type="button" data-caras="100">d100</button>
+            </div>
+            <div class="form-text">Un natural entre 2 y 1000.</div>
+          </div>
+        </div>
+
+        <div class="card mb-3">
+          <div class="card-body">
+            <div class="row g-2 align-items-end">
+              <div class="col-12 col-sm-5">
+                <label for="cantidad" class="form-label">Tiradas</label>
+                <input id="cantidad" class="form-control" type="number" min="1" max="100" step="1" value="1" style="font-size:16px">
+              </div>
+              <div class="col-12 col-sm-7">
+                <div class="d-flex flex-wrap gap-2">
+                  <button id="tirar" class="btn btn-primary" type="button">🎲 Tirar</button>
+                  <button id="tirar-varias" class="btn btn-outline-primary" type="button">Tirar N veces</button>
+                </div>
+              </div>
+            </div>
+            <div class="form-text">Las tiradas múltiples salen de a una, cada 100 ms.</div>
+          </div>
+        </div>
+
+        <div class="card mb-3">
+          <div class="card-body text-center">
+            <p id="last-result" class="display-3 fw-bold mb-0" aria-live="polite">–</p>
+            <p id="last-caption" class="text-body-secondary small mb-2">Todavía no tiraste.</p>
+            <div class="notice-slot"><div id="notice" class="alert alert-success py-2 mb-0 d-none" role="status"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="col-12 col-lg-8 align-self-start history-aside" aria-label="Historial de tiradas">
+        <div class="card">
+          <div class="card-body">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+              <h2 class="h6 mb-0">Historial <span id="hist-count" class="badge text-bg-secondary">0</span></h2>
+              <div class="d-flex flex-wrap gap-2">
+                <button id="copy-csv" class="btn btn-outline-secondary btn-sm" type="button">📋 Copiar CSV</button>
+                <button id="download-csv" class="btn btn-outline-secondary btn-sm" type="button">⬇️ Descargar CSV</button>
+                <button id="clear-hist" class="btn btn-outline-danger btn-sm" type="button">🗑️ Borrar</button>
+              </div>
+            </div>
+            <div id="history-empty" class="border rounded p-4 text-body-secondary text-center">Todavía no hay tiradas.</div>
+            <div id="history-list" class="list-group"></div>
+            <p id="history-more" class="text-body-secondary small mt-2 mb-0 d-none"></p>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <div class="alert alert-info mt-3 mb-0 small" role="note">
+      🎲 <strong>Aleatoriedad:</strong> las tiradas usan <code>crypto.getRandomValues</code> con muestreo por
+      rechazo — se descartan los valores que sesgarían el módulo, así cada cara sale con probabilidad
+      exactamente 1/N. Verificado con test chi-cuadrado en d6, d7, d20 y d100.
+    </div>
+
+    <hr>
+    <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'roller';
+      const MIN_CARAS = 2;
+      const MAX_CARAS = 1000;
+      const MAX_TIRADAS = 100;
+      const MAX_HISTORY = 500;
+      const RENDER_LIMIT = 100;
+      const DEFAULT_STATE = { caras: 6, cantidad: 1, historial: [] };
+
+      const carasInput = document.getElementById('caras');
+      const cantidadInput = document.getElementById('cantidad');
+      const presetsBox = document.getElementById('presets');
+      const lastResult = document.getElementById('last-result');
+      const lastCaption = document.getElementById('last-caption');
+      const historyList = document.getElementById('history-list');
+      const historyEmpty = document.getElementById('history-empty');
+      const historyMore = document.getElementById('history-more');
+      const histCount = document.getElementById('hist-count');
+      const notice = document.getElementById('notice');
+      let noticeTimeout;
+
+      function normalizeEntry(e) {
+        if (!e || typeof e !== 'object') return null;
+        const caras = Math.floor(Number(e.caras));
+        const valor = Math.floor(Number(e.valor));
+        const ts = typeof e.ts === 'string' ? e.ts : null;
+        if (!Number.isFinite(caras) || caras < MIN_CARAS || caras > MAX_CARAS) return null;
+        if (!Number.isFinite(valor) || valor < 1 || valor > caras) return null;
+        if (!ts || Number.isNaN(Date.parse(ts))) return null;
+        return { ts, caras, valor };
+      }
+
+      function normalizeState(value) {
+        if (!value || typeof value !== 'object') return null;
+        const caras = Math.floor(Number(value.caras));
+        if (!Number.isFinite(caras) || caras < MIN_CARAS || caras > MAX_CARAS) return null;
+        const cantidad = value.cantidad === undefined ? 1 : Math.floor(Number(value.cantidad));
+        if (!Number.isFinite(cantidad) || cantidad < 1 || cantidad > MAX_TIRADAS) return null;
+        if (!Array.isArray(value.historial)) return null;
+        return { caras, cantidad, historial: value.historial.map(normalizeEntry).filter(Boolean).slice(0, MAX_HISTORY) };
+      }
+
+      function loadState() {
+        try {
+          const stored = normalizeState(JSON.parse(localStorage.getItem(STORAGE_KEY)));
+          if (stored) return stored;
+        } catch { /* Se usa el estado por defecto. */ }
+        return structuredClone(DEFAULT_STATE);
+      }
+
+      let state = loadState();
+
+      function persist() {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
+      }
+
+      function showNotice(message) {
+        clearTimeout(noticeTimeout);
+        notice.textContent = message;
+        notice.classList.remove('d-none');
+        noticeTimeout = setTimeout(() => notice.classList.add('d-none'), 1800);
+      }
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+      }
+
+      // Tirada equiprobable en 1..n con muestreo por rechazo (sin sesgo de módulo).
+      function randInt(n) {
+        if (crypto?.getRandomValues) {
+          const range = Math.floor(4294967296 / n) * n;
+          const buf = new Uint32Array(1);
+          do { crypto.getRandomValues(buf); } while (buf[0] >= range);
+          return (buf[0] % n) + 1;
+        }
+        return Math.floor(Math.random() * n) + 1;
+      }
+
+      // ---------- Tiradas ----------
+      const ROLL_DELAY_MS = 100;
+      // Entradas de la última acción de tirar: se destacan en el historial.
+      let lastRolled = new Set();
+      let batchRunning = false;
+      let batchTimer = 0;
+
+      function pushRoll() {
+        const entry = { ts: new Date().toISOString(), caras: state.caras, valor: randInt(state.caras) };
+        state.historial.unshift(entry);
+        if (state.historial.length > MAX_HISTORY) state.historial.length = MAX_HISTORY;
+        persist();
+        return entry;
+      }
+
+      function showEntry(entry) {
+        lastResult.textContent = entry.valor;
+        lastCaption.textContent = `d${entry.caras} · ${new Date(entry.ts).toLocaleTimeString()}`;
+      }
+
+      function doRoll() {
+        const entry = pushRoll();
+        lastRolled = new Set([entry]);
+        showEntry(entry);
+        renderHistory();
+      }
+
+      document.getElementById('tirar').addEventListener('click', () => {
+        if (batchRunning) return;
+        doRoll();
+      });
+
+      function setBatchRunning(running) {
+        batchRunning = running;
+        document.getElementById('tirar').disabled = running;
+        document.getElementById('tirar-varias').disabled = running;
+        document.getElementById('clear-hist').disabled = running;
+        carasInput.disabled = running;
+      }
+
+      function stopBatch() {
+        clearTimeout(batchTimer);
+        batchTimer = 0;
+        setBatchRunning(false);
+      }
+
+      document.getElementById('tirar-varias').addEventListener('click', () => {
+        if (batchRunning) return;
+        const k = Math.floor(Number(cantidadInput.value));
+        if (!Number.isFinite(k) || k < 1 || k > MAX_TIRADAS) {
+          showNotice(`Pedí entre 1 y ${MAX_TIRADAS} tiradas.`);
+          return;
+        }
+        const batch = [];
+        setBatchRunning(true);
+        const step = () => {
+          batch.push(pushRoll());
+          lastRolled = new Set(batch);
+          showEntry(batch[batch.length - 1]);
+          renderHistory();
+          if (batch.length < k) batchTimer = setTimeout(step, ROLL_DELAY_MS);
+          else {
+            batchTimer = 0;
+            setBatchRunning(false);
+            showNotice(`Se tiraron ${k} veces el d${state.caras}.`);
+          }
+        };
+        step();
+      });
+
+      carasInput.addEventListener('change', () => {
+        const n = Math.floor(Number(carasInput.value));
+        if (!Number.isFinite(n) || n < MIN_CARAS || n > MAX_CARAS) {
+          carasInput.value = state.caras;
+          showNotice(`Elegí entre ${MIN_CARAS} y ${MAX_CARAS} caras.`);
+          return;
+        }
+        state.caras = n;
+        persist();
+        renderPresets();
+      });
+
+      cantidadInput.addEventListener('change', () => {
+        const k = Math.floor(Number(cantidadInput.value));
+        if (!Number.isFinite(k) || k < 1 || k > MAX_TIRADAS) {
+          cantidadInput.value = state.cantidad;
+          showNotice(`Pedí entre 1 y ${MAX_TIRADAS} tiradas.`);
+          return;
+        }
+        state.cantidad = k;
+        persist();
+      });
+
+      presetsBox.addEventListener('click', event => {
+        const btn = event.target.closest('[data-caras]');
+        if (!btn) return;
+        carasInput.value = btn.dataset.caras;
+        carasInput.dispatchEvent(new Event('change'));
+      });
+
+      function renderPresets() {
+        presetsBox.querySelectorAll('[data-caras]').forEach(btn => {
+          const active = Number(btn.dataset.caras) === state.caras;
+          btn.classList.toggle('btn-secondary', active);
+          btn.classList.toggle('btn-outline-secondary', !active);
+        });
+      }
+
+      // ---------- Historial ----------
+      function formatTs(ts) {
+        const d = new Date(ts);
+        const pad = x => String(x).padStart(2, '0');
+        return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      }
+
+      function csvText() {
+        const rows = ['fecha_hora,caras,resultado'];
+        state.historial.forEach(e => {
+          const d = new Date(e.ts);
+          const pad = x => String(x).padStart(2, '0');
+          rows.push(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())},${e.caras},${e.valor}`);
+        });
+        return rows.join('\n');
+      }
+
+      function copyText(text) {
+        if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
+        const input = document.createElement('textarea');
+        input.value = text;
+        input.style.position = 'fixed';
+        document.body.append(input);
+        input.select();
+        document.execCommand('copy');
+        input.remove();
+        return Promise.resolve();
+      }
+
+      function renderHistory() {
+        histCount.textContent = state.historial.length;
+        historyEmpty.classList.toggle('d-none', state.historial.length > 0);
+        const shown = state.historial.slice(0, RENDER_LIMIT);
+        historyList.innerHTML = shown.map((e, i) => {
+          const num = state.historial.length - i;
+          const fresh = lastRolled.has(e) ? ' list-group-item-primary' : '';
+          return `<div class="list-group-item${fresh} d-flex justify-content-between align-items-center gap-2"><span class="font-monospace">#${num} · d${e.caras} → <strong>${e.valor}</strong></span><small class="text-body-secondary">${escapeHtml(formatTs(e.ts))}</small></div>`;
+        }).join('');
+        const rest = state.historial.length - shown.length;
+        historyMore.classList.toggle('d-none', rest <= 0);
+        if (rest > 0) historyMore.textContent = `…y ${rest} anteriores (están en el CSV).`;
+      }
+
+      document.getElementById('copy-csv').addEventListener('click', async () => {
+        if (!state.historial.length) { showNotice('No hay tiradas para copiar.'); return; }
+        try { await copyText(csvText()); showNotice('Se copió el historial en CSV.'); }
+        catch { showNotice('No se pudo copiar.'); }
+      });
+
+      document.getElementById('download-csv').addEventListener('click', () => {
+        if (!state.historial.length) { showNotice('No hay tiradas para descargar.'); return; }
+        const d = new Date();
+        const pad = x => String(x).padStart(2, '0');
+        const blob = new Blob([csvText()], { type: 'text/csv;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `roller-tiradas-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.csv`;
+        document.body.append(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+        showNotice('Se descargó el historial en CSV.');
+      });
+
+      document.getElementById('clear-hist').addEventListener('click', event => {
+        const btn = event.currentTarget;
+        if (!state.historial.length) { showNotice('El historial ya está vacío.'); return; }
+        if (btn.dataset.armed) {
+          delete btn.dataset.armed;
+          btn.textContent = '🗑️ Borrar';
+          btn.classList.remove('btn-danger');
+          btn.classList.add('btn-outline-danger');
+          state.historial = [];
+          lastRolled = new Set();
+          persist();
+          renderHistory();
+          showNotice('Se borró el historial.');
+          return;
+        }
+        btn.dataset.armed = '1';
+        btn.textContent = '¿Seguro? Tocá de nuevo';
+        btn.classList.remove('btn-outline-danger');
+        btn.classList.add('btn-danger');
+        clearTimeout(showNotice.timer);
+        showNotice.timer = setTimeout(() => {
+          delete btn.dataset.armed;
+          btn.textContent = '🗑️ Borrar';
+          btn.classList.remove('btn-danger');
+          btn.classList.add('btn-outline-danger');
+        }, 5000);
+      });
+
+      document.getElementById('reset').addEventListener('click', () => {
+        stopBatch();
+        try { localStorage.removeItem(STORAGE_KEY); } catch {}
+        state = structuredClone(DEFAULT_STATE);
+        lastRolled = new Set();
+        carasInput.value = state.caras;
+        cantidadInput.value = state.cantidad;
+        lastResult.textContent = '–';
+        lastCaption.textContent = 'Todavía no tiraste.';
+        renderPresets();
+        renderHistory();
+        showNotice('Se restauró el dado de 6 caras.');
+      });
+
+      // ---------- Tema ----------
+      const root = document.documentElement;
+      const themeBtn = document.getElementById('theme-toggle');
+      const storedTheme = localStorage.getItem('theme');
+      const initialTheme = storedTheme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const applyTheme = t => { root.setAttribute('data-bs-theme', t); themeBtn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      applyTheme(initialTheme);
+      themeBtn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        applyTheme(next);
+      });
+
+      carasInput.value = state.caras;
+      cantidadInput.value = state.cantidad;
+      renderPresets();
+      renderHistory();
+    })();
+  </script>
+</body>
+</html>

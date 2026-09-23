@@ -27,5 +27,6 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`ducky`](./ducky) | Patito de goma para depurar en voz alta: no responde, pero ayuda igual. |
 | [`delta`](./delta) | Compará dos textos lado a lado o inspeccioná visualmente un merge de tres. |
 | [`pre-flight`](./pre-flight) | Chequeo pre-llamada: cámara, micrófono y parlantes, sin grabar ni guardar nada. |
+| [`roller`](./roller) | Dado de N caras, con historial y descarga en CSV. |
 
 Cada carpeta tiene su propio `README.md` con el detalle de uso.

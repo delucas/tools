@@ -26,6 +26,10 @@
       opacity: 0.45;
     }
 
+    #lists .list-group-item {
+      text-align: left;
+    }
+
     .signature {
       font-size: 0.8em;
     }
@@ -38,7 +42,7 @@
     <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
       <div>
         <h1 class="h3 mb-1">Compra-o-matic</h1>
-        <p class="text-body-secondary mb-0">Armá y ordená tu lista de compras.</p>
+        <p class="text-body-secondary mb-0">Armá y ordená tus listas de compras.</p>
       </div>
       <div class="d-flex flex-wrap gap-2">
         <button id="share" class="btn btn-outline-secondary btn-sm" type="button">🔗 Compartir</button>
@@ -49,36 +53,59 @@
 
     <div id="notice" class="alert alert-success py-2 d-none" role="status"></div>
 
-    <div class="card mb-4">
-      <div class="card-body">
-        <label for="raw-list" class="form-label">Cargar productos</label>
-        <textarea id="raw-list" class="form-control" rows="3" placeholder="Tomates&#10;Papas&#10;Bananas"></textarea>
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-2">
-          <div class="form-text mt-0">Un producto por línea. Cargar reemplaza la lista actual.</div>
-          <button id="load-list" class="btn btn-outline-primary btn-sm" type="button">Cargar lista</button>
+    <div class="row g-3">
+      <aside class="col-12 col-md-4 col-lg-3" aria-label="Listas de compras">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h2 class="h6 mb-0">Listas</h2>
+          <button id="add-list" class="btn btn-outline-secondary btn-sm" type="button">+ Nueva</button>
         </div>
-      </div>
+        <div id="lists" class="list-group" role="group" aria-label="Listas"></div>
+        <p id="lists-summary" class="text-body-secondary small mt-2 mb-0"></p>
+      </aside>
+      <section class="col-12 col-md-8 col-lg-9">
+        <div class="d-flex flex-wrap align-items-end gap-2 mb-3">
+          <div class="flex-grow-1">
+            <label for="list-name" class="form-label">Nombre de la lista</label>
+            <input id="list-name" class="form-control" type="text" maxlength="40" autocomplete="off" style="font-size:16px">
+          </div>
+          <button id="delete-list" class="btn btn-outline-danger" type="button">Borrar lista</button>
+        </div>
+
+        <div class="card mb-4">
+          <div class="card-body">
+            <label for="raw-list" class="form-label" id="raw-label">Cargar productos</label>
+            <textarea id="raw-list" class="form-control" rows="3" style="font-size:16px" placeholder="Tomates&#10;Papas&#10;Bananas"></textarea>
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-2">
+              <div class="form-text mt-0">Un producto por línea.</div>
+              <div class="d-flex flex-wrap gap-2">
+                <button id="load-current" class="btn btn-outline-primary btn-sm" type="button">Agregar a la actual</button>
+                <button id="load-new" class="btn btn-outline-primary btn-sm" type="button">Crear nueva lista</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+          <h2 class="h5 mb-0">Productos <span id="active-name" class="text-body-secondary fw-normal"></span></h2>
+          <div class="d-flex flex-wrap gap-2">
+            <button id="select-all" class="btn btn-outline-secondary btn-sm" type="button">Todos</button>
+            <button id="select-none" class="btn btn-outline-secondary btn-sm" type="button">Ninguno</button>
+            <button id="add-item" class="btn btn-primary btn-sm" type="button">Agregar línea</button>
+          </div>
+        </div>
+
+        <div id="empty-list" class="border rounded p-4 text-body-secondary text-center">Todavía no agregaste productos.</div>
+        <div id="item-list" class="vstack gap-2"></div>
+
+        <section class="mt-4">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+            <h2 class="h5 mb-0">Lista para comprar</h2>
+            <button id="copy-shopping-list" class="btn btn-outline-secondary btn-sm" type="button">📋 Copiar lista</button>
+          </div>
+          <div id="selected-list" class="border rounded p-3"></div>
+        </section>
+      </section>
     </div>
-
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-      <h2 class="h5 mb-0">Productos</h2>
-      <div class="d-flex gap-2">
-        <button id="select-all" class="btn btn-outline-secondary btn-sm" type="button">Todos</button>
-        <button id="select-none" class="btn btn-outline-secondary btn-sm" type="button">Ninguno</button>
-        <button id="add-item" class="btn btn-primary btn-sm" type="button">Agregar línea</button>
-      </div>
-    </div>
-
-    <div id="empty-list" class="border rounded p-4 text-body-secondary text-center">Todavía no agregaste productos.</div>
-    <div id="item-list" class="vstack gap-2"></div>
-
-    <section class="mt-4">
-      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-        <h2 class="h5 mb-0">Lista para comprar</h2>
-        <button id="copy-shopping-list" class="btn btn-outline-secondary btn-sm" type="button">📋 Copiar lista</button>
-      </div>
-      <div id="selected-list" class="border rounded p-3"></div>
-    </section>
 
     <hr>
     <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
@@ -106,16 +133,26 @@
         try { localStorage.removeItem(STORAGE_KEY); } catch {}
         LEGACY_KEYS.forEach(x => { try { localStorage.removeItem(x); } catch {} });
       }
-      const DEFAULT_STATE = {
-        raw: '',
-        items: [
-          { id: 'tomates', name: 'tomates', quantity: 1, unit: 'kilos', selected: true },
-          { id: 'papas', name: 'papas', quantity: 2, unit: 'kilos', selected: true },
-          { id: 'bananas', name: 'bananas', quantity: 1, unit: 'docena', selected: false }
-        ]
-      };
+      function defaultLists() {
+        return [{
+          id: newId(),
+          name: 'Compras',
+          raw: '',
+          items: [
+            { id: newId(), name: 'tomates', quantity: 1, unit: 'kilos', selected: true },
+            { id: newId(), name: 'papas', quantity: 2, unit: 'kilos', selected: true },
+            { id: newId(), name: 'bananas', quantity: 1, unit: 'docena', selected: false }
+          ]
+        }];
+      }
       const UNITS = ['unidades', 'kilos', 'docena'];
+      const MAX_LISTS = 30;
       const rawList = document.getElementById('raw-list');
+      const rawLabel = document.getElementById('raw-label');
+      const listsBox = document.getElementById('lists');
+      const listsSummary = document.getElementById('lists-summary');
+      const listNameInput = document.getElementById('list-name');
+      const activeName = document.getElementById('active-name');
       const itemList = document.getElementById('item-list');
       const emptyList = document.getElementById('empty-list');
       const selectedList = document.getElementById('selected-list');
@@ -137,12 +174,34 @@
         };
       }
 
-      function normalizeState(value) {
+      function normalizeList(value) {
         if (!value || !Array.isArray(value.items)) return null;
+        const name = typeof value.name === 'string' && value.name.trim()
+          ? value.name.trim().slice(0, 40)
+          : 'Lista';
         return {
+          id: typeof value.id === 'string' ? value.id : newId(),
+          name,
           raw: typeof value.raw === 'string' ? value.raw : '',
           items: value.items.map(normalizeItem).filter(Boolean)
         };
+      }
+
+      // Acepta el formato nuevo {activeId, lists} y migra el viejo {raw, items}.
+      function normalizeState(value) {
+        if (!value || typeof value !== 'object') return null;
+        if (Array.isArray(value.lists)) {
+          const lists = value.lists.map(normalizeList).filter(Boolean).slice(0, MAX_LISTS);
+          if (!lists.length) return null;
+          const activeId = lists.some(list => list.id === value.activeId) ? value.activeId : lists[0].id;
+          return { activeId, lists };
+        }
+        if (Array.isArray(value.items)) {
+          const list = normalizeList({ name: 'Compras', raw: value.raw, items: value.items });
+          if (!list) return null;
+          return { activeId: list.id, lists: [list] };
+        }
+        return null;
       }
 
       function loadState() {
@@ -150,20 +209,27 @@
         if (encoded) {
           try {
             const stateFromUrl = normalizeState(JSON.parse(encoded));
-            if (stateFromUrl) return stateFromUrl;
+            if (stateFromUrl) return { state: stateFromUrl, fromUrl: true };
           } catch { /* Se usa el estado local si la URL no es válida. */ }
         }
         try {
           const stored = normalizeState(JSON.parse(readStoredRaw()));
-          if (stored) return stored;
+          if (stored) return { state: stored, fromUrl: false };
         } catch { /* Se usa el ejemplo si el estado guardado no es válido. */ }
-        return structuredClone(DEFAULT_STATE);
+        const lists = defaultLists();
+        return { state: { activeId: lists[0].id, lists }, fromUrl: false };
       }
 
-      let state = loadState();
+      const loaded = loadState();
+      let state = loaded.state;
 
-      function save() {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      // El estado de la URL no se guarda hasta que el usuario haga un cambio (persist).
+      function persist() {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
+      }
+
+      function activeList() {
+        return state.lists.find(list => list.id === state.activeId) || state.lists[0];
       }
 
       function showNotice(message) {
@@ -173,8 +239,23 @@
         noticeTimeout = setTimeout(() => notice.classList.add('d-none'), 1800);
       }
 
+      function displayName(list) {
+        const name = list.name.trim();
+        return name || '(sin nombre)';
+      }
+
+      function unitLabel(unit, quantity) {
+        if (unit === 'kilos') return quantity === 1 ? 'kilo' : 'kilos';
+        if (unit === 'docena') return quantity === 1 ? 'docena' : 'docenas';
+        return quantity === 1 ? 'unidad' : 'unidades';
+      }
+
       function escapeHtml(value) {
         return value.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
+      }
+
+      function parseNames(text) {
+        return text.split('\n').map(name => name.trim()).filter(Boolean);
       }
 
       function itemMarkup(item) {
@@ -193,28 +274,44 @@
         </div>`;
       }
 
+      function renderTabs(active) {
+        listsBox.innerHTML = state.lists.map(list => {
+          const isActive = list.id === active.id;
+          return `<button class="list-group-item list-group-item-action d-flex justify-content-between align-items-center${isActive ? ' active' : ''}" type="button" data-list="${list.id}"><span class="text-truncate">${escapeHtml(displayName(list))}</span><span class="badge text-bg-secondary rounded-pill ms-2">${list.items.length}</span></button>`;
+        }).join('');
+        const total = state.lists.reduce((sum, list) => sum + list.items.length, 0);
+        listsSummary.textContent = `${state.lists.length} ${state.lists.length === 1 ? 'lista' : 'listas'} · ${total} ${total === 1 ? 'producto' : 'productos'} en total`;
+      }
+
       function render() {
-        rawList.value = state.raw;
-        itemList.innerHTML = state.items.map(itemMarkup).join('');
-        emptyList.classList.toggle('d-none', state.items.length > 0);
-        const selected = state.items.filter(item => item.selected && item.name.trim() && item.quantity > 0);
+        const active = activeList();
+        if (document.activeElement !== listNameInput) listNameInput.value = active.name;
+        rawList.value = active.raw;
+        const label = displayName(active);
+        rawLabel.textContent = `Cargar productos en "${label}"`;
+        activeName.textContent = `· ${label}`;
+        renderTabs(active);
+        itemList.innerHTML = active.items.map(itemMarkup).join('');
+        emptyList.classList.toggle('d-none', active.items.length > 0);
+        const selected = active.items.filter(item => item.selected && item.name.trim() && item.quantity > 0);
         selectedList.innerHTML = selected.length
-          ? `<ul class="list-unstyled mb-0">${selected.map(item => `<li>${item.quantity} <strong>${item.unit}</strong> de ${escapeHtml(item.name)}</li>`).join('')}</ul>`
+          ? `<ul class="list-unstyled mb-0">${selected.map(item => `<li>${item.quantity} <strong>${unitLabel(item.unit, item.quantity)}</strong> de ${escapeHtml(item.name)}</li>`).join('')}</ul>`
           : '<span class="text-body-secondary">Seleccioná al menos un producto con cantidad mayor a cero.</span>';
       }
 
       function shoppingListText() {
-        return state.items
+        const active = activeList();
+        return active.items
           .filter(item => item.selected && item.name.trim() && item.quantity > 0)
-          .map(item => `${item.quantity} ${item.unit} de ${item.name}`)
+          .map(item => `${item.quantity} ${unitLabel(item.unit, item.quantity)} de ${item.name}`)
           .join('\n');
       }
 
       function updateItem(id, update) {
-        const item = state.items.find(candidate => candidate.id === id);
+        const item = activeList().items.find(candidate => candidate.id === id);
         if (!item) return;
         update(item);
-        save();
+        persist();
         render();
       }
 
@@ -230,6 +327,53 @@
         return Promise.resolve();
       }
 
+      listsBox.addEventListener('click', event => {
+        const button = event.target.closest('[data-list]');
+        if (!button) return;
+        state.activeId = button.dataset.list;
+        persist();
+        render();
+      });
+
+      // Igual que en GSD/Checksmith: el nombre se edita en un campo y se guarda al escribir.
+      listNameInput.addEventListener('input', () => {
+        const active = activeList();
+        active.name = listNameInput.value.slice(0, 40);
+        persist();
+        const label = displayName(active);
+        rawLabel.textContent = `Cargar productos en "${label}"`;
+        activeName.textContent = `· ${label}`;
+        renderTabs(active);
+      });
+
+      document.getElementById('add-list').addEventListener('click', () => {
+        if (state.lists.length >= MAX_LISTS) {
+          showNotice(`Llegaste al máximo de ${MAX_LISTS} listas.`);
+          return;
+        }
+        const list = { id: newId(), name: `Lista ${state.lists.length + 1}`, raw: '', items: [] };
+        state.lists.push(list);
+        state.activeId = list.id;
+        persist();
+        render();
+        listNameInput.focus();
+        listNameInput.select();
+      });
+
+      document.getElementById('delete-list').addEventListener('click', () => {
+        if (state.lists.length <= 1) {
+          showNotice('No se puede borrar la única lista.');
+          return;
+        }
+        const active = activeList();
+        if (!confirm(`¿Borrar la lista "${active.name}"?`)) return;
+        state.lists = state.lists.filter(list => list.id !== active.id);
+        state.activeId = state.lists[0].id;
+        persist();
+        render();
+        showNotice('Lista borrada.');
+      });
+
       itemList.addEventListener('click', event => {
         const button = event.target.closest('button[data-action]');
         if (!button) return;
@@ -238,8 +382,8 @@
         if (button.dataset.action === 'increase') updateItem(id, item => { item.quantity += 1; item.selected = true; });
         if (button.dataset.action === 'decrease') updateItem(id, item => { item.quantity = Math.max(0, item.quantity - 1); if (!item.quantity) item.selected = false; });
         if (button.dataset.action === 'delete') {
-          state.items = state.items.filter(item => item.id !== id);
-          save();
+          activeList().items = activeList().items.filter(item => item.id !== id);
+          persist();
           render();
         }
       });
@@ -256,39 +400,70 @@
       });
 
       rawList.addEventListener('input', () => {
-        state.raw = rawList.value;
-        save();
+        activeList().raw = rawList.value;
+        persist();
       });
 
-      document.getElementById('load-list').addEventListener('click', () => {
-        const names = rawList.value.split('\n').map(name => name.trim()).filter(Boolean);
-        state.items = names.map(name => ({ id: newId(), name, quantity: 1, unit: 'unidades', selected: true }));
-        save();
+      document.getElementById('load-current').addEventListener('click', () => {
+        const names = parseNames(rawList.value);
+        if (!names.length) {
+          showNotice('Escribí al menos un producto.');
+          return;
+        }
+        const active = activeList();
+        names.forEach(name => active.items.push({ id: newId(), name, quantity: 1, unit: 'unidades', selected: true }));
+        persist();
         render();
+        showNotice(`Se agregaron ${names.length} producto(s) a "${active.name}".`);
+      });
+
+      document.getElementById('load-new').addEventListener('click', () => {
+        const names = parseNames(rawList.value);
+        if (!names.length) {
+          showNotice('Escribí al menos un producto.');
+          return;
+        }
+        if (state.lists.length >= MAX_LISTS) {
+          showNotice(`Llegaste al máximo de ${MAX_LISTS} listas.`);
+          return;
+        }
+        const name = names[0].slice(0, 40);
+        const list = {
+          id: newId(),
+          name,
+          raw: '',
+          items: names.map(product => ({ id: newId(), name: product, quantity: 1, unit: 'unidades', selected: true }))
+        };
+        state.lists.push(list);
+        state.activeId = list.id;
+        persist();
+        render();
+        showNotice(`Se creó la lista "${name}".`);
       });
 
       document.getElementById('add-item').addEventListener('click', () => {
-        state.items.push({ id: newId(), name: '', quantity: 1, unit: 'unidades', selected: true });
-        save();
+        activeList().items.push({ id: newId(), name: '', quantity: 1, unit: 'unidades', selected: true });
+        persist();
         render();
         itemList.querySelector('[data-id]:last-child input[data-action="name"]')?.focus();
       });
 
       document.getElementById('select-all').addEventListener('click', () => {
-        state.items.forEach(item => { item.selected = item.quantity > 0; });
-        save();
+        activeList().items.forEach(item => { item.selected = item.quantity > 0; });
+        persist();
         render();
       });
 
       document.getElementById('select-none').addEventListener('click', () => {
-        state.items.forEach(item => { item.selected = false; });
-        save();
+        activeList().items.forEach(item => { item.selected = false; });
+        persist();
         render();
       });
 
       document.getElementById('reset').addEventListener('click', () => {
         removeStored();
-        state = structuredClone(DEFAULT_STATE);
+        const lists = defaultLists();
+        state = { activeId: lists[0].id, lists };
         window.history.replaceState(null, '', window.location.pathname);
         render();
         showNotice('Se restauró la lista de ejemplo.');
@@ -300,7 +475,7 @@
         url.searchParams.set('data', JSON.stringify(state));
         try {
           await copyText(url.toString());
-          showNotice('Se copió el enlace con la lista.');
+          showNotice('Se copió el enlace con las listas.');
         } catch {
           showNotice('No se pudo copiar el enlace.');
         }
@@ -326,9 +501,10 @@
         ghostClass: 'sortable-ghost',
         onEnd(event) {
           if (event.oldIndex === event.newIndex) return;
-          const [item] = state.items.splice(event.oldIndex, 1);
-          state.items.splice(event.newIndex, 0, item);
-          save();
+          const items = activeList().items;
+          const [item] = items.splice(event.oldIndex, 1);
+          items.splice(event.newIndex, 0, item);
+          persist();
           render();
         }
       });

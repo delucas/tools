@@ -95,6 +95,7 @@
                 <button type="button" :class="['btn', tamano === 3 ? 'btn-secondary' : 'btn-outline-secondary']" @click="setTamano(3)" title="Triple tamaño">3×</button>
               </div>
               <button class="btn btn-outline-secondary btn-sm" type="button" @click="downloadPng" :disabled="pngBusy">{{ pngBusy ? 'Generando…' : '⬇️ Descargar PNG transparente' }}</button>
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="copyPng" :disabled="pngBusy">{{ pngBusy ? 'Generando…' : '📋 Copiar PNG transparente' }}</button>
             </div>
           </div>
           <div id="preview-box" class="mb-2" style="background-color:#ffffff;color:#000000;padding:1.5rem;">
@@ -423,13 +424,9 @@
           this.render();
           this.showNotice('Se restauró el ejemplo inicial.');
         },
-        async downloadPng() {
+        async renderPngBlob() {
           const box = document.getElementById('preview-box');
-          if (typeof html2canvas === 'undefined') {
-            this.showNotice('No se pudo cargar el generador de PNG.');
-            return;
-          }
-          this.pngBusy = true;
+          if (typeof html2canvas === 'undefined') throw new Error('html2canvas no disponible');
           // El recuadro es blanco para captura manual, pero el PNG debe salir
           // transparente y con 1em de margen: se ajusta durante la captura
           // y se restaura después.
@@ -449,17 +446,45 @@
             const canvas = await html2canvas(box, { backgroundColor: null, scale: 3, logging: false });
             const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
             if (!blob) throw new Error('canvas vacío');
-            downloadBlob(blob, sanitizeFilename(this.nombre.trim()) + '.png');
-            this.showNotice('Se descargó el PNG transparente.');
-          } catch (e) {
-            console.error('EqTeX: no se pudo generar el PNG:', e);
-            this.showNotice('No se pudo generar el PNG.');
+            return blob;
           } finally {
             box.style.backgroundColor = previousBackground;
             box.style.padding = previousPadding;
             box.style.border = previousBorder;
             box.style.overflow = previousOverflow;
             box.style.width = previousWidth;
+          }
+        },
+        async downloadPng() {
+          if (this.pngBusy) return;
+          this.pngBusy = true;
+          try {
+            const blob = await this.renderPngBlob();
+            downloadBlob(blob, sanitizeFilename(this.nombre.trim()) + '.png');
+            this.showNotice('Se descargó el PNG transparente.');
+          } catch (e) {
+            console.error('EqTeX: no se pudo generar el PNG:', e);
+            this.showNotice('No se pudo generar el PNG.');
+          } finally {
+            this.pngBusy = false;
+          }
+        },
+        async copyPng() {
+          if (this.pngBusy) return;
+          // Igual que en QRLabs: el PNG va al portapapeles como image/png.
+          if (typeof ClipboardItem === 'undefined' || !navigator.clipboard?.write) {
+            this.showNotice('Tu navegador no soporta copiar imágenes.');
+            return;
+          }
+          this.pngBusy = true;
+          try {
+            const blob = await this.renderPngBlob();
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+            this.showNotice('Se copió el PNG transparente.');
+          } catch (e) {
+            console.error('EqTeX: no se pudo copiar el PNG:', e);
+            this.showNotice('No se pudo copiar el PNG.');
+          } finally {
             this.pngBusy = false;
           }
         },

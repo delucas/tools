@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f522%3B%3C/text%3E%3C/svg%3E">
+  <title>Guess — adiviná el número</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    @media (max-width: 576px) {
+      #tope, #intento {
+        font-size: 16px;
+      }
+    }
+
+    #feedback {
+      font-variant-numeric: tabular-nums;
+    }
+
+    #history-list {
+      max-height: 420px;
+      overflow-y: auto;
+    }
+
+    /* En desktop el historial ocupa la columna ancha y llena el alto visible:
+       la lista scrollea por dentro y nunca agranda el scroll de la página. */
+    @media (min-width: 992px) {
+      .history-aside {
+        position: sticky;
+        top: 1rem;
+      }
+
+      #history-list {
+        max-height: max(240px, calc(100vh - 320px));
+      }
+    }
+
+    /* Espacio reservado para el aviso: mostrarlo u ocultarlo no mueve la pantalla. */
+    .notice-slot {
+      min-height: 2.9rem;
+    }
+
+    .signature {
+      font-size: 0.8em;
+    }
+  </style>
+</head>
+<body>
+  <main class="container py-4">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">🔢 Guess</h1>
+        <p class="text-body-secondary mb-0">Pienso un número y vos lo adivinás: te digo si es más grande o más chico.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div class="row g-3">
+      <section class="col-12 col-lg-5">
+        <div class="card mb-3">
+          <div class="card-body text-center">
+            <p id="feedback" class="display-6 fw-bold mb-1" aria-live="polite">–</p>
+            <p id="tried" class="text-body-secondary small mb-2">Todavía no probaste.</p>
+            <div class="row g-2 align-items-end text-start">
+              <div class="col-12 col-sm-4">
+                <label for="tope" class="form-label">Tope (1–X)</label>
+                <input id="tope" class="form-control" type="number" min="2" max="1000000" step="1" value="100">
+              </div>
+              <div class="col-12 col-sm-4">
+                <label for="intento" class="form-label">Tu número</label>
+                <input id="intento" class="form-control" type="number" min="1" step="1" placeholder="¿Cuál es?">
+              </div>
+              <div class="col-12 col-sm-4">
+                <div class="d-flex flex-wrap gap-2">
+                  <button id="probar" class="btn btn-primary" type="button">Probar</button>
+                  <button id="nuevo" class="btn btn-outline-primary d-none" type="button">Jugar de nuevo</button>
+                </div>
+              </div>
+            </div>
+            <div class="form-text text-start">Cambiar el tope arranca un número nuevo. El número no cambia hasta que lo adivinás.</div>
+            <div class="notice-slot mt-1"><div id="notice" class="alert alert-success py-2 mb-0 d-none" role="status"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <div class="col-12 col-lg-7">
+        <div id="record" class="alert alert-warning small d-none" role="note"></div>
+
+        <aside class="align-self-start history-aside" aria-label="Historial de juegos">
+        <div class="card mb-3">
+          <div class="card-body">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+              <h2 class="h6 mb-0">Historial <span id="hist-count" class="badge text-bg-secondary">0</span></h2>
+              <div class="d-flex flex-wrap gap-2">
+                <button id="copy-csv" class="btn btn-outline-secondary btn-sm" type="button">📋 Copiar CSV</button>
+                <button id="download-csv" class="btn btn-outline-secondary btn-sm" type="button">⬇️ Descargar CSV</button>
+                <button id="clear-hist" class="btn btn-outline-danger btn-sm" type="button">🗑️ Borrar</button>
+              </div>
+            </div>
+            <div id="history-empty" class="border rounded p-4 text-body-secondary text-center">Todavía no ganaste ningún juego.</div>
+            <div id="history-list" class="list-group"></div>
+            <p id="history-more" class="text-body-secondary small mt-2 mb-0 d-none"></p>
+          </div>
+        </div>
+        </aside>
+      </div>
+    </div>
+
+    <div class="alert alert-info mb-0 small" role="note">
+      🔢 <strong>Sin trampa:</strong> el número se elige con <code>crypto.getRandomValues</code> y se guarda
+      en tu navegador — ni recargar la página lo cambia. Nada sale de tu máquina.
+    </div>
+
+    <hr>
+    <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'guess';
+      const MIN_TOPE = 2;
+      const MAX_TOPE = 1000000;
+      const MAX_HISTORY = 100;
+      const RENDER_LIMIT = 100;
+      const DEFAULT_STATE = { tope: 100, actual: null, historial: [] };
+
+      const topeInput = document.getElementById('tope');
+      const intentoInput = document.getElementById('intento');
+      const feedback = document.getElementById('feedback');
+      const tried = document.getElementById('tried');
+      const nuevoBtn = document.getElementById('nuevo');
+      const probarBtn = document.getElementById('probar');
+      const historyList = document.getElementById('history-list');
+      const historyEmpty = document.getElementById('history-empty');
+      const historyMore = document.getElementById('history-more');
+      const histCount = document.getElementById('hist-count');
+      const recordBox = document.getElementById('record');
+      const notice = document.getElementById('notice');
+      let noticeTimeout;
+
+      function normalizeActual(a, tope) {
+        if (!a || typeof a !== 'object') return null;
+        const secreto = Math.floor(Number(a.secreto));
+        if (!Number.isInteger(secreto) || secreto < 1 || secreto > tope) return null;
+        if (!Array.isArray(a.intentos)) return null;
+        const intentos = a.intentos.map(Math.floor).filter(n => Number.isInteger(n) && n >= 1 && n <= tope);
+        const tsInicio = typeof a.tsInicio === 'string' && !Number.isNaN(Date.parse(a.tsInicio)) ? a.tsInicio : null;
+        if (!tsInicio) return null;
+        return { secreto, intentos, tsInicio, ganado: a.ganado === true };
+      }
+
+      function normalizeEntry(e) {
+        if (!e || typeof e !== 'object') return null;
+        const ts = typeof e.ts === 'string' && !Number.isNaN(Date.parse(e.ts)) ? e.ts : null;
+        const tope = Math.floor(Number(e.tope));
+        const elegido = Math.floor(Number(e.elegido));
+        const pasos = Math.floor(Number(e.pasos));
+        if (!ts || !Number.isInteger(tope) || tope < MIN_TOPE || tope > MAX_TOPE) return null;
+        if (!Number.isInteger(elegido) || elegido < 1 || elegido > tope) return null;
+        if (!Number.isInteger(pasos) || pasos < 1) return null;
+        return { ts, tope, elegido, pasos };
+      }
+
+      function normalizeState(value) {
+        if (!value || typeof value !== 'object') return null;
+        const tope = Math.floor(Number(value.tope));
+        if (!Number.isInteger(tope) || tope < MIN_TOPE || tope > MAX_TOPE) return null;
+        if (!Array.isArray(value.historial)) return null;
+        const actual = value.actual === null || value.actual === undefined
+          ? null
+          : normalizeActual(value.actual, tope);
+        // Si la partida guardada no valida, se descarta (pero se conserva el resto).
+        if (value.actual !== null && value.actual !== undefined && actual === null) return null;
+        return { tope, actual, historial: value.historial.map(normalizeEntry).filter(Boolean).slice(0, MAX_HISTORY) };
+      }
+
+      function loadState() {
+        try {
+          const stored = normalizeState(JSON.parse(localStorage.getItem(STORAGE_KEY)));
+          if (stored) return stored;
+        } catch { /* Se usa el estado por defecto. */ }
+        return structuredClone(DEFAULT_STATE);
+      }
+
+      let state = loadState();
+
+      function persist() {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
+      }
+
+      function showNotice(message) {
+        clearTimeout(noticeTimeout);
+        notice.textContent = message;
+        notice.classList.remove('d-none');
+        noticeTimeout = setTimeout(() => notice.classList.add('d-none'), 1800);
+      }
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+      }
+
+      // Entero equiprobable en 1..n con muestreo por rechazo (sin sesgo de módulo).
+      function randInt(n) {
+        if (crypto?.getRandomValues) {
+          const range = Math.floor(4294967296 / n) * n;
+          const buf = new Uint32Array(1);
+          do { crypto.getRandomValues(buf); } while (buf[0] >= range);
+          return (buf[0] % n) + 1;
+        }
+        return Math.floor(Math.random() * n) + 1;
+      }
+
+      function newGame() {
+        state.actual = { secreto: randInt(state.tope), intentos: [], tsInicio: new Date().toISOString(), ganado: false };
+        persist();
+        renderGame();
+      }
+
+      function renderGame() {
+        const a = state.actual;
+        nuevoBtn.classList.toggle('d-none', !a?.ganado);
+        probarBtn.disabled = !!a?.ganado;
+        intentoInput.disabled = !!a?.ganado;
+        if (!a) { feedback.textContent = '–'; tried.textContent = 'Todavía no probaste.'; return; }
+        if (a.ganado) {
+          feedback.textContent = `🎉 ¡Era el ${a.secreto}! (${a.intentos.length} ${a.intentos.length === 1 ? 'paso' : 'pasos'})`;
+          tried.textContent = `Probaste: ${a.intentos.join(', ')}.`;
+          return;
+        }
+        const last = a.intentos[a.intentos.length - 1];
+        if (last === undefined) {
+          feedback.textContent = `Pienso un número del 1 al ${state.tope}…`;
+          tried.textContent = 'Todavía no probaste.';
+        } else {
+          feedback.textContent = last < a.secreto ? '📈 Más grande' : '📉 Más chico';
+          tried.textContent = `Probaste (${a.intentos.length}): ${a.intentos.join(', ')}.`;
+        }
+      }
+
+      probarBtn.addEventListener('click', () => {
+        const a = state.actual;
+        if (!a || a.ganado) return;
+        const n = Math.floor(Number(intentoInput.value));
+        if (!Number.isInteger(n) || n < 1 || n > state.tope) {
+          showNotice(`Probá con un entero entre 1 y ${state.tope}.`);
+          return;
+        }
+        if (a.intentos.includes(n)) {
+          showNotice('Ese ya lo probaste: no cuenta.');
+          return;
+        }
+        a.intentos.push(n);
+        if (n === a.secreto) {
+          a.ganado = true;
+          state.historial.unshift({ ts: new Date().toISOString(), tope: state.tope, elegido: a.secreto, pasos: a.intentos.length });
+          if (state.historial.length > MAX_HISTORY) state.historial.length = MAX_HISTORY;
+          showNotice(`¡Adivinaste en ${a.intentos.length}! Quedó en el historial.`);
+        }
+        intentoInput.value = '';
+        intentoInput.focus();
+        persist();
+        renderGame();
+        renderHistory();
+        renderRecord();
+      });
+
+      intentoInput.addEventListener('keydown', event => {
+        if (event.key === 'Enter') { event.preventDefault(); probarBtn.click(); }
+      });
+
+      nuevoBtn.addEventListener('click', () => {
+        newGame();
+        showNotice(`Nuevo número del 1 al ${state.tope}. ¡Suerte!`);
+        intentoInput.focus();
+      });
+
+      topeInput.addEventListener('change', () => {
+        const n = Math.floor(Number(topeInput.value));
+        if (!Number.isInteger(n) || n < MIN_TOPE || n > MAX_TOPE) {
+          topeInput.value = state.tope;
+          showNotice(`El tope va de ${MIN_TOPE} a ${MAX_TOPE}.`);
+          return;
+        }
+        if (n === state.tope) return;
+        state.tope = n;
+        newGame();
+        showNotice(`Tope en ${n}: arranca un número nuevo.`);
+      });
+
+      // ---------- Récord (mínimo pasos/tope) ----------
+      function bestRecord() {
+        let best = null;
+        for (const e of state.historial) {
+          const ratio = e.pasos / e.tope;
+          if (!best || ratio < best.ratio) best = { ...e, ratio };
+        }
+        return best;
+      }
+
+      function formatTs(ts) {
+        const d = new Date(ts);
+        const pad = x => String(x).padStart(2, '0');
+        return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      }
+
+      function renderRecord() {
+        const best = bestRecord();
+        recordBox.classList.toggle('d-none', !best);
+        if (best) {
+          recordBox.innerHTML = `🏆 <strong>Récord:</strong> ${escapeHtml(best.pasos)} ${best.pasos === 1 ? 'paso' : 'pasos'} en 1–${escapeHtml(best.tope)} `
+            + `(era el ${escapeHtml(best.elegido)}, ${escapeHtml(formatTs(best.ts))}).`;
+        } else {
+          recordBox.innerHTML = '';
+        }
+      }
+
+      // ---------- Historial ----------
+      function csvText() {
+        const rows = ['fecha_hora,tope,elegido,pasos'];
+        const pad = x => String(x).padStart(2, '0');
+        state.historial.forEach(e => {
+          const d = new Date(e.ts);
+          rows.push(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())},${e.tope},${e.elegido},${e.pasos}`);
+        });
+        return rows.join('\n');
+      }
+
+      function copyText(text) {
+        if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
+        const input = document.createElement('textarea');
+        input.value = text;
+        input.style.position = 'fixed';
+        document.body.append(input);
+        input.select();
+        document.execCommand('copy');
+        input.remove();
+        return Promise.resolve();
+      }
+
+      function renderHistory() {
+        histCount.textContent = state.historial.length;
+        historyEmpty.classList.toggle('d-none', state.historial.length > 0);
+        const shown = state.historial.slice(0, RENDER_LIMIT);
+        historyList.innerHTML = shown.map((e, i) => {
+          const num = state.historial.length - i;
+          return `<div class="list-group-item d-flex justify-content-between align-items-center gap-2">`
+            + `<span>#${num} · 1–${e.tope} → <strong>${e.elegido}</strong> en ${e.pasos} ${e.pasos === 1 ? 'paso' : 'pasos'}`
+            + ` <small class="text-body-secondary">${escapeHtml(formatTs(e.ts))}</small></span>`
+            + `<button class="btn btn-outline-danger btn-sm" type="button" data-del="${i}" aria-label="Borrar juego ${num}">✕</button></div>`;
+        }).join('');
+        const rest = state.historial.length - shown.length;
+        historyMore.classList.toggle('d-none', rest <= 0);
+        if (rest > 0) historyMore.textContent = `…y ${rest} anteriores (están en el CSV).`;
+      }
+
+      historyList.addEventListener('click', event => {
+        const btn = event.target.closest('[data-del]');
+        if (!btn) return;
+        const idx = Number(btn.dataset.del);
+        if (!Number.isInteger(idx) || idx < 0 || idx >= state.historial.length) return;
+        state.historial.splice(idx, 1);
+        persist();
+        renderHistory();
+        renderRecord();
+        showNotice('Se borró el juego.');
+      });
+
+      document.getElementById('copy-csv').addEventListener('click', async () => {
+        if (!state.historial.length) { showNotice('No hay juegos para copiar.'); return; }
+        try { await copyText(csvText()); showNotice('Se copió el historial en CSV.'); }
+        catch { showNotice('No se pudo copiar.'); }
+      });
+
+      document.getElementById('download-csv').addEventListener('click', () => {
+        if (!state.historial.length) { showNotice('No hay juegos para descargar.'); return; }
+        const d = new Date();
+        const pad = x => String(x).padStart(2, '0');
+        const blob = new Blob([csvText()], { type: 'text/csv;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `guess-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.csv`;
+        document.body.append(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+        showNotice('Se descargó el historial en CSV.');
+      });
+
+      document.getElementById('clear-hist').addEventListener('click', event => {
+        const btn = event.currentTarget;
+        if (!state.historial.length) { showNotice('El historial ya está vacío.'); return; }
+        if (btn.dataset.armed) {
+          delete btn.dataset.armed;
+          btn.textContent = '🗑️ Borrar';
+          btn.classList.remove('btn-danger');
+          btn.classList.add('btn-outline-danger');
+          state.historial = [];
+          persist();
+          renderHistory();
+          renderRecord();
+          showNotice('Se borró el historial.');
+          return;
+        }
+        btn.dataset.armed = '1';
+        btn.textContent = '¿Seguro? Tocá de nuevo';
+        btn.classList.remove('btn-outline-danger');
+        btn.classList.add('btn-danger');
+        clearTimeout(showNotice.timer);
+        showNotice.timer = setTimeout(() => {
+          delete btn.dataset.armed;
+          btn.textContent = '🗑️ Borrar';
+          btn.classList.remove('btn-danger');
+          btn.classList.add('btn-outline-danger');
+        }, 5000);
+      });
+
+      document.getElementById('reset').addEventListener('click', () => {
+        try { localStorage.removeItem(STORAGE_KEY); } catch {}
+        try { history.replaceState(null, '', window.location.pathname); } catch {}
+        state = structuredClone(DEFAULT_STATE);
+        topeInput.value = state.tope;
+        intentoInput.value = '';
+        newGame();
+        renderHistory();
+        renderRecord();
+        showNotice('Se borró todo y arranca un número nuevo.');
+      });
+
+      // ---------- Tema ----------
+      const root = document.documentElement;
+      const themeBtn = document.getElementById('theme-toggle');
+      const storedTheme = localStorage.getItem('theme');
+      const initialTheme = storedTheme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const applyTheme = t => { root.setAttribute('data-bs-theme', t); themeBtn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      applyTheme(initialTheme);
+      themeBtn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        applyTheme(next);
+      });
+
+      topeInput.value = state.tope;
+      if (!state.actual) newGame();
+      else renderGame();
+      renderHistory();
+      renderRecord();
+    })();
+  </script>
+</body>
+</html>

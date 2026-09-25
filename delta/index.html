@@ -78,15 +78,9 @@
     <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
       <div>
         <h1 class="h3 mb-1">🔀 Delta</h1>
-        <p class="text-body-secondary mb-0">¿Qué cambió entre estas versiones? Compará dos textos o inspeccioná un merge.</p>
+        <p class="text-body-secondary mb-0">¿Qué cambió entre estas versiones? Compará dos textos lado a lado.</p>
       </div>
       <div class="d-flex flex-wrap gap-2 align-items-center">
-        <div class="btn-group btn-group-sm" role="group" aria-label="Modo">
-          <input type="radio" class="btn-check" name="mode" id="mode-cmp" autocomplete="off" checked>
-          <label class="btn btn-outline-secondary" for="mode-cmp">Comparar</label>
-          <input type="radio" class="btn-check" name="mode" id="mode-mrg" autocomplete="off">
-          <label class="btn btn-outline-secondary" for="mode-mrg">Mergear</label>
-        </div>
         <button id="clear" class="btn btn-outline-secondary btn-sm" type="button">🧹 Limpiar</button>
         <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
       </div>
@@ -136,63 +130,7 @@
       </div>
     </section>
 
-    <section id="sec-mrg" class="d-none" aria-label="Mergear tres textos">
-      <div class="row g-2 mb-2">
-        <div class="col-12 col-lg-4">
-          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-1">
-            <label for="ta-ma" class="form-label mb-0">Origen A</label>
-            <div class="d-flex gap-2 align-items-center">
-              <span id="cnt-ma" class="text-body-secondary small"></span>
-              <button class="btn btn-outline-secondary btn-sm" type="button" data-file="ma" title="Cargar archivo .txt">📂</button>
-              <button class="btn btn-outline-secondary btn-sm" type="button" data-paste="ma" title="Pegar desde el portapapeles">📋</button>
-            </div>
-          </div>
-          <textarea id="ta-ma" class="form-control mono" rows="6" spellcheck="false" placeholder="Pegá o cargá el primer texto…"></textarea>
-        </div>
-        <div class="col-12 col-lg-4">
-          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-1">
-            <label for="ta-mb" class="form-label mb-0">Origen B</label>
-            <div class="d-flex gap-2 align-items-center">
-              <span id="cnt-mb" class="text-body-secondary small"></span>
-              <button class="btn btn-outline-secondary btn-sm" type="button" data-file="mb" title="Cargar archivo .txt">📂</button>
-              <button class="btn btn-outline-secondary btn-sm" type="button" data-paste="mb" title="Pegar desde el portapapeles">📋</button>
-            </div>
-          </div>
-          <textarea id="ta-mb" class="form-control mono" rows="6" spellcheck="false" placeholder="Pegá o cargá el segundo texto…"></textarea>
-        </div>
-        <div class="col-12 col-lg-4">
-          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-1">
-            <label for="ta-mr" class="form-label mb-0">Resultado</label>
-            <div class="d-flex gap-2 align-items-center">
-              <span id="cnt-mr" class="text-body-secondary small"></span>
-              <button class="btn btn-outline-secondary btn-sm" type="button" data-file="mr" title="Cargar archivo .txt">📂</button>
-              <button class="btn btn-outline-secondary btn-sm" type="button" data-paste="mr" title="Pegar desde el portapapeles">📋</button>
-            </div>
-          </div>
-          <textarea id="ta-mr" class="form-control mono" rows="6" spellcheck="false" placeholder="Pegá o cargá la versión arreglada…"></textarea>
-        </div>
-      </div>
-
-      <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-        <div class="btn-group btn-group-sm" role="group" aria-label="Qué comparar contra el Resultado">
-          <input type="radio" class="btn-check" name="view" id="view-a" autocomplete="off" checked>
-          <label class="btn btn-outline-secondary" for="view-a">R ↔ A</label>
-          <input type="radio" class="btn-check" name="view" id="view-b" autocomplete="off">
-          <label class="btn btn-outline-secondary" for="view-b">R ↔ B</label>
-        </div>
-        <span id="diffcount-mrg" class="text-body-secondary small" role="status"></span>
-        <button id="prev-mrg" class="btn btn-outline-secondary btn-sm" type="button">↑ Anterior</button>
-        <button id="next-mrg" class="btn btn-outline-secondary btn-sm" type="button">↓ Siguiente</button>
-      </div>
-      <div class="row g-2">
-        <div class="col-12 col-md-6">
-          <div id="pane-mrg-l" class="diff-pane mono border rounded" tabindex="0" aria-label="Diferencias lado izquierdo"></div>
-        </div>
-        <div class="col-12 col-md-6">
-          <div id="pane-mrg-r" class="diff-pane mono border rounded" tabindex="0" aria-label="Diferencias en Resultado"></div>
-        </div>
-      </div>
-    </section>
+    <p class="text-body-secondary small mt-3 mb-0">¿Necesitás combinar versiones en vez de compararlas? Para mergear usá una herramienta especializada como <a href="https://diffresolver.com" target="_blank" rel="noopener">DiffResolver</a>.</p>
 
     <input id="file-input" type="file" accept=".txt,text/plain" hidden>
 
@@ -205,7 +143,6 @@
       const STORAGE_KEY = 'delta';
       const DEFAULT_A = 'Lista de compras\n- manzanas\n- peras\n- leche\nTotal: $240';
       const DEFAULT_B = 'Lista de compras\n- manzanas\n- bananas\n- leche descremada\nTotal: $310';
-      const DEFAULT_R = 'Lista de compras\n- manzanas\n- bananas\n- leche descremada\n- yerba\nTotal: $310';
 
       function escapeHtml(text) {
         return text.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
@@ -358,31 +295,24 @@
       }
 
       function loadState() {
-        const fallback = { mode: 'comparar', view: 'a', a: DEFAULT_A, b: DEFAULT_B, r: DEFAULT_R };
+        // El estado viejo traía modo merge (mode/view/r): se leen A y B y se ignora el resto.
+        const fallback = { a: DEFAULT_A, b: DEFAULT_B };
         try {
           const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
           if (!saved || typeof saved !== 'object') return fallback;
           return {
-            mode: saved.mode === 'mergear' ? 'mergear' : 'comparar',
-            view: saved.view === 'b' ? 'b' : 'a',
             a: typeof saved.a === 'string' ? saved.a : DEFAULT_A,
-            b: typeof saved.b === 'string' ? saved.b : DEFAULT_B,
-            r: typeof saved.r === 'string' ? saved.r : DEFAULT_R
+            b: typeof saved.b === 'string' ? saved.b : DEFAULT_B
           };
         } catch { return fallback; }
       }
 
       const state = loadState();
-      const taA = $('ta-a'), taB = $('ta-b'), taMA = $('ta-ma'), taMB = $('ta-mb'), taMR = $('ta-mr');
+      const taA = $('ta-a'), taB = $('ta-b');
       taA.value = state.a; taB.value = state.b;
-      taMA.value = state.a; taMB.value = state.b; taMR.value = state.r;
-      $('mode-mrg').checked = state.mode === 'mergear';
-      $('view-b').checked = state.view === 'b';
 
       function save() {
-        state.a = taA.value; state.b = taB.value; state.r = taMR.value;
-        state.mode = $('mode-mrg').checked ? 'mergear' : 'comparar';
-        state.view = $('view-b').checked ? 'b' : 'a';
+        state.a = taA.value; state.b = taB.value;
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* modo privado: se sigue sin guardar */ }
       }
 
@@ -398,9 +328,6 @@
       function updateCounts() {
         $('cnt-a').textContent = counts(taA.value);
         $('cnt-b').textContent = counts(taB.value);
-        $('cnt-ma').textContent = counts(taMA.value);
-        $('cnt-mb').textContent = counts(taMB.value);
-        $('cnt-mr').textContent = counts(taMR.value);
       }
 
       // nav: {hunks: [rowIdx...], cur: -1, panes: [el, el]}
@@ -452,16 +379,10 @@
       }
 
       const navCmp = { hunks: [], cur: -1 };
-      const navMrg = { hunks: [], cur: -1 };
 
       function render() {
         updateCounts();
-        if ($('mode-mrg').checked) {
-          const left = $('view-b').checked ? split(taMB.value) : split(taMA.value);
-          renderPair(left, split(taMR.value), $('pane-mrg-l'), $('pane-mrg-r'), $('diffcount-mrg'), navMrg);
-        } else {
-          renderPair(split(taA.value), split(taB.value), $('pane-cmp-a'), $('pane-cmp-b'), $('diffcount-cmp'), navCmp);
-        }
+        renderPair(split(taA.value), split(taB.value), $('pane-cmp-a'), $('pane-cmp-b'), $('diffcount-cmp'), navCmp);
       }
 
       let renderTimer;
@@ -487,8 +408,6 @@
 
       $('prev-cmp').addEventListener('click', () => goto(navCmp, [$('pane-cmp-a'), $('pane-cmp-b')], $('diffcount-cmp'), -1));
       $('next-cmp').addEventListener('click', () => goto(navCmp, [$('pane-cmp-a'), $('pane-cmp-b')], $('diffcount-cmp'), 1));
-      $('prev-mrg').addEventListener('click', () => goto(navMrg, [$('pane-mrg-l'), $('pane-mrg-r')], $('diffcount-mrg'), -1));
-      $('next-mrg').addEventListener('click', () => goto(navMrg, [$('pane-mrg-l'), $('pane-mrg-r')], $('diffcount-mrg'), 1));
 
       // Scroll sincronizado entre paneles del mismo par
       let syncing = false;
@@ -499,28 +418,14 @@
         syncing = false;
       }
       const cmpPanes = [$('pane-cmp-a'), $('pane-cmp-b')];
-      const mrgPanes = [$('pane-mrg-l'), $('pane-mrg-r')];
       cmpPanes.forEach(p => p.addEventListener('scroll', () => syncScroll(p, cmpPanes.filter(q => q !== p)), { passive: true }));
-      mrgPanes.forEach(p => p.addEventListener('scroll', () => syncScroll(p, mrgPanes.filter(q => q !== p)), { passive: true }));
 
-      // Los Orígenes A y B existen en ambos modos: se mantienen sincronizados.
-      const twins = [[taA, taMA], [taB, taMB]];
-      [taA, taB, taMA, taMB, taMR].forEach(ta => ta.addEventListener('input', () => {
-        twins.forEach(([x, y]) => {
-          if (ta === x) y.value = x.value;
-          else if (ta === y) x.value = y.value;
-        });
-        scheduleRender();
-      }));
-      $('mode-cmp').addEventListener('change', () => { $('sec-cmp').classList.remove('d-none'); $('sec-mrg').classList.add('d-none'); save(); render(); });
-      $('mode-mrg').addEventListener('change', () => { $('sec-mrg').classList.remove('d-none'); $('sec-cmp').classList.add('d-none'); save(); render(); });
-      $('view-a').addEventListener('change', () => { save(); render(); });
-      $('view-b').addEventListener('change', () => { save(); render(); });
+      [taA, taB].forEach(ta => ta.addEventListener('input', scheduleRender));
 
       // Cargar archivo .txt en el panel indicado
       const fileInput = $('file-input');
       let fileTarget = null;
-      const targets = { a: taA, b: taB, ma: taMA, mb: taMB, mr: taMR };
+      const targets = { a: taA, b: taB };
       document.querySelectorAll('[data-file]').forEach(btn => btn.addEventListener('click', () => {
         fileTarget = btn.dataset.file;
         fileInput.click();
@@ -552,14 +457,13 @@
       }));
 
       $('clear').addEventListener('click', () => {
-        [taA, taB, taMA, taMB, taMR].forEach(ta => { ta.value = ''; });
+        [taA, taB].forEach(ta => { ta.value = ''; });
         try { localStorage.removeItem(STORAGE_KEY); } catch { /* modo privado */ }
         history.replaceState(null, '', window.location.pathname);
         render();
         taA.focus();
       });
 
-      if (state.mode === 'mergear') { $('sec-mrg').classList.remove('d-none'); $('sec-cmp').classList.add('d-none'); }
       render();
     })();
   </script>

@@ -25,7 +25,7 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`textwrangler`](./textwrangler) | Domá tu texto: ordenar, mezclar, numerar líneas y cambiar mayúsculas. |
 | [`qrlabs`](./qrlabs) | Generador de QR de URL, texto, Wi-Fi y email, con descarga en PNG o SVG. |
 | [`ducky`](./ducky) | Patito de goma para depurar en voz alta: no responde, pero ayuda igual. |
-| [`delta`](./delta) | Compará dos textos lado a lado o inspeccioná visualmente un merge de tres. |
+| [`delta`](./delta) | Compará dos textos lado a lado, con diferencias resaltadas. |
 | [`pre-flight`](./pre-flight) | Chequeo pre-llamada: cámara, micrófono y parlantes, sin grabar ni guardar nada. |
 | [`roller`](./roller) | Dado de N caras, con historial y descarga en CSV. |
 | [`fingerprint`](./fingerprint) | Calculá MD5 y SHA de textos y archivos, con historial local. |

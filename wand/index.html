@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1fa84%3B%3C/text%3E%3C/svg%3E">
+  <title>Wand — Mis bookmarklets en cualquier lado</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    .code-pre {
+      max-height: 12rem;
+      overflow: auto;
+      font-size: 0.8rem;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    /* La ★ es decorativa (pseudo-elemento): el texto del enlace sigue siendo
+       solo el nombre, que es lo que el navegador usa como nombre del marcador. */
+    .drag-btn::before {
+      content: "★ ";
+    }
+
+    .signature {
+      font-size: 0.8em;
+    }
+  </style>
+</head>
+<body>
+<div id="app" class="container py-4">
+  <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+    <div>
+      <h1 class="h3 mb-1">🪄 Wand</h1>
+      <p class="text-body-secondary mb-0">Tus bookmarklets arrastrables, en cualquier computadora.</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">🔗 Compartir</button>
+      <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset">🗑️ Reiniciar</button>
+      <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+    </div>
+  </div>
+
+  <div v-if="notice.text" class="alert py-2" :class="notice.kind === 'error' ? 'alert-danger' : 'alert-success'" role="status">{{ notice.text }}</div>
+
+  <div class="alert alert-info py-2 small" role="note">
+    Para instalar uno: mostrá la barra de marcadores (<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd>) y arrastrá el botón con su nombre hasta la barra. Ese botón <em>es</em> el bookmarklet.
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-body">
+      <h2 class="h6 mb-3">Agregar bookmarklet</h2>
+      <div class="vstack gap-2">
+        <div>
+          <label for="name-input" class="form-label small mb-1">Nombre</label>
+          <input id="name-input" v-model="fName" class="form-control" type="text" maxlength="80" autocomplete="off"
+            placeholder="Ej: Quitar paywall suave">
+        </div>
+        <div>
+          <label for="desc-input" class="form-label small mb-1">Explicación breve <span class="text-body-secondary">(opcional)</span></label>
+          <input id="desc-input" v-model="fDesc" class="form-control" type="text" maxlength="200" autocomplete="off"
+            placeholder="Qué hace cuando lo ejecutás">
+        </div>
+        <div>
+          <label for="code-input" class="form-label small mb-1">Código JavaScript</label>
+          <textarea id="code-input" v-model="fCode" class="form-control font-monospace" rows="3" spellcheck="false" autocomplete="off"
+            placeholder="javascript:(function(){ /* tu código */ })()"></textarea>
+          <div class="form-text">Se guarda sin el prefijo <code>javascript:</code>; si lo pegás con prefijo, se detecta solo. Tip: envolvé tu código en <code>(function(){...})()</code>.</div>
+        </div>
+        <div>
+          <button class="btn btn-primary" type="button" @click="addBm">Agregar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mb-3">
+    <input v-model="q" class="form-control" type="search" placeholder="🔍 Filtrar por nombre o descripción…" aria-label="Filtrar bookmarklets" autocomplete="off">
+  </div>
+
+  <div v-if="!visibleFixed.length && !visibleLocals.length" class="alert alert-secondary" role="status">Sin bookmarklets para esa búsqueda.</div>
+
+  <section class="mb-4">
+    <h2 class="h5 mb-2">📌 Fijos <span class="badge text-bg-secondary fw-normal">{{ fixed.length }}</span></h2>
+    <div v-if="!fixed.length && !hasQuery" class="border rounded p-4 text-body-secondary text-center">Todavía no hay bookmarklets fijos. Pasame el primero y lo sumamos al código.</div>
+    <div class="row g-3">
+      <div v-for="item in visibleFixed" :key="item.id" class="col-12 col-md-6">
+        <div class="card h-100">
+          <div class="card-body d-flex flex-column gap-2">
+            <div>
+              <a class="btn btn-primary btn-sm drag-btn" :href="href(item)" title="Arrastrá este botón hasta la barra de marcadores para instalarlo">{{ item.name }}</a>
+              <p v-if="item.desc" class="text-body-secondary small mt-2 mb-0">{{ item.desc }}</p>
+            </div>
+            <details>
+              <summary class="small">Ver código</summary>
+              <pre class="code-pre border rounded p-2 mt-2 mb-0"><code>{{ item.code }}</code></pre>
+            </details>
+            <div class="d-flex flex-wrap gap-2 mt-auto">
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="copyCode(item.code)">📋 Código</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mb-4">
+    <h2 class="h5 mb-2">💾 En este navegador <span class="badge text-bg-secondary fw-normal">{{ locals.length }}</span></h2>
+    <div v-if="!locals.length && !hasQuery" class="border rounded p-4 text-body-secondary text-center">Todavía no agregaste bookmarklets en este navegador.</div>
+    <div class="row g-3">
+      <div v-for="item in visibleLocals" :key="item.id" class="col-12 col-md-6">
+        <div class="card h-100">
+          <div class="card-body">
+            <div v-if="editingId === item.id" class="vstack gap-2">
+              <input v-model="draft.name" class="form-control form-control-sm" type="text" maxlength="80" aria-label="Nombre">
+              <input v-model="draft.desc" class="form-control form-control-sm" type="text" maxlength="200" aria-label="Descripción">
+              <textarea v-model="draft.code" class="form-control form-control-sm font-monospace" rows="3" aria-label="Código"></textarea>
+              <div class="d-flex flex-wrap gap-2">
+                <button class="btn btn-primary btn-sm" type="button" @click="saveEdit(item)">Guardar</button>
+                <button class="btn btn-outline-secondary btn-sm" type="button" @click="editingId = null">Cancelar</button>
+              </div>
+            </div>
+            <div v-else class="d-flex flex-column gap-2">
+              <div>
+                <a class="btn btn-primary btn-sm drag-btn" :href="href(item)" title="Arrastrá este botón hasta la barra de marcadores para instalarlo">{{ item.name }}</a>
+                <p v-if="item.desc" class="text-body-secondary small mt-2 mb-0">{{ item.desc }}</p>
+                <span class="badge text-bg-warning fw-normal mt-1">solo en este navegador</span>
+              </div>
+              <details>
+                <summary class="small">Ver código</summary>
+                <pre class="code-pre border rounded p-2 mt-2 mb-0"><code>{{ item.code }}</code></pre>
+              </details>
+              <div class="d-flex flex-wrap gap-2 mt-auto">
+                <button class="btn btn-outline-secondary btn-sm" type="button" @click="copyCode(item.code)">📋 Código</button>
+                <button class="btn btn-outline-secondary btn-sm" type="button" @click="startEdit(item)" title="Editar">✏️</button>
+                <button class="btn btn-outline-danger btn-sm" type="button" @click="removeBm(item)" title="Borrar">✕</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr>
+  <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.5.42/vue.global.prod.min.js"
+  integrity="sha512-PREsKi18CyKMgwXMJWtvkzinqjiN0znVfDovmVadp7pKiUpyNGtq7bD2fKElDBmdfH4DGJz8pmAdgihN8NZ8TQ=="
+  crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>
+const { createApp, ref, reactive, computed } = Vue;
+
+const STORAGE_KEY = 'wand';
+
+// Bookmarklets fijos: viajan con la página a cualquier navegador.
+// Para agregar más, sumar objetos { name, desc, code } a esta lista.
+// code se guarda SIN el prefijo "javascript:".
+const DEFAULT_BOOKMARKLETS = [
+  {
+    name: '🎉 Confetti',
+    desc: 'Carga confetti y lo dispara sobre la página actual.',
+    code: "(function(){var U='https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js';function party(){confetti({particleCount:90,spread:75,origin:{y:0.7}});var end=Date.now()+1100;(function frame(){confetti({particleCount:3,angle:60,spread:60,origin:{x:0,y:0.7}});confetti({particleCount:3,angle:120,spread:60,origin:{x:1,y:0.7}});if(Date.now()<end)requestAnimationFrame(frame);})();}if(typeof confetti==='function'){party();return;}var s=document.createElement('script');s.src=U;s.onload=party;(document.head||document.documentElement).appendChild(s);})()"
+  }
+];
+
+function newId() {
+  return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+}
+
+function normalizeCode(raw) {
+  const code = (typeof raw === 'string' ? raw : '').trim().replace(/^javascript:/i, '').trim();
+  return code ? code.slice(0, 8000) : null;
+}
+
+function normalizeItem(item) {
+  if (!item || typeof item.name !== 'string' || !item.name.trim()) return null;
+  const code = normalizeCode(item.code);
+  if (!code) return null;
+  return {
+    id: typeof item.id === 'string' ? item.id : newId(),
+    name: item.name.trim().slice(0, 80),
+    desc: typeof item.desc === 'string' ? item.desc.trim().slice(0, 200) : '',
+    code
+  };
+}
+
+function norm(value) {
+  return value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function loadState() {
+  const fromUrl = new URLSearchParams(window.location.search).get('data');
+  if (fromUrl) {
+    try {
+      const parsed = JSON.parse(fromUrl);
+      if (parsed && Array.isArray(parsed.locals)) {
+        return { locals: parsed.locals.map(normalizeItem).filter(Boolean), fromUrl: true };
+      }
+    } catch { /* Se usa el estado local si la URL no es válida. */ }
+  }
+  try {
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (stored && Array.isArray(stored.locals)) {
+      return { locals: stored.locals.map(normalizeItem).filter(Boolean), fromUrl: false };
+    }
+  } catch { /* Se usa la lista vacía si el estado guardado no es válido. */ }
+  return { locals: [], fromUrl: false };
+}
+
+createApp({
+  setup() {
+    const initial = loadState();
+    const fromUrl = initial.fromUrl;
+    const fixed = DEFAULT_BOOKMARKLETS.map(normalizeItem).filter(Boolean);
+    const locals = ref(initial.locals);
+    const q = ref('');
+    const fName = ref('');
+    const fDesc = ref('');
+    const fCode = ref('');
+    const editingId = ref(null);
+    const draft = reactive({ name: '', desc: '', code: '' });
+    const notice = reactive({ text: '', kind: 'success' });
+    let timer = null;
+
+    const hasQuery = computed(() => norm(q.value.trim()) !== '');
+    const matches = (item) => !hasQuery.value || norm(`${item.name} ${item.desc}`).includes(norm(q.value.trim()));
+    const visibleFixed = computed(() => fixed.filter(matches));
+    const visibleLocals = computed(() => locals.value.filter(matches));
+
+    function showNotice(text, kind = 'success') {
+      clearTimeout(timer);
+      notice.text = text;
+      notice.kind = kind;
+      timer = setTimeout(() => { notice.text = ''; }, 2600);
+    }
+
+    function save() {
+      if (!fromUrl) localStorage.setItem(STORAGE_KEY, JSON.stringify({ locals: locals.value }));
+    }
+
+    function href(item) {
+      return `javascript:${item.code}`;
+    }
+
+    function isDuplicateName(name, excludeId = null) {
+      const needle = name.trim().toLowerCase();
+      return fixed.some(link => link.name.toLowerCase() === needle)
+        || locals.value.some(item => item.id !== excludeId && item.name.toLowerCase() === needle);
+    }
+
+    async function copyText(text, okMessage) {
+      try {
+        if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(text);
+        else throw new Error('Sin portapapeles');
+        showNotice(okMessage);
+      } catch {
+        showNotice('No se pudo copiar al portapapeles.', 'error');
+      }
+    }
+
+    function copyCode(code) {
+      copyText(code, 'Código copiado.');
+    }
+
+    function addBm() {
+      const code = normalizeCode(fCode.value);
+      if (!fName.value.trim()) {
+        showNotice('Poné un nombre para el bookmarklet.', 'error');
+        return;
+      }
+      if (!code) {
+        showNotice('Pegá el código JavaScript del bookmarklet.', 'error');
+        return;
+      }
+      if (isDuplicateName(fName.value)) {
+        showNotice('Ya existe un bookmarklet con ese nombre.', 'error');
+        return;
+      }
+      locals.value.unshift({ id: newId(), name: fName.value.trim().slice(0, 80), desc: fDesc.value.trim().slice(0, 200), code });
+      fName.value = '';
+      fDesc.value = '';
+      fCode.value = '';
+      save();
+      showNotice(fromUrl ? 'Bookmarklet agregado (la página vino de un link compartido: no se guardó en este navegador).' : 'Bookmarklet agregado en este navegador.');
+    }
+
+    function startEdit(item) {
+      editingId.value = item.id;
+      draft.name = item.name;
+      draft.desc = item.desc;
+      draft.code = item.code;
+    }
+
+    function saveEdit(item) {
+      const code = normalizeCode(draft.code);
+      if (!draft.name.trim()) {
+        showNotice('El nombre no puede quedar vacío.', 'error');
+        return;
+      }
+      if (!code) {
+        showNotice('El código no puede quedar vacío.', 'error');
+        return;
+      }
+      if (isDuplicateName(draft.name, item.id)) {
+        showNotice('Ya existe un bookmarklet con ese nombre.', 'error');
+        return;
+      }
+      item.name = draft.name.trim().slice(0, 80);
+      item.desc = draft.desc.trim().slice(0, 200);
+      item.code = code;
+      editingId.value = null;
+      save();
+      showNotice('Bookmarklet actualizado.');
+    }
+
+    function removeBm(item) {
+      locals.value = locals.value.filter(candidate => candidate.id !== item.id);
+      if (editingId.value === item.id) editingId.value = null;
+      save();
+      showNotice('Bookmarklet borrado.');
+    }
+
+    function share() {
+      if (!locals.value.length) {
+        showNotice('No hay bookmarklets locales para compartir todavía.', 'error');
+        return;
+      }
+      const url = new URL(window.location.href);
+      url.search = '';
+      url.searchParams.set('data', JSON.stringify({ locals: locals.value }));
+      copyText(url.toString(), 'Se copió el enlace con tus bookmarklets.');
+    }
+
+    function reset() {
+      try { localStorage.removeItem(STORAGE_KEY); } catch {}
+      locals.value = [];
+      editingId.value = null;
+      history.replaceState(null, '', window.location.pathname);
+      showNotice('Se borraron los bookmarklets de este navegador.');
+    }
+
+    return { fixed, locals, q, hasQuery, visibleFixed, visibleLocals, fName, fDesc, fCode, editingId, draft, notice, href, copyCode, addBm, startEdit, saveEdit, removeBm, share, reset };
+  }
+}).mount('#app');
+</script>
+
+<script>
+// theme toggle: Bootstrap's native data-bs-theme, remembered per browser
+(() => {
+  const root = document.documentElement;
+  const btn = document.getElementById('theme-toggle');
+  const stored = localStorage.getItem('theme');
+  const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+  apply(initial);
+  btn.addEventListener('click', () => {
+    const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('theme', next);
+    apply(next);
+  });
+})();
+</script>
+</body>
+</html>

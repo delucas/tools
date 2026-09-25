@@ -30,5 +30,6 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`roller`](./roller) | Dado de N caras, con historial y descarga en CSV. |
 | [`fingerprint`](./fingerprint) | Calculá MD5 y SHA de textos y archivos, con historial local. |
 | [`guess`](./guess) | Adiviná el número que piensa la máquina, con récord e historial. |
+| [`wand`](./wand) | Tus bookmarklets arrastrables, en cualquier computadora. |
 
 Cada carpeta tiene su propio `README.md` con el detalle de uso.

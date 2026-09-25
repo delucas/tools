@@ -29,6 +29,7 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`pre-flight`](./pre-flight) | Chequeo pre-llamada: cámara, micrófono y parlantes, sin grabar ni guardar nada. |
 | [`roller`](./roller) | Dado de N caras, con historial y descarga en CSV. |
 | [`fingerprint`](./fingerprint) | Calculá MD5 y SHA de textos y archivos, con historial local. |
+| [`sauriopass`](./sauriopass) | Contraseñas fáciles de recordar: animal + adjetivo + números. |
 | [`guess`](./guess) | Adiviná el número que piensa la máquina, con récord e historial. |
 | [`wand`](./wand) | Tus bookmarklets arrastrables, en cualquier computadora. |
 | [`tick`](./tick) | Cuenta atrás gigante para proyectar, que no deja dormir la pantalla. |

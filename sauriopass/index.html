@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f995%3B%3C/text%3E%3C/svg%3E">
+  <title>Sauriopass — Contraseñas fáciles de recordar</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    #pwd {
+      font-size: clamp(1.5rem, 6vw, 2.75rem);
+      overflow-wrap: anywhere;
+    }
+
+    .signature {
+      font-size: 0.8em;
+    }
+  </style>
+</head>
+<body>
+  <main class="container py-4" style="max-width: 640px;">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">🦕 Sauriopass</h1>
+        <p class="text-body-secondary mb-0">Contraseñas fáciles de recordar: un animal, un adjetivo y unos números.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-body text-center">
+        <div id="pwd" class="font-monospace fw-bold mb-3" aria-live="polite">…</div>
+        <button id="copy" class="btn btn-outline-secondary" type="button">📋 Copiar</button>
+      </div>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2 mb-3">
+      <button id="btn-simple" class="btn btn-outline-primary flex-fill" type="button">🙂 Dame una simple</button>
+      <button id="btn-strong" class="btn btn-primary flex-fill" type="button">💪 Dame una fuerte</button>
+    </div>
+
+    <p id="modeline" class="text-body-secondary small"></p>
+  </main>
+
+  <footer class="container pb-4" style="max-width: 640px;">
+    <hr>
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </footer>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'sauriopass';
+
+      // Listas porteadas de sauriopass (Ruby). "serpiente" venía duplicada: se deja una sola.
+      const ANIMALS = ['lagarto', 'hormiga', 'armadillo', 'murcielago', 'oso', 'castor', 'abeja', 'escarabajo', 'pajaro', 'bufalo', 'toro', 'becerro', 'camello', 'canario', 'gato', 'pollo', 'chimpance', 'serpiente', 'gallo', 'vaca', 'coyote', 'cangrejo', 'cocodrilo', 'ciervo', 'perro', 'delfin', 'burro', 'pato', 'aguila', 'elefante', 'pez', 'mosca', 'zorro', 'rana', 'jirafa', 'saltamontes', 'gallina', 'hipopotamo', 'caballo', 'jaguar', 'canguro', 'cordero', 'leopardo', 'leon', 'mono', 'mosquito', 'raton', 'avestruz', 'buho', 'loro', 'pinguino', 'cerdo', 'conejo', 'mapache', 'rata', 'escorpion', 'foca', 'tiburon', 'oveja', 'perezoso', 'caracol', 'arana', 'ardilla', 'cisne', 'tigre', 'pavo', 'tortuga', 'avispa', 'ballena', 'lobo', 'cebra'];
+      const ADJECTIVES = ['abstracto', 'aburrido', 'adorable', 'afectuoso', 'agotador', 'agradable', 'agudo', 'alargado', 'alegre', 'alto', 'amable', 'amargo', 'amarillo', 'ambicioso', 'ambiguo', 'amigable', 'amoroso', 'amplio', 'ancho', 'angelical', 'animado', 'ansiado', 'ansioso', 'antiguo', 'apasionado', 'apatico', 'ardiente', 'arrogante', 'arrugado', 'artesanal', 'astuto', 'atento', 'azul', 'bajo', 'barato', 'bello', 'blanco', 'blando', 'bondadoso', 'bonito', 'brillante', 'bueno', 'burlon', 'caliente', 'calmo', 'caluroso', 'cansado', 'caprichoso', 'carismatico', 'carinoso', 'caro', 'cauteloso', 'celeste', 'celoso', 'chiquito', 'cobarde', 'coherente', 'colorido', 'complejo', 'considerado', 'contagioso', 'contento', 'cordial', 'correcto', 'corto', 'crocante', 'cruel', 'cuadrado', 'cuidadoso', 'culto', 'curioso', 'calido', 'comodo', 'danino', 'decepcionado', 'delgado', 'delicado', 'delicioso', 'dependiente', 'desconfiado', 'desordenado', 'despistado', 'diferente', 'dificil', 'directo', 'distante', 'divertido', 'dorado', 'dulce', 'duro', 'debil', 'eficiente', 'elegante', 'emocionado', 'encantador', 'enfadado', 'enfermo', 'engreido', 'enojado', 'enorme', 'entrometido', 'especial', 'espontaneo', 'estrecho', 'estresante', 'estudioso', 'exitoso', 'extraordinario', 'extrano', 'extrovertido', 'familiar', 'famoso', 'fascinante', 'feliz', 'feo', 'fino', 'flaco', 'fresco', 'fragil', 'frio', 'fuerte', 'fugaz', 'facil', 'generoso', 'gordo', 'gracioso', 'grande', 'gris', 'grueso', 'helado', 'hermoso', 'honrado', 'horrible', 'hueco', 'humilde', 'habil', 'humedo', 'imperfecto', 'impulsivo', 'incorruptible', 'increible', 'incomodo', 'indeciso', 'independiente', 'indestructible', 'indiferente', 'infantil', 'ingenuo', 'inmenso', 'inocente', 'insensible', 'inteligente', 'interesante', 'intrepido', 'invisible', 'irresponsable', 'largo', 'lento', 'libre', 'limpio', 'lindo', 'liviano', 'lleno', 'luminoso', 'maduro', 'malcriado', 'maleable', 'malo', 'maravilloso', 'marron', 'mediano', 'miedoso', 'misterioso', 'moderno', 'modesto', 'molesto', 'monotono', 'negro', 'nervioso', 'noble', 'nuevo', 'nitido', 'odioso', 'opaco', 'ordenado', 'organizado', 'orgulloso', 'original', 'oscuro', 'ostentoso', 'paciente', 'pacifico', 'peludo', 'pequeno', 'perfecto', 'pesado', 'petiso', 'plano', 'pobre', 'precioso', 'preocupado', 'profundo', 'prolijo', 'protector', 'practico', 'palido', 'quebrado', 'quemado', 'rayado', 'realista', 'redondo', 'refinado', 'responsable', 'rico', 'rojo', 'rosado', 'roto', 'rubio', 'ruidoso', 'rapido', 'rigido', 'rustico', 'sabio', 'salado', 'saludable', 'satisfecho', 'seco', 'sencillo', 'sensible', 'silencioso', 'simple', 'simpatico', 'sobrio', 'suave', 'sucio', 'sutil', 'talentoso', 'tenebroso', 'tenso', 'terco', 'torpe', 'trabajador', 'tramposo', 'transparente', 'travieso', 'triste', 'turbio', 'timido', 'usado', 'vacio', 'valiente', 'veloz', 'venenoso', 'verde', 'viejo', 'violento', 'violeta', 'vulgar', 'acido', 'agil', 'unico'];
+      const ALTERATIONS = [['a', '@'], ['i', '!'], ['t', '+'], ['e', '3'], ['c', '('], ['o', '*'], ['s', '$'], ['d', ')'], ['k', '<']];
+
+      function randInt(min, max) {
+        const range = max - min + 1;
+        const buf = new Uint32Array(1);
+        crypto.getRandomValues(buf);
+        return min + (buf[0] % range);
+      }
+
+      function pick(arr) {
+        return arr[randInt(0, arr.length - 1)];
+      }
+
+      function simple() {
+        return pick(ANIMALS) + pick(ADJECTIVES) + String(randInt(10, 99));
+      }
+
+      // El Ruby original reintenta hasta que algo cambie (loop infinito si nada
+      // aplicara): acá se prueba hasta 20 alteraciones y si no, vuelve igual.
+      function harden(passw) {
+        for (let i = 0; i < 20; i++) {
+          const [from, to] = pick(ALTERATIONS);
+          if (passw.includes(from)) return passw.replace(from, to);
+        }
+        return passw;
+      }
+
+      function strong() {
+        return harden(pick(ANIMALS) + pick(ADJECTIVES) + String(randInt(100, 999)));
+      }
+
+      const $ = (id) => document.getElementById(id);
+      const pwd = $('pwd'), modeline = $('modeline');
+      const copyBtn = $('copy');
+      const COPY_LABEL = '📋 Copiar';
+      let copyTimer;
+      let mode = 'strong';
+
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (saved && (saved.mode === 'simple' || saved.mode === 'strong')) mode = saved.mode;
+      } catch { /* Sin modo guardado: se usa el fuerte. */ }
+
+      $('copy').addEventListener('click', async () => {
+        clearTimeout(copyTimer);
+        try {
+          if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(pwd.textContent);
+          else throw new Error('Sin portapapeles');
+          copyBtn.textContent = '✅ Copiado';
+        } catch {
+          copyBtn.textContent = '❌ No se pudo copiar';
+        }
+        copyTimer = setTimeout(() => { copyBtn.textContent = COPY_LABEL; }, 1500);
+      });
+
+      function describe() {
+        if (mode === 'simple') {
+          modeline.textContent = `Modo simple: animal + adjetivo + 2 números, fáciles de recordar pero menos seguras (${ANIMALS.length} animales × ${ADJECTIVES.length} adjetivos). Se recuerda tu elección.`;
+        } else {
+          modeline.textContent = `Modo fuerte: animal + adjetivo + 3 números + 1 símbolo, mejores para cosas importantes (${ANIMALS.length} animales × ${ADJECTIVES.length} adjetivos). Se recuerda tu elección.`;
+        }
+        $('btn-simple').classList.toggle('btn-primary', mode === 'simple');
+        $('btn-simple').classList.toggle('btn-outline-primary', mode !== 'simple');
+        $('btn-strong').classList.toggle('btn-primary', mode === 'strong');
+        $('btn-strong').classList.toggle('btn-outline-primary', mode !== 'strong');
+      }
+
+      function saveMode() {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ mode })); } catch {}
+      }
+
+      function generate(nextMode) {
+        mode = nextMode;
+        pwd.textContent = mode === 'simple' ? simple() : strong();
+        describe();
+        saveMode();
+      }
+
+      $('btn-simple').addEventListener('click', () => generate('simple'));
+      $('btn-strong').addEventListener('click', () => generate('strong'));
+
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+
+      generate(mode);
+    })();
+  </script>
+</body>
+</html>

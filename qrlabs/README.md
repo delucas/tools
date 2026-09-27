@@ -1,6 +1,6 @@
 # QRlabs
 
-Generador de QR de URL, texto, Wi-Fi y email simple, con tamaño a elección (S/M/L), copiado al portapapeles y descarga en PNG o SVG.
+Generador de QR de URL, texto, Wi-Fi, email y vCard simple, con tamaño a elección (S/M/L), copiado al portapapeles y descarga en PNG o SVG.
 
 ## Uso
 

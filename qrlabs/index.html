@@ -21,6 +21,10 @@
       #f-text {
         font-size: 16px;
       }
+      #f-vcard {
+        font-size: 16px;
+        font-family: var(--bs-font-monospace);
+      }
     }
 
     p.signature {
@@ -57,6 +61,8 @@
           <label class="btn btn-outline-primary" for="type-wifi">📶 Wi-Fi</label>
           <input type="radio" class="btn-check" name="tipo" id="type-email" value="email">
           <label class="btn btn-outline-primary" for="type-email">✉️ Email</label>
+          <input type="radio" class="btn-check" name="tipo" id="type-vcard" value="vcard">
+          <label class="btn btn-outline-primary" for="type-vcard">🪪 vCard</label>
         </div>
 
         <div id="panel-url">
@@ -96,6 +102,12 @@
         <div id="panel-email" class="d-none">
           <label for="f-email" class="form-label">Email</label>
           <input id="f-email" class="form-control" type="email" inputmode="email" placeholder="alguien@ejemplo.com" autocomplete="off">
+        </div>
+
+        <div id="panel-vcard" class="d-none">
+          <label for="f-vcard" class="form-label">vCard</label>
+          <textarea id="f-vcard" class="form-control" rows="6" spellcheck="false" placeholder="BEGIN:VCARD…"></textarea>
+          <div class="form-text">Pegá el texto vCard o generala en <a href="../vcard/">VCard</a>.</div>
         </div>
       </div>
 
@@ -147,10 +159,10 @@
       const STORAGE_KEY = 'qrlabs';
       const LEGACY_KEYS = ['qrlabs-state']; // MIGRACIÓN (2026-09-21): leer vieja, guardar en nueva y borrar vieja. Eliminar este bloque en 2027-03.
       const MARGIN = 1; // módulos de zona de silencio por lado
-      const DEFAULTS = { t: 'url', url: '', texto: '', ssid: '', pass: '', sec: 'WPA', hidden: false, email: '', size: '256' };
+      const DEFAULTS = { t: 'url', url: '', texto: '', ssid: '', pass: '', sec: 'WPA', hidden: false, email: '', vcard: '', size: '256' };
       const MAX_HISTORY = 50; // tope de QR guardados (los más nuevos primero)
       const SAVE_DELAY = 1500; // pausa de escritura antes de guardar al historial
-      const TYPE_LABELS = { url: '🔗 URL', texto: '📝 Texto', wifi: '📶 Wi-Fi', email: '✉️ Email' };
+      const TYPE_LABELS = { url: '🔗 URL', texto: '📝 Texto', wifi: '📶 Wi-Fi', email: '✉️ Email', vcard: '🪪 vCard' };
 
       function escapeHtml(text) {
         return String(text).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
@@ -164,9 +176,9 @@
       const $ = (id) => document.getElementById(id);
       const fields = {
         url: $('f-url'), texto: $('f-text'), ssid: $('f-ssid'),
-        pass: $('f-pass'), sec: $('f-sec'), hidden: $('f-hidden'), email: $('f-email')
+        pass: $('f-pass'), sec: $('f-sec'), hidden: $('f-hidden'), email: $('f-email'), vcard: $('f-vcard')
       };
-      const panels = { url: $('panel-url'), texto: $('panel-texto'), wifi: $('panel-wifi'), email: $('panel-email') };
+      const panels = { url: $('panel-url'), texto: $('panel-texto'), wifi: $('panel-wifi'), email: $('panel-email'), vcard: $('panel-vcard') };
       const canvas = $('qr-canvas');
       const preview = $('preview');
       const hint = $('hint');
@@ -257,6 +269,7 @@
           sec: fields.sec.value,
           hidden: fields.hidden.checked,
           email: fields.email.value,
+          vcard: fields.vcard.value,
           size: document.querySelector('input[name="tamano"]:checked').value
         };
       }
@@ -270,6 +283,7 @@
         fields.sec.value = state.sec;
         fields.hidden.checked = !!state.hidden;
         fields.email.value = state.email;
+        fields.vcard.value = state.vcard || '';
         document.querySelector(`input[name="tamano"][value="${state.size}"]`).checked = true;
       }
 
@@ -293,6 +307,7 @@
           payload += `H:${state.hidden ? 'true' : 'false'};;`;
           return payload;
         }
+        if (state.t === 'vcard') return state.vcard.trim();
         const email = state.email.trim();
         return /.+@.+\..+/.test(email) ? `mailto:${email}` : '';
       }

@@ -23,7 +23,7 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`linkdb`](./linkdb) | Tus links favoritos con título automático y agregados locales por navegador. |
 | [`docfactory`](./docfactory) | Combinar correspondencia: plantilla con marcadores más CSV, un documento por fila. |
 | [`textwrangler`](./textwrangler) | Domá tu texto: ordenar, mezclar, numerar líneas y cambiar mayúsculas. |
-| [`qrlabs`](./qrlabs) | Generador de QR de URL, texto, Wi-Fi y email, con descarga en PNG o SVG. |
+| [`qrlabs`](./qrlabs) | Generador de QR de URL, texto, Wi-Fi, email y vCard, con descarga en PNG o SVG. |
 | [`ducky`](./ducky) | Patito de goma para depurar en voz alta: no responde, pero ayuda igual. |
 | [`delta`](./delta) | Compará dos textos lado a lado, con diferencias resaltadas. |
 | [`pre-flight`](./pre-flight) | Chequeo pre-llamada: cámara, micrófono y parlantes, sin grabar ni guardar nada. |
@@ -36,5 +36,6 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`chromatic`](./chromatic) | Analizá colores y paletas: contraste, variantes y vista previa de diapositiva. |
 | [`image-inspector`](./image-inspector) | DevTools para imágenes: archivo, hashes, dimensiones, EXIF y más, todo local. |
 | [`fontoscope`](./fontoscope) | Cargá una fuente y mirala en todos sus tamaños, con cobertura Unicode real. |
+| [`vcard`](./vcard) | Tu tarjeta laboral: descargala como `.vcf` o abrila en QRlabs para que la escaneen. |
 
 Cada carpeta tiene su propio `README.md` con el detalle de uso.

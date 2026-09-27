@@ -26,10 +26,24 @@ Este repositorio reúne herramientas web autocontenidas. Cada herramienta vive e
 <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
 ```
 
-- Al final, incluir exactamente:
+- El `html` va en español (`<html lang="es">`), salvo que se pida expresamente otro idioma.
+- El `h1` lleva tagline debajo, con este formato:
 
 ```html
-<p>Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+<div>
+  <h1 class="h3 mb-1">🦕 Nombre</h1>
+  <p class="text-body-secondary mb-0">Descripción corta de una línea.</p>
+</div>
+```
+
+- Al final, incluir exactamente (con la clase `signature` y su regla CSS):
+
+```html
+<p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+```
+
+```css
+p.signature { font-size: 0.8em; }
 ```
 
 ## Estado editable

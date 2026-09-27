@@ -1,6 +1,6 @@
 # Sauriopass
 
-Generador de contraseñas fáciles de recordar, en castellano: un animal, un adjetivo y unos números. Inspirado en [DinoPass](https://dinopass.com/), con las listas de [sauriopass](https://github.com/sipofcode/sauriopass_py).
+Generador de contraseñas fáciles de recordar, en castellano: un animal, un adjetivo y unos números. Inspirado en [DinoPass](https://www.dinopass.com/), con las listas de [sauriopass](https://github.com/sipofcode/sauriopass_py), disponible también como [gema de Ruby](https://www.ruby-toolbox.com/projects/sauriopass).
 
 ## Uso
 

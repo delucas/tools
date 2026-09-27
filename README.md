@@ -33,5 +33,6 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`guess`](./guess) | Adiviná el número que piensa la máquina, con récord e historial. |
 | [`wand`](./wand) | Tus bookmarklets arrastrables, en cualquier computadora. |
 | [`tick`](./tick) | Cuenta atrás gigante para proyectar, que no deja dormir la pantalla. |
+| [`chromatic`](./chromatic) | Analizá colores y paletas: contraste, variantes y vista previa de diapositiva. |
 
 Cada carpeta tiene su propio `README.md` con el detalle de uso.

@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f3a8%3B%3C/text%3E%3C/svg%3E">
+  <title>Chromatic</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    .slot-swatch {
+      height: 96px;
+      border-radius: 0.5rem;
+      border: 1px solid var(--bs-border-color);
+    }
+    .slot-picker {
+      width: 3rem;
+      height: 2.375rem;
+      padding: 0.15rem;
+    }
+    .variant {
+      min-width: 104px;
+      border: 1px solid var(--bs-border-color);
+      border-radius: 0.5rem;
+      padding: 0.35rem 0.5rem;
+      font-size: 0.75rem;
+      line-height: 1.3;
+      cursor: pointer;
+      background: none;
+    }
+    .hue-track {
+      height: 0.75rem;
+      border-radius: 999px;
+      background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+      position: relative;
+    }
+    .hue-mark {
+      position: absolute;
+      top: -3px;
+      width: 4px;
+      height: calc(100% + 6px);
+      background: #000;
+      border: 1px solid #fff;
+      border-radius: 2px;
+      transform: translateX(-50%);
+    }
+    @media (max-width: 576px) {
+      .slot-swatch { height: 72px; }
+      input, textarea, select { font-size: 16px; }
+    }
+    p.signature { font-size: 0.8em; }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4">
+    <div id="app">
+      <div id="vue-missing" class="alert alert-danger d-none" role="alert">
+        No se pudo cargar la interfaz (Vue). Revisá tu conexión y recargá la página.
+      </div>
+      <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+      <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+        <div>
+          <h1 class="h3 mb-1">🎨 Chromatic</h1>
+          <p class="text-body-secondary mb-0">Analizá colores y paletas: contraste, variantes y vista previa de diapositiva.</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ shareLabel }}</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset">🗑️ Reiniciar</button>
+          <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+        </div>
+      </div>
+
+      <div class="alert alert-danger py-2" v-if="!hasCulori" role="alert">
+        No se pudo cargar el motor de color (culori). Revisá tu conexión y recargá la página.
+      </div>
+
+      <div class="row g-3 mb-2">
+        <div class="col-12 col-md-6 col-xl-3" v-for="(c, i) in colors" :key="i">
+          <div class="card h-100">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="fw-semibold small">COLOR {{ i + 1 }}</span>
+                <button class="btn btn-sm btn-link text-body-secondary text-decoration-none p-0" type="button"
+                  v-if="c" @click="clearSlot(i)" title="Eliminar color">✕</button>
+              </div>
+              <div class="slot-swatch d-flex align-items-center justify-content-center mb-2"
+                :style="{ backgroundColor: c || 'transparent' }">
+                <span class="fw-bold" v-if="c" :style="{ color: ink(c) }">{{ c.toUpperCase() }}</span>
+                <span class="text-body-secondary small" v-else>vacío</span>
+              </div>
+              <div class="d-flex gap-2">
+                <input class="form-control form-control-color slot-picker" type="color" :value="c || '#000000'"
+                  @input="onPick(i, $event.target.value)" :aria-label="'Elegir color ' + (i + 1)">
+                <input class="form-control form-control-sm" v-model="drafts[i]" @change="onText(i)"
+                  :placeholder="i < 2 ? '#3B82F6' : 'HEX, rgb(), hsl()…'" :aria-label="'Color ' + (i + 1) + ' en texto'">
+              </div>
+              <div class="text-danger small mt-1" v-if="errors[i]">{{ errors[i] }}</div>
+              <button class="btn btn-outline-secondary btn-sm w-100 mt-2" type="button" v-if="c" @click="copyHex(i)">
+                {{ copied === i ? '¡Copiado!' : 'Copiar HEX' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-2 align-items-center mb-4">
+        <div class="col-12 col-md-8">
+          <input class="form-control form-control-sm" v-model="bulk" @keyup.enter="pasteMany"
+            placeholder="Pegar varios colores separados por espacios o comas… (Enter para aplicar)">
+        </div>
+        <div class="col-12 col-md-4 d-flex flex-wrap gap-2">
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="copyPalette">Copy palette</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearAll">Clear all</button>
+          <span class="small text-body-secondary align-self-center" v-if="paletteMsg">{{ paletteMsg }}</span>
+        </div>
+      </div>
+
+      <div class="alert alert-secondary" v-if="activeCount === 0">
+        Agregá un color para empezar: Chromatic lo analiza. Con 2 explica contraste y relación.
+        <div class="d-flex flex-wrap gap-2 mt-2">
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="loadExample(['#1e3a8a', '#f8fafc'])">Probar: azul + casi blanco</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="loadExample(['#166534', '#fefce8', '#f59e0b'])">Probar: trío cálido</button>
+        </div>
+      </div>
+
+      <!-- Secciones de análisis por cantidad de colores (Tasks 2-4) -->
+      <section v-if="activeCount === 1 && singleInfo" class="card mb-4">
+        <div class="card-body">
+          <h2 class="h5 mb-3">Análisis del color</h2>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <tbody>
+                <tr v-for="row in infoRows" :key="row.label">
+                  <th scope="row" class="fw-semibold small" style="width: 8rem;">{{ row.label }}</th>
+                  <td class="small font-monospace">{{ row.value }}</td>
+                  <td class="text-end" style="width: 5.5rem;">
+                    <button class="btn btn-outline-secondary btn-sm py-0" type="button" @click="copyInfo(row.value, row.label)">
+                      {{ copiedFmt === row.label ? '¡Copiado!' : 'Copiar' }}
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <h3 class="h6 mt-3 mb-2">Variantes <small class="text-body-secondary fw-normal">(tocá para usar)</small></h3>
+          <div class="d-flex flex-wrap gap-2">
+            <button v-for="v in singleVariants" :key="v.label" class="variant" type="button"
+              :style="{ backgroundColor: v.hex }" @click="applyVariant(v.hex)" :title="v.label + ' ' + v.hex">
+              <span class="d-block fw-semibold" :style="{ color: ink(v.hex) }">{{ v.label }}</span>
+              <small class="d-block font-monospace" :style="{ color: ink(v.hex) }">{{ v.hex }}</small>
+            </button>
+          </div>
+        </div>
+      </section>
+      <section v-if="activeCount === 2 && pairInfo" class="card mb-4">
+        <div class="card-body">
+          <h2 class="h5 mb-1">Relación entre colores</h2>
+          <p class="display-6 mb-1">Contrast {{ pairInfo.ratio.toFixed(2) }}:1</p>
+          <div class="d-flex flex-wrap gap-2 mb-3">
+            <span class="badge" :class="pairInfo.aaN ? 'text-bg-success' : 'text-bg-danger'">{{ pairInfo.aaN ? '✓' : '✕' }} AA normal</span>
+            <span class="badge" :class="pairInfo.aaaN ? 'text-bg-success' : 'text-bg-secondary'">{{ pairInfo.aaaN ? '✓' : '✕' }} AAA normal</span>
+            <span class="badge" :class="pairInfo.aaG ? 'text-bg-success' : 'text-bg-danger'">{{ pairInfo.aaG ? '✓' : '✕' }} AA grande</span>
+            <span class="badge" :class="pairInfo.aaaG ? 'text-bg-success' : 'text-bg-secondary'">{{ pairInfo.aaaG ? '✓' : '✕' }} AAA grande</span>
+          </div>
+          <div class="row g-3 mb-3">
+            <div class="col-12 col-md-6" v-for="dir in pairDirs" :key="dir.bg">
+              <div class="p-3 rounded border" :style="{ backgroundColor: dir.bg, color: dir.fg }">
+                <div class="small opacity-75 mb-1">{{ dir.label }}</div>
+                <div class="fs-4 fw-bold">Heading</div>
+                <div class="fs-6">Subtitle de ejemplo</div>
+                <p class="mb-1">Body text: la paleta debe sostener un párrafo real sin cansar la vista.</p>
+                <small class="d-block">Small text de apoyo.</small>
+                <small class="opacity-75">Caption · 12.340 visitas</small>
+              </div>
+            </div>
+          </div>
+          <p class="mb-1">Perceptual distance: <strong>{{ pairInfo.distancia.toFixed(3) }}</strong>
+            <span class="text-body-secondary">({{ distLabel }})</span></p>
+          <p class="mb-2">Relación cromática: <strong>{{ pairInfo.relacion }}</strong>
+            <span class="text-body-secondary small">· Δhue {{ pairInfo.hueDiff.toFixed(0) }}° · Δluz {{ pairInfo.luzDiff.toFixed(2) }} · Δcroma {{ pairInfo.cromaDiff.toFixed(2) }}</span></p>
+          <div class="hue-track mb-4" aria-hidden="true">
+            <span class="hue-mark" :style="{ left: (pairInfo.hueA / 360 * 100) + '%' }"></span>
+            <span class="hue-mark" :style="{ left: (pairInfo.hueB / 360 * 100) + '%', background: '#fff' }"></span>
+          </div>
+        </div>
+      </section>
+      <section v-if="activeCount >= 3" class="card mb-4">
+        <div class="card-body">
+          <h2 class="h5 mb-3">Paleta ({{ activeCount }} colores)</h2>
+          <div class="d-flex flex-wrap gap-2 mb-4">
+            <span v-for="c in activeColors" :key="c.hex" class="badge fw-normal font-monospace"
+              :style="{ backgroundColor: c.hex, color: ink(c.hex) }">C{{ c.idx + 1 }} · {{ c.hex }}</span>
+          </div>
+          <h3 class="h6 mb-2">Slide Preview
+            <small class="text-body-secondary fw-normal" v-if="slide">(fondo/texto: mejor contraste {{ slide.ratio.toFixed(1) }}:1)</small>
+          </h3>
+          <div v-if="slide" class="p-4 rounded border" :style="{ backgroundColor: slide.bg, color: slide.fg }">
+            <div class="small fw-bold mb-1" :style="{ color: slide.accent || slide.fg }">INFORME MENSUAL · DESTACADO</div>
+            <div class="fs-3 fw-bold">Título de la diapositiva</div>
+            <div class="mb-2 opacity-75">Subtítulo que acompaña sin competir</div>
+            <p class="mb-2">Párrafo de ejemplo para evaluar si la paleta sostiene texto real en una presentación.</p>
+            <div class="fs-2 fw-bold mb-2" :style="{ color: slide.accent || slide.fg }">+38% dato destacado</div>
+            <div class="d-flex gap-1 align-items-end mb-2" style="height: 3rem;" aria-hidden="true">
+              <span class="rounded" :style="{ width: '18%', height: '40%', backgroundColor: slide.accent || slide.fg, opacity: 0.55 }"></span>
+              <span class="rounded" :style="{ width: '18%', height: '70%', backgroundColor: slide.accent || slide.fg, opacity: 0.8 }"></span>
+              <span class="rounded" :style="{ width: '18%', height: '100%', backgroundColor: slide.accent || slide.fg }"></span>
+              <span class="rounded" :style="{ width: '18%', height: '55%', backgroundColor: slide.fg, opacity: 0.45 }"></span>
+            </div>
+            <span class="badge fw-normal" :style="{ border: '1px solid ' + (slide.accent || slide.fg), color: slide.accent || slide.fg }">Etiqueta / callout</span>
+          </div>
+        </div>
+      </section>
+
+      <hr>
+      <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/culori@4.0.2/bundled/culori.umd.js"
+    integrity="sha384-LieXRHyZ2ZIgIZXDHE7RNy5l9aOGL5GavA2Kkh5BBEj+QXDmcItcgnnSqTscoJbX"
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.5.42/vue.global.prod.min.js"
+    integrity="sha512-PREsKi18CyKMgwXMJWtvkzinqjiN0znVfDovmVadp7pKiUpyNGtq7bD2fKElDBmdfH4DGJz8pmAdgihN8NZ8TQ=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script>
+    const HAS_CULORI = typeof culori !== 'undefined';
+    const STORAGE_KEY = 'chromatic';
+    const DEFAULTS = ['#3b82f6', null, null, null];
+
+    function normalizeInput(text) {
+      const t = String(text === null || text === undefined ? '' : text).trim();
+      if (!t || !HAS_CULORI) return null;
+      const parsed = culori.parse(t);
+      if (!parsed) return null;
+      try {
+        return culori.formatHex(parsed);
+      } catch {
+        return null;
+      }
+    }
+
+    function parseURLColors() {
+      const q = new URLSearchParams(window.location.search);
+      const raw = q.get('c');
+      if (raw !== null) {
+        try {
+          const arr = JSON.parse(raw);
+          if (Array.isArray(arr)) {
+            const out = [null, null, null, null];
+            for (let i = 0; i < 4; i++) out[i] = arr[i] ? normalizeInput(arr[i]) : null;
+            return { colors: out, fromURL: true };
+          }
+        } catch { /* cae a defaults */ }
+        return { colors: DEFAULTS.slice(), fromURL: true };
+      }
+      let any = false;
+      const out = [null, null, null, null];
+      for (let i = 0; i < 4; i++) {
+        const v = q.get('c' + (i + 1));
+        if (v !== null) { any = true; out[i] = normalizeInput(v); }
+      }
+      if (any) return { colors: out, fromURL: true };
+      return null;
+    }
+
+    function readState() {
+      const fromURL = parseURLColors();
+      if (fromURL) return fromURL;
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw !== null) {
+          const arr = JSON.parse(raw);
+          if (Array.isArray(arr)) {
+            const out = [null, null, null, null];
+            for (let i = 0; i < 4; i++) out[i] = arr[i] ? normalizeInput(arr[i]) : null;
+            return { colors: out, fromURL: false };
+          }
+        }
+      } catch {
+        try { localStorage.removeItem(STORAGE_KEY); } catch {}
+      }
+      return { colors: DEFAULTS.slice(), fromURL: false };
+    }
+
+    async function copyText(text) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.setAttribute('readonly', '');
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.append(ta);
+          ta.select();
+          const ok = document.execCommand('copy');
+          ta.remove();
+          return ok;
+        } catch {
+          return false;
+        }
+      }
+    }
+
+    function clamp01(x) {
+      return Math.min(1, Math.max(0, x));
+    }
+
+    function f2(x) {
+      return (Math.round(x * 100) / 100).toFixed(2);
+    }
+
+    function oklchOf(hex) {
+      const c = culori.converter('oklch')(culori.parse(hex));
+      if (c.h === undefined || c.h === null) c.h = 0;
+      return c;
+    }
+
+    function oklchHex(l, c, h) {
+      return culori.formatHex({ mode: 'oklch', l: clamp01(l), c: Math.max(0, c), h });
+    }
+
+    function colorInfo(hex) {
+      const base = culori.parse(hex);
+      const hsl = culori.converter('hsl')(base);
+      const hsv = culori.converter('hsv')(base);
+      const oklab = culori.converter('oklab')(base);
+      const oklch = oklchOf(hex);
+      const s = (hsl.s || 0) * 100;
+      let temperatura = 'neutra';
+      if (s >= 8) {
+        const hue = ((oklch.h % 360) + 360) % 360;
+        temperatura = (hue <= 70 || hue >= 345) ? 'cálida' : 'fría';
+      }
+      return {
+        hex: culori.formatHex(base),
+        rgb: culori.formatRgb(base),
+        hsl: culori.formatHsl(base),
+        hsv: `hsv(${Math.round(hsv.h || 0)}, ${Math.round((hsv.s || 0) * 100)}%, ${Math.round((hsv.v || 0) * 100)}%)`,
+        oklab: `oklab(${f2(oklab.l)} ${f2(oklab.a)} ${f2(oklab.b)})`,
+        oklch: `oklch(${f2(oklch.l)} ${f2(oklch.c)} ${f2(oklch.h)})`,
+        luminancia: culori.wcagLuminance(base),
+        saturacion: s,
+        lightness: (hsl.l || 0) * 100,
+        temperatura
+      };
+    }
+
+    function variants(hex) {
+      const base = oklchOf(hex);
+      const out = [
+        { label: 'Más oscuro', hex: oklchHex(base.l - 0.15, base.c, base.h) },
+        { label: 'Más claro', hex: oklchHex(base.l + 0.15, base.c, base.h) },
+        { label: 'Menos saturado', hex: oklchHex(base.l, base.c * 0.4, base.h) },
+        { label: 'Más saturado', hex: oklchHex(base.l, base.c * 1.5, base.h) }
+      ];
+      [0.3, 0.45, 0.6, 0.75, 0.9].forEach((l, i) => {
+        out.push({ label: 'Mono ' + (i + 1), hex: oklchHex(l, base.c, base.h) });
+      });
+      out.push({ label: 'Tint', hex: oklchHex(base.l + (1 - base.l) * 0.4, base.c, base.h) });
+      out.push({ label: 'Shade', hex: oklchHex(base.l * 0.55, base.c, base.h) });
+      out.push({ label: 'Tone', hex: oklchHex(base.l, base.c * 0.5, base.h) });
+      return out;
+    }
+
+    function pairAnalysis(a, b) {
+      const ratio = culori.wcagContrast(a, b);
+      const distancia = culori.differenceEuclidean('oklab')(a, b);
+      const A = oklchOf(a);
+      const B = oklchOf(b);
+      let hueDiff = Math.abs(A.h - B.h) % 360;
+      if (hueDiff > 180) hueDiff = 360 - hueDiff;
+      return {
+        ratio,
+        aaN: ratio >= 4.5, aaaN: ratio >= 7,
+        aaG: ratio >= 3, aaaG: ratio >= 4.5,
+        distancia,
+        hueDiff,
+        luzDiff: Math.abs(A.l - B.l),
+        cromaDiff: Math.abs(A.c - B.c),
+        hueA: A.h, hueB: B.h,
+        relacion: distancia < 0.05 ? 'muy cercanos'
+          : hueDiff >= 165 && hueDiff <= 195 ? 'complementarios'
+          : hueDiff <= 30 ? 'análogos' : 'sin relación simple'
+      };
+    }
+
+    function pickSlide(hexes) {
+      const list = (hexes || []).filter(Boolean);
+      if (list.length < 2) return null;
+      let best = null;
+      for (let i = 0; i < list.length; i++) {
+        for (let j = i + 1; j < list.length; j++) {
+          const r = pairAnalysis(list[i], list[j]);
+          if (!best || r.ratio > best.ratio) best = { a: list[i], b: list[j], ratio: r.ratio };
+        }
+      }
+      const lumA = culori.wcagLuminance(best.a);
+      const lumB = culori.wcagLuminance(best.b);
+      const bg = lumA <= lumB ? best.a : best.b;
+      const fg = lumA <= lumB ? best.b : best.a;
+      return { bg, fg, accent: list.find(h => h !== best.a && h !== best.b) || null, ratio: best.ratio };
+    }
+
+    const app = typeof Vue === 'undefined' ? null : Vue.createApp({
+      data() {
+        const state = readState();
+        return {
+          hasCulori: HAS_CULORI,
+          colors: state.colors,
+          drafts: state.colors.map(c => c || ''),
+          errors: [null, null, null, null],
+          fromURL: state.fromURL,
+          bulk: '',
+          shareLabel: '🔗 Compartir',
+          copied: null,
+          copiedFmt: null,
+          paletteMsg: ''
+        };
+      },
+      computed: {
+        activeCount() {
+          return this.colors.filter(Boolean).length;
+        },
+        singleIndex() {
+          return this.colors.findIndex(Boolean);
+        },
+        singleHex() {
+          return this.singleIndex >= 0 ? this.colors[this.singleIndex] : null;
+        },
+        singleInfo() {
+          if (!this.singleHex || !HAS_CULORI) return null;
+          try {
+            return colorInfo(this.singleHex);
+          } catch {
+            return null;
+          }
+        },
+        infoRows() {
+          const i = this.singleInfo;
+          if (!i) return [];
+          return [
+            { label: 'HEX', value: i.hex },
+            { label: 'RGB', value: i.rgb },
+            { label: 'HSL', value: i.hsl },
+            { label: 'HSV', value: i.hsv },
+            { label: 'OKLab', value: i.oklab },
+            { label: 'OKLCH', value: i.oklch },
+            { label: 'Luminancia', value: i.luminancia.toFixed(3) },
+            { label: 'Temperatura', value: i.temperatura + ' (aprox.)' },
+            { label: 'Saturación', value: i.saturacion.toFixed(1) + '%' },
+            { label: 'Lightness', value: i.lightness.toFixed(1) + '%' }
+          ];
+        },
+        singleVariants() {
+          if (!this.singleHex || !HAS_CULORI) return [];
+          try {
+            return variants(this.singleHex);
+          } catch {
+            return [];
+          }
+        },
+        pairIdx() {
+          const out = [];
+          this.colors.forEach((c, i) => { if (c) out.push(i); });
+          return out;
+        },
+        pairInfo() {
+          if (this.pairIdx.length !== 2 || !HAS_CULORI) return null;
+          try {
+            return pairAnalysis(this.colors[this.pairIdx[0]], this.colors[this.pairIdx[1]]);
+          } catch {
+            return null;
+          }
+        },
+        pairDirs() {
+          if (this.pairIdx.length !== 2) return [];
+          const [a, b] = this.pairIdx.map(i => this.colors[i]);
+          return [
+            { label: `Color ${this.pairIdx[0] + 1} → Color ${this.pairIdx[1] + 1}`, bg: a, fg: b },
+            { label: `Color ${this.pairIdx[1] + 1} → Color ${this.pairIdx[0] + 1}`, bg: b, fg: a }
+          ];
+        },
+        distLabel() {
+          if (!this.pairInfo) return '';
+          const d = this.pairInfo.distancia;
+          return d < 0.05 ? 'muy cercanos' : d < 0.25 ? 'moderadamente diferentes' : 'claramente diferentes';
+        },
+        activeColors() {
+          const out = [];
+          this.colors.forEach((c, i) => { if (c) out.push({ hex: c, idx: i }); });
+          return out;
+        },
+        slide() {
+          if (this.activeCount < 2 || !HAS_CULORI) return null;
+          try {
+            return pickSlide(this.colors);
+          } catch {
+            return null;
+          }
+        }
+      },
+      methods: {
+        ink(hex) {
+          if (!HAS_CULORI) return 'inherit';
+          try {
+            return culori.wcagContrast(hex, '#000000') >= culori.wcagContrast(hex, '#ffffff')
+              ? '#000000' : '#ffffff';
+          } catch {
+            return 'inherit';
+          }
+        },
+        persist() {
+          if (this.fromURL) {
+            this.fromURL = false;
+          } else {
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.colors)); } catch {}
+          }
+        },
+        setSlot(i, hex) {
+          this.colors[i] = hex;
+          this.drafts[i] = hex || '';
+          this.errors[i] = null;
+          this.persist();
+        },
+        onPick(i, value) {
+          this.setSlot(i, normalizeInput(value));
+        },
+        onText(i) {
+          const v = this.drafts[i].trim();
+          if (!v) { this.setSlot(i, null); return; }
+          const hex = normalizeInput(v);
+          if (!hex) {
+            this.errors[i] = 'Color no válido (probá HEX, rgb() o hsl()).';
+            return;
+          }
+          this.setSlot(i, hex);
+        },
+        clearSlot(i) {
+          this.setSlot(i, null);
+        },
+        clearAll() {
+          this.colors = [null, null, null, null];
+          this.drafts = ['', '', '', ''];
+          this.errors = [null, null, null, null];
+          this.persist();
+        },
+        pasteMany() {
+          const parts = this.bulk.split(/[\s,;]+/).map(s => s.trim()).filter(Boolean);
+          let changed = false;
+          let slot = 0;
+          for (const p of parts) {
+            const hex = normalizeInput(p);
+            if (!hex) continue;
+            while (slot < 4 && this.colors[slot]) slot++;
+            if (slot >= 4) break;
+            this.setSlot(slot, hex);
+            slot++;
+            changed = true;
+          }
+          if (changed) this.bulk = '';
+        },
+        async copyHex(i) {
+          if (!this.colors[i]) return;
+          if (await copyText(this.colors[i])) {
+            this.copied = i;
+            setTimeout(() => { this.copied = null; }, 1500);
+          } else {
+            this.errors[i] = 'No se pudo copiar (el navegador lo bloqueó).';
+            setTimeout(() => { if (this.errors[i]) this.errors[i] = null; }, 2500);
+          }
+        },
+        async copyInfo(text, label) {
+          if (await copyText(text)) {
+            this.copiedFmt = label;
+            setTimeout(() => { this.copiedFmt = null; }, 1500);
+          } else if (this.singleIndex >= 0) {
+            this.errors[this.singleIndex] = 'No se pudo copiar (el navegador lo bloqueó).';
+          }
+        },
+        applyVariant(hex) {
+          if (this.singleIndex >= 0 && hex) this.setSlot(this.singleIndex, hex);
+        },
+        loadExample(arr) {
+          const out = [null, null, null, null];
+          for (let i = 0; i < 4 && i < arr.length; i++) out[i] = normalizeInput(arr[i]);
+          this.colors = out;
+          this.drafts = out.map(c => c || '');
+          this.errors = [null, null, null, null];
+          this.persist();
+        },
+        async copyPalette() {
+          const list = this.colors.filter(Boolean);
+          if (!list.length) {
+            this.paletteMsg = 'No hay colores para copiar.';
+            return;
+          }
+          if (await copyText(list.join(' '))) this.paletteMsg = '¡Paleta copiada!';
+          else this.paletteMsg = 'No se pudo copiar.';
+          setTimeout(() => { this.paletteMsg = ''; }, 2000);
+        },
+        share() {
+          const base = window.location.href.split('?')[0];
+          const url = `${base}?c=${encodeURIComponent(JSON.stringify(this.colors))}`;
+          copyText(url).then(ok => {
+            this.shareLabel = ok ? '¡Copiado!' : 'No se pudo copiar';
+            setTimeout(() => { this.shareLabel = '🔗 Compartir'; }, 2000);
+          });
+        },
+        reset() {
+          try { localStorage.removeItem(STORAGE_KEY); } catch {}
+          this.fromURL = false;
+          this.colors = DEFAULTS.slice();
+          this.drafts = this.colors.map(c => c || '');
+          this.errors = [null, null, null, null];
+          this.bulk = '';
+          history.replaceState(null, '', window.location.pathname);
+        }
+      }
+    });
+
+    // theme toggle: Bootstrap's native data-bs-theme, remembered per browser
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      if (app) {
+        app.mount('#app');
+      } else {
+        document.getElementById('vue-missing').classList.remove('d-none');
+      }
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

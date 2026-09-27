@@ -35,5 +35,6 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`tick`](./tick) | Cuenta atrás gigante para proyectar, que no deja dormir la pantalla. |
 | [`chromatic`](./chromatic) | Analizá colores y paletas: contraste, variantes y vista previa de diapositiva. |
 | [`image-inspector`](./image-inspector) | DevTools para imágenes: archivo, hashes, dimensiones, EXIF y más, todo local. |
+| [`fontoscope`](./fontoscope) | Cargá una fuente y mirala en todos sus tamaños, con cobertura Unicode real. |
 
 Cada carpeta tiene su propio `README.md` con el detalle de uso.

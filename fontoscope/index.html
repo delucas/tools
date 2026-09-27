@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f52d%3B%3C/text%3E%3C/svg%3E">
+  <title>Fontoscope</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    #dropzone {
+      cursor: pointer;
+      border-style: dashed;
+    }
+    #dropzone.dragging {
+      border-color: var(--bs-primary);
+      background: var(--bs-primary-bg-subtle);
+    }
+    #specimen-input {
+      font-size: 16px;
+    }
+    .size-row {
+      border-bottom: 1px solid var(--bs-border-color);
+      padding: 0.5rem 0;
+    }
+    .size-label {
+      font-family: var(--bs-font-monospace);
+      font-size: 0.8rem;
+      white-space: nowrap;
+    }
+    .specimen {
+      overflow-wrap: break-word;
+      white-space: pre-wrap;
+    }
+    .cov-track {
+      height: 0.6rem;
+      border-radius: 999px;
+      background: var(--bs-secondary-bg);
+      overflow: hidden;
+    }
+    .cov-fill {
+      height: 100%;
+      background: var(--bs-primary);
+    }
+    @media (max-width: 576px) {
+      input, textarea, select { font-size: 16px; }
+    }
+    p.signature { font-size: 0.8em; }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">🔭 Fontoscope</h1>
+        <p class="text-body-secondary mb-0">Cargá una fuente y mirala en todos sus tamaños.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div class="alert alert-info py-2" role="note">🔒 Todo se procesa en tu navegador, nada se sube.</div>
+    <div id="lib-warning" class="alert alert-danger py-2 d-none" role="alert"></div>
+
+    <section id="drop-section" class="card mb-3">
+      <div class="card-body">
+        <span class="form-label" id="dropzone-label">Fuente (.ttf, .otf, .woff, .woff2)</span>
+        <div id="dropzone" class="border rounded p-4 text-center text-body-secondary" role="button" tabindex="0" aria-labelledby="dropzone-label">
+          Arrastrá una fuente acá o tocá para elegirla
+        </div>
+        <input id="file-input" class="d-none" type="file" accept=".ttf,.otf,.woff,.woff2" multiple>
+        <div id="drop-error" class="text-danger small mt-2 d-none"></div>
+      </div>
+    </section>
+
+    <section id="result-section" class="d-none">
+      <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mb-1">
+        <h2 id="font-title" class="h4 mb-0"></h2>
+        <span id="font-meta" class="text-body-secondary small"></span>
+      </div>
+      <div id="font-badges" class="d-flex flex-wrap gap-2 mb-2"></div>
+      <div id="variant-bar" class="d-flex flex-wrap gap-2 align-items-center mb-3"></div>
+
+      <div class="card mb-3">
+        <div class="card-body">
+          <label for="specimen-input" class="form-label">Texto del specimen</label>
+          <textarea id="specimen-input" class="form-control" rows="3" spellcheck="false"></textarea>
+          <div class="d-flex flex-wrap gap-2 mt-2">
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-preset="en">English</button>
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-preset="es">Castellano</button>
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-preset="abc">Abecedario</button>
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-preset="num">Números</button>
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-preset="acc">Acentuadas</button>
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-preset="sym">Símbolos</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-body">
+          <div id="size-chips" class="d-flex flex-wrap gap-2 mb-1"></div>
+          <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+            <input id="size-add" class="form-control form-control-sm" style="max-width: 7rem;" inputmode="numeric" placeholder="+ px">
+            <button id="size-add-btn" class="btn btn-outline-secondary btn-sm" type="button">Agregar tamaño</button>
+          </div>
+          <div id="size-rows"></div>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-body">
+          <h3 class="h6">Ajustes</h3>
+          <div id="axes-controls"></div>
+          <div class="mb-2">
+            <label for="tracking" class="form-label small mb-1">Tracking <span id="tracking-val" class="font-monospace"></span></label>
+            <input id="tracking" class="form-range" type="range" min="-0.05" max="0.2" step="0.005" value="0">
+          </div>
+          <div class="mb-0">
+            <label for="leading" class="form-label small mb-1">Line height <span id="leading-val" class="font-monospace"></span></label>
+            <input id="leading" class="form-range" type="range" min="0.8" max="2" step="0.05" value="1.2">
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-body">
+          <h3 class="h6">Ficha</h3>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0"><tbody id="facts-rows"></tbody></table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-body">
+          <h3 class="h6">Cobertura Unicode <small id="cov-summary" class="text-body-secondary fw-normal"></small></h3>
+          <div id="cov-rows" class="d-grid gap-2"></div>
+        </div>
+      </div>
+    </section>
+
+    <hr>
+    <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/opentype.js@1.3.4/dist/opentype.js"
+    integrity="sha384-FlcQqLN4Tpq2TYf/0eLJG0WvCfwIqHdYMbAga3b4xRIJ9XjXeuf5K1JDdN/s33fp"
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script>
+    const HAS_OPENTYPE = typeof opentype !== 'undefined';
+    const WOFF2_URL = 'https://cdn.jsdelivr.net/npm/wawoff2@2.0.1/build/decompress_binding.js';
+    const WOFF2_SRI = 'sha384-SyYOOD4ZN4/JKhvBuL3NEccOr0/4SXH20eHO+IATCKa69DExD+YA32e/bcSN8iWD';
+    const STORAGE_KEY = 'fontoscope';
+    const ALL_SIZES = [12, 16, 24, 32, 48, 64, 96, 144];
+    const DEFAULT_SIZES = [16, 32];
+    const DEFAULT_TEXT = 'The quick brown fox jumps over the lazy dog.\nEl veloz murciélago hindú comía feliz cardillo y kiwi.';
+    const PRESETS = {
+      en: 'The quick brown fox jumps over the lazy dog.',
+      es: 'El veloz murciélago hindú comía feliz cardillo y kiwi.',
+      abc: 'Aa Bb Cc Dd Ee Ff Gg Hh Ii Jj Kk Ll Mm Nn Ññ Oo Pp Qq Rr Ss Tt Uu Vv Ww Xx Yy Zz',
+      num: '0123456789',
+      acc: 'á é í ó ú ü ñ Á É Í Ó Ú Ü Ñ ¿? ¡!',
+      sym: '! ? @ # $ % & * ( ) [ ] { } + − × ÷ = / \\ < > « » “ ” ‘ ’'
+    };
+    const BLOCKS = [
+      { name: 'Basic Latin', ranges: [[0x20, 0x7E]] },
+      { name: 'Latin-1 Supplement', ranges: [[0xA0, 0xFF]] },
+      { name: 'Latin Extended-A', ranges: [[0x100, 0x17F]] },
+      { name: 'Latin Extended-B', ranges: [[0x180, 0x24F]] },
+      { name: 'General Punctuation', ranges: [[0x2000, 0x206F]] },
+      { name: 'Currency Symbols', ranges: [[0x20A0, 0x20CF]] },
+      { name: 'Arrows', ranges: [[0x2190, 0x21FF]] },
+      { name: 'Greek', ranges: [[0x370, 0x3FF]] },
+      { name: 'Cyrillic', ranges: [[0x400, 0x4FF]] },
+      { name: 'Hebrew', ranges: [[0x590, 0x5FF]] },
+      { name: 'Arabic', ranges: [[0x600, 0x6FF]] },
+      { name: 'Devanagari', ranges: [[0x900, 0x97F]] },
+      { name: 'Math Operators', ranges: [[0x2200, 0x22FF]] },
+      { name: 'Dingbats', ranges: [[0x2700, 0x27BF]] }
+    ];
+
+    function detectFontFormat(bytes) {
+      if (!bytes || bytes.length < 4) return null;
+      const tag = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
+      if (bytes[0] === 0x00 && bytes[1] === 0x01 && bytes[2] === 0x00 && bytes[3] === 0x00) return { ext: 'ttf', label: 'TTF' };
+      if (tag === 'OTTO') return { ext: 'otf', label: 'OTF' };
+      if (tag === 'wOFF') return { ext: 'woff', label: 'WOFF' };
+      if (tag === 'wOF2') return { ext: 'woff2', label: 'WOFF2' };
+      if (tag === 'ttcf') return { ext: 'ttc', label: 'TTC' };
+      return null;
+    }
+
+    function blockCoverage(blocks, unicodes) {
+      const set = unicodes instanceof Set ? unicodes : new Set(unicodes);
+      return blocks.map(b => {
+        let total = 0, covered = 0;
+        for (const [a, z] of b.ranges) {
+          total += z - a + 1;
+          for (let cp = a; cp <= z; cp++) if (set.has(cp)) covered++;
+        }
+        return { name: b.name, covered, total, pct: total ? covered / total * 100 : 0 };
+      });
+    }
+
+    function weightName(w) {
+      const table = [[100, 'Thin'], [200, 'ExtraLight'], [300, 'Light'], [400, 'Regular'], [500, 'Medium'], [600, 'SemiBold'], [700, 'Bold'], [800, 'ExtraBold'], [900, 'Black']];
+      let best = table[0];
+      for (const row of table) {
+        if (Math.abs(w - row[0]) <= Math.abs(w - best[0])) best = row;
+      }
+      return w >= 950 ? 'Black' : best[1];
+    }
+
+    function esc(s) {
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function fmtSize(n) {
+      if (n < 1024) return `${n} B`;
+      const v = n / 1024;
+      return v < 1024 ? `${Math.round(v * 10) / 10} KB` : `${Math.round(v / 1024 * 10) / 10} MB`;
+    }
+
+    let state = null;
+    let objectURL = null;
+    let faceCounter = 0;
+    let entries = [];
+    let current = -1;
+
+    function readSettings() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const s = JSON.parse(raw);
+          return {
+            text: typeof s.text === 'string' ? s.text : DEFAULT_TEXT,
+            sizes: Array.isArray(s.sizes) && s.sizes.length ? s.sizes.filter(n => n > 0 && n <= 500) : DEFAULT_SIZES.slice(),
+            tracking: typeof s.tracking === 'number' ? s.tracking : 0,
+            leading: typeof s.leading === 'number' ? s.leading : 1.2
+          };
+        }
+      } catch { /* defaults */ }
+      return { text: DEFAULT_TEXT, sizes: DEFAULT_SIZES.slice(), tracking: 0, leading: 1.2 };
+    }
+
+    function saveSettings() {
+      if (!state) return;
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          text: state.text, sizes: state.sizes, tracking: state.tracking, leading: state.leading
+        }));
+      } catch { /* sin storage */ }
+    }
+
+    async function decompressWoff2(buffer) {
+      if (!window.Module) {
+        const ready = new Promise(res => { window.Module = { onRuntimeInitialized: res }; });
+        await new Promise((res, rej) => {
+          const s = document.createElement('script');
+          s.src = WOFF2_URL;
+          s.integrity = WOFF2_SRI;
+          s.crossOrigin = 'anonymous';
+          s.onload = res;
+          s.onerror = rej;
+          document.head.append(s);
+        });
+        await ready;
+      }
+      if (typeof window.Module.decompress !== 'function') throw new Error('woff2');
+      const out = window.Module.decompress(new Uint8Array(buffer));
+      const clean = new Uint8Array(out.length);
+      clean.set(out);
+      return clean.buffer;
+    }
+
+    function showError(msg) {
+      const box = document.getElementById('drop-error');
+      box.textContent = msg;
+      box.classList.remove('d-none');
+    }
+
+    async function analyze(file) {
+      document.getElementById('drop-error').classList.add('d-none');
+      if (state?.face) {
+        try { document.fonts.delete(state.face); } catch { /* noop */ }
+        state.face = null;
+      }
+      if (!HAS_OPENTYPE) {
+        document.getElementById('lib-warning').textContent = 'No se pudo cargar opentype.js. Revisá tu conexión y recargá.';
+        document.getElementById('lib-warning').classList.remove('d-none');
+        return;
+      }
+      const buffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      const fmt = detectFontFormat(bytes);
+      if (!fmt) { showError('Eso no parece una fuente (TTF, OTF, WOFF o WOFF2).'); return; }
+      let parseBuffer = buffer;
+      let partial = false;
+      if (fmt.ext === 'woff2') {
+        try {
+          parseBuffer = await decompressWoff2(buffer);
+        } catch {
+          partial = true;
+        }
+      }
+      let font = null;
+      if (!partial) {
+        try {
+          font = opentype.parse(parseBuffer);
+        } catch {
+          showError('No se pudo parsear la fuente (archivo corrupto o no soportado).');
+          return;
+        }
+      }
+      const settings = readSettings();
+      const family = font ? (font.names.fontFamily?.en || file.name) : file.name;
+      const sub = font ? (font.names.fontSubfamily?.en || '') : '';
+      const unicodes = new Set();
+      if (font) {
+        for (const g of Object.values(font.glyphs.glyphs)) {
+          if (g.unicode !== undefined) unicodes.add(g.unicode);
+        }
+      }
+      const axes = font?.tables?.fvar?.axes || [];
+      const instances = font?.tables?.fvar?.instances || [];
+      const os2w = font?.tables?.os2?.usWeightClass;
+      const macStyle = font?.tables?.head?.macStyle || 0;
+      const subLower = sub.toLowerCase();
+      let style = { label: 'Regular', origin: 'dato' };
+      if (macStyle & 2 || subLower.includes('italic')) style = { label: 'Italic', origin: macStyle & 2 ? 'dato' : 'inferido' };
+      else if (subLower.includes('oblique') || subLower.includes('slanted')) style = { label: 'Oblique', origin: 'inferido' };
+      else if (macStyle & 1 || subLower.includes('bold')) style = { label: 'Bold', origin: macStyle & 1 ? 'dato' : 'inferido' };
+      faceCounter++;
+      const familyTag = `Fontoscope-${faceCounter}`;
+      let face = null;
+      try {
+        face = new FontFace(familyTag, buffer, {});
+        await face.load();
+        document.fonts.add(face);
+      } catch {
+        showError('La fuente se analizó pero el navegador no pudo renderizarla.');
+      }
+      state = {
+        fileName: file.name, fileSize: file.size, fmt,
+        family, sub, style, axes, instances, os2w,
+        glyphs: font ? font.numGlyphs : null,
+        unicodes, upm: font ? font.unitsPerEm : null,
+        partial,
+        axisValues: Object.fromEntries(axes.map(a => [a.tag, a.defaultValue])),
+        text: settings.text, sizes: settings.sizes,
+        tracking: settings.tracking, leading: settings.leading,
+        familyTag, face
+      };
+      if (current >= 0 && entries[current]) entries[current].sub = sub || null;
+      render();
+      renderVariantBar();
+      document.getElementById('drop-section').classList.add('d-none');
+      document.getElementById('result-section').classList.remove('d-none');
+    }
+
+    function variationSettings() {
+      if (!state || !state.axes.length) return '';
+      return state.axes.map(a => `"${a.tag}" ${state.axisValues[a.tag]}`).join(', ');
+    }
+
+    function applySpecimen() {
+      document.querySelectorAll('#size-rows .specimen').forEach(el => {
+        el.textContent = state.text;
+        el.style.fontFamily = `'${state.familyTag}', sans-serif`;
+        el.style.fontSize = el.dataset.px + 'px';
+        el.style.letterSpacing = state.tracking + 'em';
+        el.style.lineHeight = state.leading;
+        el.style.fontVariationSettings = variationSettings() || 'normal';
+      });
+      document.getElementById('tracking-val').textContent = `${state.tracking >= 0 ? '+' : ''}${state.tracking}em`;
+      document.getElementById('leading-val').textContent = String(state.leading);
+    }
+
+    function badge(text, kind) {
+      return `<span class="badge ${kind || 'text-bg-secondary'} fw-normal">${esc(text)}</span>`;
+    }
+
+    function render() {
+      document.getElementById('font-title').textContent = state.family + (state.sub ? ` ${state.sub}` : '');
+      document.getElementById('font-meta').textContent =
+        `${state.fmt.label} · ${fmtSize(state.fileSize)}${state.axes.length ? ' · Variable' : ' · Estática'}${state.partial ? ' · análisis parcial' : ''}`;
+      const badges = [];
+      if (state.axes.length) {
+        badges.push(badge('Variable', 'text-bg-primary'));
+        badges.push(badge('Ejes: ' + state.axes.map(a => a.tag).join(' · ')));
+      } else if (state.os2w !== undefined && state.os2w !== null) {
+        badges.push(badge(`Peso ${state.os2w} ${weightName(state.os2w)} (dato)`));
+      }
+      badges.push(badge(`Estilo ${state.style.label} (${state.style.origin})`));
+      document.getElementById('font-badges').innerHTML = badges.join('');
+      const input = document.getElementById('specimen-input');
+      if (document.activeElement !== input) input.value = state.text;
+      renderSizes();
+      renderAxes();
+      document.getElementById('tracking').value = state.tracking;
+      document.getElementById('leading').value = state.leading;
+      const facts = [
+        ['Archivo', state.fileName],
+        ['Formato', `${state.fmt.label} (detectado por firma)`],
+        ['Tamaño', `${state.fileSize} bytes (${fmtSize(state.fileSize)})`],
+        ['Glyphs', state.glyphs !== null ? state.glyphs.toLocaleString('es') : 'no disponible'],
+        ['Unicode mapeados', state.unicodes.size.toLocaleString('es')],
+        ['UPM', state.upm !== null ? String(state.upm) : 'no disponible']
+      ];
+      document.getElementById('facts-rows').innerHTML = facts
+        .map(([k, v]) => `<tr><th scope="row" class="fw-semibold small" style="width: 11rem;">${esc(k)}</th><td class="small font-monospace">${esc(v)}</td></tr>`).join('');
+      const cov = blockCoverage(BLOCKS, state.unicodes);
+      const coveredBlocks = cov.filter(c => c.covered > 0).map(c => c.name);
+      document.getElementById('cov-summary').textContent =
+        `${(state.glyphs ?? 0).toLocaleString('es')} glyphs · ${state.unicodes.size.toLocaleString('es')} caracteres · ${coveredBlocks.join(' · ') || 'sin cobertura'}`;
+      document.getElementById('cov-rows').innerHTML = cov.map(c => `
+        <div>
+          <div class="d-flex justify-content-between small"><span>${esc(c.name)}</span><span class="font-monospace">${c.pct.toFixed(0)}%</span></div>
+          <div class="cov-track"><div class="cov-fill" style="width: ${c.pct.toFixed(1)}%"></div></div>
+        </div>`).join('');
+      applySpecimen();
+    }
+
+    function renderSizes() {
+      const chips = document.getElementById('size-chips');
+      chips.innerHTML = '';
+      const all = [...new Set([...ALL_SIZES, ...state.sizes])].sort((a, b) => a - b);
+      for (const px of all) {
+        const on = state.sizes.includes(px);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-sm ' + (on ? 'btn-primary' : 'btn-outline-secondary');
+        btn.textContent = px;
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        btn.addEventListener('click', () => {
+          state.sizes = on ? state.sizes.filter(s => s !== px) : [...state.sizes, px].sort((a, b) => a - b);
+          saveSettings();
+          renderSizes();
+          applySpecimen();
+        });
+        chips.append(btn);
+      }
+      const rows = document.getElementById('size-rows');
+      rows.innerHTML = '';
+      for (const px of state.sizes) {
+        const div = document.createElement('div');
+        div.className = 'size-row d-flex gap-3 align-items-baseline';
+        const label = document.createElement('span');
+        label.className = 'size-label text-body-secondary';
+        label.textContent = px + 'px';
+        const spec = document.createElement('div');
+        spec.className = 'specimen flex-grow-1';
+        spec.dataset.px = px;
+        div.append(label, spec);
+        rows.append(div);
+      }
+    }
+
+    function renderAxes() {
+      const box = document.getElementById('axes-controls');
+      box.innerHTML = '';
+      if (!state.axes.length) {
+        box.innerHTML = '<p class="text-body-secondary small mb-2">Fuente estática: sin ejes variables.</p>';
+        return;
+      }
+      for (const a of state.axes) {
+        const name = a.name?.en || a.tag;
+        const wrap = document.createElement('div');
+        wrap.className = 'mb-2';
+        const label = document.createElement('label');
+        label.className = 'form-label small mb-1';
+        const val = document.createElement('span');
+        val.className = 'font-monospace';
+        const slider = document.createElement('input');
+        slider.className = 'form-range';
+        slider.type = 'range';
+        slider.min = a.minValue;
+        slider.max = a.maxValue;
+        slider.step = a.tag === 'wght' || a.tag === 'wdth' ? 1 : 0.1;
+        slider.value = state.axisValues[a.tag];
+        const update = () => {
+          state.axisValues[a.tag] = parseFloat(slider.value);
+          val.textContent = ` ${slider.value} (default ${a.defaultValue})`;
+          applySpecimen();
+        };
+        slider.addEventListener('input', update);
+        label.textContent = `${name} `;
+        label.append(val);
+        wrap.append(label, slider);
+        const hint = document.createElement('div');
+        hint.className = 'small text-body-secondary';
+        hint.textContent = `min ${a.minValue} · max ${a.maxValue} · ${a.tag}`;
+        const named = state.instances.filter(i => i.coordinates && Object.keys(i.coordinates).length === 1 && i.coordinates[a.tag] !== undefined);
+        if (named.length) hint.textContent += ' · ' + named.map(i => `${i.name?.en}: ${i.coordinates[a.tag]}`).join(', ');
+        wrap.append(hint);
+        box.append(wrap);
+        update();
+      }
+    }
+
+    function renderVariantBar() {
+      const bar = document.getElementById('variant-bar');
+      bar.innerHTML = '';
+      if (entries.length < 2) return;
+      const label = document.createElement('span');
+      label.className = 'small text-body-secondary';
+      label.textContent = `Variantes (${entries.length}):`;
+      bar.append(label);
+      entries.forEach((entry, i) => {
+        const chip = document.createElement('span');
+        chip.className = 'btn btn-sm ' + (i === current ? 'btn-primary' : 'btn-outline-secondary');
+        chip.setAttribute('role', 'button');
+        chip.setAttribute('tabindex', '0');
+        chip.textContent = entry.sub || entry.file.name;
+        chip.title = entry.file.name;
+        const go = () => { if (i !== current) selectEntry(i); };
+        chip.addEventListener('click', go);
+        chip.addEventListener('keydown', event => {
+          if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); go(); }
+        });
+        const x = document.createElement('span');
+        x.textContent = ' ✕';
+        x.title = 'Quitar';
+        x.addEventListener('click', event => { event.stopPropagation(); removeEntry(i); });
+        chip.append(x);
+        bar.append(chip);
+      });
+    }
+
+    async function selectEntry(i) {
+      current = i;
+      await analyze(entries[i].file);
+    }
+
+    function resetAll() {
+      if (state?.face) {
+        try { document.fonts.delete(state.face); } catch { /* noop */ }
+      }
+      state = null;
+      entries = [];
+      current = -1;
+      document.getElementById('file-input').value = '';
+      document.getElementById('variant-bar').innerHTML = '';
+      document.getElementById('result-section').classList.add('d-none');
+      document.getElementById('drop-section').classList.remove('d-none');
+      document.getElementById('drop-error').classList.add('d-none');
+    }
+
+    async function removeEntry(i) {
+      entries.splice(i, 1);
+      if (!entries.length) { resetAll(); return; }
+      if (i === current) await selectEntry(Math.max(0, i - 1));
+      else {
+        if (i < current) current--;
+        renderVariantBar();
+      }
+    }
+    async function addFiles(files) {
+      const list = [...files];
+      if (!list.length) return;
+      const firstNew = entries.length;
+      for (const f of list) entries.push({ file: f, sub: null });
+      if (current < 0) {
+        await selectEntry(firstNew);
+      } else {
+        // Ya había una fuente: parsear solo los nombres para etiquetar las chips.
+        for (let i = firstNew; i < entries.length; i++) {
+          try {
+            const buf = await entries[i].file.arrayBuffer();
+            const parsed = opentype.parse(buf);
+            entries[i].sub = parsed.names.fontSubfamily?.en || null;
+          } catch { /* queda el nombre de archivo */ }
+        }
+        renderVariantBar();
+      }
+    }
+
+    (() => {
+      const settings = readSettings();
+      document.getElementById('specimen-input').value = settings.text;
+      document.getElementById('specimen-input').addEventListener('input', event => {
+        if (!state) return;
+        state.text = event.target.value;
+        saveSettings();
+        applySpecimen();
+      });
+      document.querySelectorAll('[data-preset]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const text = PRESETS[btn.getAttribute('data-preset')];
+          document.getElementById('specimen-input').value = text;
+          if (!state) return;
+          state.text = text;
+          saveSettings();
+          applySpecimen();
+        });
+      });
+      document.getElementById('tracking').addEventListener('input', event => {
+        if (!state) return;
+        state.tracking = parseFloat(event.target.value);
+        saveSettings();
+        applySpecimen();
+      });
+      document.getElementById('leading').addEventListener('input', event => {
+        if (!state) return;
+        state.leading = parseFloat(event.target.value);
+        saveSettings();
+        applySpecimen();
+      });
+      document.getElementById('size-add-btn').addEventListener('click', () => {
+        const v = parseInt(document.getElementById('size-add').value, 10);
+        if (!state || !v || v <= 0 || v > 500) return;
+        if (!state.sizes.includes(v)) state.sizes = [...state.sizes, v].sort((a, b) => a - b);
+        document.getElementById('size-add').value = '';
+        saveSettings();
+        renderSizes();
+        applySpecimen();
+      });
+      const dropzone = document.getElementById('dropzone');
+      const fileInput = document.getElementById('file-input');
+      dropzone.addEventListener('click', () => fileInput.click());
+      dropzone.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); fileInput.click(); }
+      });
+      ['dragenter', 'dragover'].forEach(ev => dropzone.addEventListener(ev, event => {
+        event.preventDefault();
+        dropzone.classList.add('dragging');
+      }));
+      ['dragleave', 'drop'].forEach(ev => dropzone.addEventListener(ev, event => {
+        event.preventDefault();
+        dropzone.classList.remove('dragging');
+      }));
+      dropzone.addEventListener('drop', event => {
+        const files = event.dataTransfer?.files;
+        if (files?.length) addFiles(files);
+      });
+      fileInput.addEventListener('change', () => {
+        if (fileInput.files.length) addFiles(fileInput.files);
+      });
+      document.getElementById('reset').addEventListener('click', resetAll);
+      if (!HAS_OPENTYPE) {
+        document.getElementById('lib-warning').textContent = 'No se pudo cargar opentype.js. Revisá tu conexión y recargá.';
+        document.getElementById('lib-warning').classList.remove('d-none');
+      }
+    })();
+
+    // theme toggle: Bootstrap's native data-bs-theme, remembered per browser
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

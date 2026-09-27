@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f5bc%3B%3C/text%3E%3C/svg%3E">
+  <title>Image Inspector</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    #dropzone {
+      cursor: pointer;
+      border-style: dashed;
+    }
+    #dropzone.dragging {
+      border-color: var(--bs-primary);
+      background: var(--bs-primary-bg-subtle);
+    }
+    #preview {
+      max-height: 320px;
+      max-width: 100%;
+      object-fit: contain;
+    }
+    .mono {
+      font-family: var(--bs-font-monospace);
+      font-size: 0.8rem;
+      word-break: break-all;
+    }
+    .raw-scroll {
+      max-height: 240px;
+      overflow: auto;
+    }
+    #thumb {
+      max-height: 120px;
+      max-width: 100%;
+      object-fit: contain;
+    }
+    details.card summary {
+      cursor: pointer;
+      list-style: none;
+    }
+    details.card summary::-webkit-details-marker {
+      display: none;
+    }
+    details.card summary::before {
+      content: '▸ ';
+    }
+    details.card[open] summary::before {
+      content: '▾ ';
+    }
+    @media (max-width: 576px) {
+      input, textarea, select { font-size: 16px; }
+    }
+    p.signature { font-size: 0.8em; }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">🖼️ Image Inspector</h1>
+        <p class="text-body-secondary mb-0">DevTools para archivos de imagen: todo se analiza en tu navegador, nada se sube.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div class="alert alert-info py-2" role="note">🔒 Análisis 100% local: el archivo nunca sale de tu navegador.</div>
+    <div id="lib-warning" class="alert alert-danger py-2 d-none" role="alert">
+      No se pudo cargar el lector de metadatos (exifr). Se mostrará solo información básica del archivo.
+    </div>
+
+    <section id="drop-section" class="card mb-3">
+      <div class="card-body">
+        <span class="form-label" id="dropzone-label">Imagen</span>
+        <div id="dropzone" class="border rounded p-4 text-center text-body-secondary" role="button" tabindex="0" aria-labelledby="dropzone-label">
+          Arrastrá una imagen acá o tocá para elegirla
+        </div>
+        <input id="file-input" class="d-none" type="file" accept="image/*">
+        <div id="drop-error" class="text-danger small mt-2 d-none"></div>
+      </div>
+    </section>
+
+    <section id="result-section" class="d-none">
+      <div class="card mb-3">
+        <div class="card-body text-center">
+          <img id="preview" class="rounded border" alt="Vista previa de la imagen analizada">
+          <div id="thumb-wrap" class="mt-2 d-none">
+            <div class="small text-body-secondary mb-1">Thumbnail embebido</div>
+            <img id="thumb" class="rounded border" alt="Thumbnail embebido en los metadatos">
+          </div>
+        </div>
+      </div>
+
+      <div id="sections"></div>
+
+      <div class="d-flex flex-wrap gap-2 mb-4">
+        <button id="copy-json" class="btn btn-outline-secondary btn-sm" type="button">📋 Copiar todo como JSON</button>
+        <button id="download-json" class="btn btn-outline-secondary btn-sm" type="button">💾 Descargar JSON</button>
+        <button id="another" class="btn btn-outline-secondary btn-sm" type="button">🖼️ Analizar otra imagen</button>
+        <span id="json-msg" class="small text-body-secondary align-self-center"></span>
+      </div>
+    </section>
+
+    <hr>
+    <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js"
+    integrity="sha384-KrOocIA+lZcNUz2MDavnT/FuX+CbTREJihUi0bp8QUSwhE2AkGTNpv2b7yMbBkx5"
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script>
+    const HAS_EXIFR = typeof exifr !== 'undefined';
+
+    function detectFormat(bytes) {
+      if (!bytes || bytes.length < 4) return null;
+      const head = (n) => Array.from(bytes.slice(0, n)).map(x => x.toString(16).padStart(2, '0')).join(' ');
+      const h8 = head(12);
+      if (h8.startsWith('89 50 4e 47 0d 0a 1a 0a')) return { ext: 'png', mime: 'image/png' };
+      if (h8.startsWith('ff d8 ff')) return { ext: 'jpg', mime: 'image/jpeg' };
+      if (h8.startsWith('47 49 46 38')) return { ext: 'gif', mime: 'image/gif' };
+      if (h8.startsWith('52 49 46 46') && h8.slice(24).startsWith('57 45 42 50')) return { ext: 'webp', mime: 'image/webp' };
+      if (h8.startsWith('42 4d')) return { ext: 'bmp', mime: 'image/bmp' };
+      if (h8.startsWith('49 49 2a 00') || h8.startsWith('4d 4d 00 2a')) return { ext: 'tif', mime: 'image/tiff' };
+      if (h8.startsWith('00 00 01 00')) return { ext: 'ico', mime: 'image/x-icon' };
+      if (bytes.length >= 12 && h8.slice(12, 23) === '66 74 79 70') {
+        const brand = String.fromCharCode(...bytes.slice(8, 12));
+        if (brand === 'avif') return { ext: 'avif', mime: 'image/avif' };
+        return { ext: 'heif', mime: 'image/heif' };
+      }
+      if (bytes.length >= 132) {
+        const tag = String.fromCharCode(...bytes.slice(128, 132));
+        if (tag === 'DICM') return { ext: 'dcm', mime: 'application/dicom' };
+      }
+      return null;
+    }
+
+    function fmtSize(n) {
+      if (n < 1024) return `${n} B`;
+      const units = ['KB', 'MB', 'GB'];
+      let v = n / 1024;
+      let u = 0;
+      while (v >= 1024 && u < units.length - 1) { v /= 1024; u++; }
+      return `${Math.round(v * 10) / 10} ${units[u]}`;
+    }
+
+    function gcd(a, b) {
+      return b ? gcd(b, a % b) : a;
+    }
+
+    function aspect(w, h) {
+      if (!w || !h) return '—';
+      const d = gcd(w, h);
+      return `${w / d}:${h / d}`;
+    }
+
+    function effectiveDims(w, h, orientation) {
+      const o = parseInt(orientation, 10);
+      if (w && h && o >= 5 && o <= 8) return { w: h, h: w };
+      return { w: w || null, h: h || null };
+    }
+
+    function normMime(m) {
+      m = String(m || '').toLowerCase().trim();
+      if (m === 'image/jpg') return 'image/jpeg';
+      if (m === 'image/tif') return 'image/tiff';
+      return m;
+    }
+
+    function mimeMismatch(declared, detected) {
+      if (!declared || !detected) return false;
+      return normMime(declared) !== normMime(detected.mime);
+    }
+
+    function osmLink(lat, lon) {
+      if (typeof lat !== 'number' || typeof lon !== 'number' || isNaN(lat) || isNaN(lon)) return null;
+      return `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=15/${lat}/${lon}`;
+    }
+
+    function extractXmpRaw(bytes) {
+      try {
+        const text = new TextDecoder('utf-8', { fatal: false }).decode(bytes.slice(0, Math.min(bytes.length, 2000000)));
+        const start = text.indexOf('<x:xmpmeta');
+        const end = text.indexOf('</x:xmpmeta>');
+        if (start < 0 || end < 0) return null;
+        return text.slice(start, end + '</x:xmpmeta>'.length);
+      } catch {
+        return null;
+      }
+    }
+
+    function printableStrings(bytes, minLen, maxCount) {
+      minLen = minLen || 5;
+      maxCount = maxCount || 300;
+      let text = '';
+      try {
+        text = new TextDecoder('latin1').decode(bytes.slice(0, Math.min(bytes.length, 3000000)));
+      } catch {
+        return [];
+      }
+      const re = new RegExp(`[\\x20-\\x7E]{${minLen},}`, 'g');
+      const seen = new Set();
+      const out = [];
+      let m;
+      while ((m = re.exec(text)) !== null && out.length < maxCount) {
+        if (!seen.has(m[0])) { seen.add(m[0]); out.push(m[0]); }
+      }
+      return out;
+    }
+
+    function pngChunks(bytes) {
+      const sig = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+      if (bytes.length < 8 || !sig.every((b, i) => bytes[i] === b)) return null;
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      const chunks = [];
+      let pos = 8;
+      while (pos + 8 <= bytes.length) {
+        const len = view.getUint32(pos);
+        const type = String.fromCharCode(bytes[pos + 4], bytes[pos + 5], bytes[pos + 6], bytes[pos + 7]);
+        chunks.push({ type, offset: pos, length: len + 12 });
+        pos += 12 + len;
+        if (type === 'IEND' || chunks.length > 200) break;
+      }
+      return chunks;
+    }
+
+    const JPEG_MARKERS = { D8: 'SOI', D9: 'EOI', '01': 'TEM', DA: 'SOS', FE: 'COM', DB: 'DQT', C4: 'DHT', DD: 'DRI' };
+
+    function jpegMarkerName(code) {
+      const hex = code.toString(16).toUpperCase().padStart(2, '0');
+      if (JPEG_MARKERS[hex]) return JPEG_MARKERS[hex];
+      if (hex >= 'E0' && hex <= 'EF') return 'APP' + (code - 0xE0);
+      if (hex >= 'C0' && hex <= 'CF') return 'SOF' + (code - 0xC0);
+      if (hex >= 'D0' && hex <= 'D7') return 'RST' + (code - 0xD0);
+      return 'MK_' + hex;
+    }
+
+    function jpegMarkers(bytes) {
+      if (bytes.length < 4 || bytes[0] !== 0xFF || bytes[1] !== 0xD8) return null;
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      const segs = [{ marker: 'SOI', offset: 0, length: 2 }];
+      let pos = 2;
+      while (pos + 4 <= bytes.length && segs.length < 200) {
+        if (bytes[pos] !== 0xFF) break;
+        let code = bytes[pos + 1];
+        while (code === 0xFF && pos + 4 <= bytes.length) { pos++; code = bytes[pos + 1]; }
+        const name = jpegMarkerName(code);
+        if (code === 0xD8 || code === 0xD9 || code === 0x01 || (code >= 0xD0 && code <= 0xD7)) {
+          segs.push({ marker: name, offset: pos, length: 2 });
+          pos += 2;
+          continue;
+        }
+        const len = view.getUint16(pos + 2);
+        if (len < 2 || pos + 2 + len > bytes.length + 2) break;
+        segs.push({ marker: name, offset: pos, length: len + 2 });
+        pos += 2 + len;
+        if (code === 0xDA) {
+          segs.push({ marker: 'SCAN', offset: pos, length: bytes.length - pos - 2 });
+          break;
+        }
+      }
+      let eoi = -1;
+      for (let i = bytes.length - 2; i >= 0; i--) {
+        if (bytes[i] === 0xFF && bytes[i + 1] === 0xD9) { eoi = i; break; }
+      }
+      if (eoi >= 0) segs.push({ marker: 'EOI', offset: eoi, length: 2 });
+      return segs;
+    }
+
+    function colorSummary(ext, ihdr) {
+      ihdr = ihdr || {};
+      const bit = ihdr.BitDepth !== undefined ? ihdr.BitDepth : '—';
+      if (ext === 'png') {
+        const ct = String(ihdr.ColorType || '');
+        if (ct.includes('Alpha')) return { canales: ct.startsWith('Gray') ? 2 : 4, bits: bit, alpha: 'sí', modelo: ct };
+        if (ct.includes('Palette')) return { canales: 1, bits: bit, alpha: 'posible (tRNS)', modelo: 'paleta' };
+        if (ct.includes('Gray')) return { canales: 1, bits: bit, alpha: 'no', modelo: 'gris' };
+        return { canales: 3, bits: bit, alpha: 'no', modelo: 'RGB' };
+      }
+      if (ext === 'jpg') return { canales: 3, bits: 8, alpha: 'no', modelo: 'YCbCr' };
+      if (ext === 'gif') return { canales: 1, bits: 8, alpha: 'binaria (1 bit)', modelo: 'paleta' };
+      if (ext === 'webp') return { canales: '3 o 4', bits: 8, alpha: 'posible', modelo: 'VP8' };
+      if (ext === 'bmp') return { canales: 3, bits: bit, alpha: 'no', modelo: 'RGB' };
+      return null;
+    }
+
+    function fmtValue(v) {
+      if (v === null || v === undefined) return '—';
+      if (v instanceof Uint8Array) {
+        const hex = Array.from(v.slice(0, 16)).map(x => x.toString(16).padStart(2, '0')).join(' ');
+        return v.length > 16 ? `${hex} … (${v.length} bytes)` : `${hex} (${v.length} bytes)`;
+      }
+      if (v instanceof Date) return v.toISOString();
+      if (typeof v === 'object') {
+        try { return JSON.stringify(v); } catch { return String(v); }
+      }
+      return String(v);
+    }
+
+    function esc(s) {
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    async function copyText(text) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.setAttribute('readonly', '');
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.append(ta);
+          ta.select();
+          const ok = document.execCommand('copy');
+          ta.remove();
+          return ok;
+        } catch {
+          return false;
+        }
+      }
+    }
+
+    let report = null;
+    let objectURL = null;
+    let thumbURL = null;
+
+    function rowHTML(label, value, declared, raw) {
+      return `<tr><th scope="row" class="fw-semibold small" style="width: 11rem;">${esc(label)}${declared ? ' <span class="badge text-bg-secondary fw-normal">declarado</span>' : ''}</th>` +
+        `<td class="small mono">${raw ? value : esc(value)}</td>` +
+        `<td class="text-end" style="width: 5.5rem;">${raw ? '' : `<button class="btn btn-outline-secondary btn-sm py-0" type="button" data-copy="${esc(value)}">Copiar</button>`}</td></tr>`;
+    }
+
+    function sectionHTML(id, title, rows, emptyText) {
+      const body = rows.length
+        ? `<div class="table-responsive"><table class="table table-sm align-middle mb-0"><tbody>${rows.join('')}</tbody></table></div>`
+        : `<p class="text-body-secondary small mb-0">${esc(emptyText || 'Sin información.')}</p>`;
+      const copyBtn = rows.length
+        ? `<button class="btn btn-outline-secondary btn-sm mt-2" type="button" data-copy-section="${id}">Copiar sección</button>` : '';
+      return `<details class="card mb-3" open><summary class="card-header fw-semibold">${esc(title)}</summary><div class="card-body">${body}${copyBtn}</div></details>`;
+    }
+
+    function render() {
+      const box = document.getElementById('sections');
+      const { file, image, metadata, format, structure } = report;
+      const fileRows = [
+        rowHTML('Nombre', file.name, true),
+        rowHTML('Extensión', file.extension, true),
+        rowHTML('MIME declarado', file.mimeDeclared, true),
+        rowHTML('MIME detectado', file.mimeDetected || 'no detectado'),
+        ...(file.mismatch ? [rowHTML('⚠ Aviso', 'El MIME declarado no coincide con la firma detectada.')] : []),
+        rowHTML('Tamaño exacto', `${file.size} bytes`),
+        rowHTML('Tamaño legible', file.sizeHuman),
+        rowHTML('Modificado', file.modifiedLocale, true),
+        rowHTML('Modificado (ISO)', file.modifiedISO, true),
+        rowHTML('SHA-256', file.hashes.sha256 || 'no disponible'),
+        rowHTML('SHA-384', file.hashes.sha384 || 'no disponible'),
+        rowHTML('SHA-512', file.hashes.sha512 || 'no disponible'),
+        rowHTML('SHA-1', file.hashes.sha1 || 'no disponible'),
+        rowHTML('Magic bytes', file.magic)
+      ];
+      const imageRows = [
+        rowHTML('Ancho', image.width !== null ? `${image.width} px` : 'no disponible'),
+        rowHTML('Alto', image.height !== null ? `${image.height} px` : 'no disponible'),
+        rowHTML('Relación de aspecto', image.aspect),
+        rowHTML('Píxeles totales', image.pixels !== null ? image.pixels.toLocaleString('es') : 'no disponible'),
+        rowHTML('Orientación EXIF', image.orientation || 'sin dato'),
+        rowHTML('Dimensiones efectivas', image.effW && image.effH ? `${image.effW} × ${image.effH} px` : '—'),
+        ...(image.color ? [
+          rowHTML('Modelo de color', String(image.color.modelo)),
+          rowHTML('Canales', String(image.color.canales)),
+          rowHTML('Bits por canal', String(image.color.bits)),
+          rowHTML('Alpha', String(image.color.alpha))
+        ] : [])
+      ].concat(image.extra.map(e => rowHTML(e[0], e[1])));
+      const blockName = { exif: 'EXIF', gps: 'EXIF · GPS', xmp: 'XMP', iptc: 'IPTC', icc: 'ICC' };
+      let html = sectionHTML('file', 'ARCHIVO', fileRows)
+        + sectionHTML('image', 'IMAGEN', imageRows);
+      for (const [key, obj] of Object.entries(metadata)) {
+        const rows = Object.entries(obj).map(([k, v]) => rowHTML(k, fmtValue(v)));
+        if (key === 'exif' && report.mapLink) {
+          rows.push(rowHTML('Mapa', `<a href="${report.mapLink}" target="_blank" rel="noopener">Ver ubicación en OpenStreetMap</a>`, false, true));
+        }
+        const title = blockName[key] || key.toUpperCase();
+        html += sectionHTML('meta-' + key, title, rows, 'No metadata found: el archivo no trae este bloque.');
+      }
+      if (report.structure.items) {
+        const srows = report.structure.items.map(it =>
+          `<tr><td class="small mono">${esc(it.name)}</td><td class="small mono">offset ${it.offset}</td><td class="small mono">${it.length} bytes</td></tr>`).join('');
+        html += `<details class="card mb-3"><summary class="card-header fw-semibold">ESTRUCTURA (${esc(report.structure.kind)})</summary>` +
+          `<div class="card-body"><div class="table-responsive"><table class="table table-sm align-middle mb-0"><tbody>${srows}</tbody></table></div></div></details>`;
+      }
+      if (report.raw.xmp || report.raw.strings.length) {
+        let rawBody = '';
+        if (report.raw.xmp) {
+          rawBody += `<div class="fw-semibold small mb-1">XMP crudo (${report.raw.xmp.length} caracteres)</div>` +
+            `<pre class="mono raw-scroll border rounded p-2">${esc(report.raw.xmp.slice(0, 4000))}${report.raw.xmp.length > 4000 ? '\n… (truncado en vista, completo al copiar)' : ''}</pre>` +
+            `<button class="btn btn-outline-secondary btn-sm mt-1 mb-3" type="button" data-copy-raw="xmp">Copiar XMP crudo</button>`;
+        }
+        rawBody += `<div class="fw-semibold small mb-1">Strings detectadas (${report.raw.strings.length})</div>` +
+          `<pre class="mono raw-scroll border rounded p-2">${esc(report.raw.strings.join('\n'))}</pre>`;
+        html += `<details class="card mb-3"><summary class="card-header fw-semibold">RAW</summary><div class="card-body">${rawBody}</div></details>`;
+      }
+      box.innerHTML = html;
+      box.querySelectorAll('[data-copy]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const ok = await copyText(btn.getAttribute('data-copy'));
+          btn.textContent = ok ? '¡Copiado!' : 'Error';
+          setTimeout(() => { btn.textContent = 'Copiar'; }, 1500);
+        });
+      });
+      box.querySelectorAll('[data-copy-section]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = btn.getAttribute('data-copy-section');
+          const data = id === 'file' ? report.file : id === 'image' ? report.image : report.metadata[id.slice(5)];
+          const ok = await copyText(JSON.stringify(data, null, 2));
+          btn.textContent = ok ? '¡Copiado!' : 'Error';
+          setTimeout(() => { btn.textContent = 'Copiar sección'; }, 1500);
+        });
+      });
+      box.querySelectorAll('[data-copy-raw]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const ok = report.raw.xmp && await copyText(report.raw.xmp);
+          btn.textContent = ok ? '¡Copiado!' : 'Error';
+          setTimeout(() => { btn.textContent = 'Copiar XMP crudo'; }, 1500);
+        });
+      });
+      const thumbWrap = document.getElementById('thumb-wrap');
+      if (thumbURL) {
+        document.getElementById('thumb').src = thumbURL;
+        thumbWrap.classList.remove('d-none');
+      } else {
+        document.getElementById('thumb').removeAttribute('src');
+        thumbWrap.classList.add('d-none');
+      }
+      // JSON interno para copiar/descargar (no se muestra como sección: ya está todo arriba).
+      report._json = { file: report.file, image: { ...report.image, extra: undefined }, metadata: report.metadata, format: report.format, structure: report.structure, raw: report.raw, map: report.mapLink };
+    }
+
+    async function shaHex(buffer, algo) {
+      const digest = await crypto.subtle.digest(algo, buffer);
+      return Array.from(new Uint8Array(digest)).map(x => x.toString(16).padStart(2, '0')).join('');
+    }
+
+    async function analyze(file) {
+      const errBox = document.getElementById('drop-error');
+      errBox.classList.add('d-none');
+      const buffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      const detected = detectFormat(bytes);
+      if (!file.type.startsWith('image/') && !detected) {
+        errBox.textContent = 'Eso no parece una imagen (MIME y firma desconocidos).';
+        errBox.classList.remove('d-none');
+        return;
+      }
+      const magic = Array.from(bytes.slice(0, 16)).map(x => x.toString(16).padStart(2, '0')).join(' ');
+      let hashes = { sha1: null, sha256: null, sha384: null, sha512: null };
+      if (crypto?.subtle) {
+        try {
+          [hashes.sha1, hashes.sha256, hashes.sha384, hashes.sha512] = await Promise.all([
+            shaHex(buffer, 'SHA-1'), shaHex(buffer, 'SHA-256'), shaHex(buffer, 'SHA-384'), shaHex(buffer, 'SHA-512')
+          ]);
+        } catch { /* deja nulls */ }
+      }
+      let width = null, height = null;
+      try {
+        const bmp = await createImageBitmap(file);
+        width = bmp.width;
+        height = bmp.height;
+        bmp.close();
+      } catch { /* fallback abajo */ }
+      let blocks = {};
+      if (HAS_EXIFR) {
+        try {
+          blocks = await exifr.parse(file, { mergeOutput: false }) || {};
+        } catch { blocks = {}; }
+      } else {
+        document.getElementById('lib-warning').classList.remove('d-none');
+      }
+      const groups = { exif: {}, xmp: {}, iptc: {}, icc: {}, other: {} };
+      for (const [key, obj] of Object.entries(blocks)) {
+        if (!obj || typeof obj !== 'object') continue;
+        if (key === 'exif' || key === 'gps') Object.assign(groups.exif, obj);
+        else if (key === 'xmp') Object.assign(groups.xmp, obj);
+        else if (key === 'iptc') Object.assign(groups.iptc, obj);
+        else if (key === 'icc') Object.assign(groups.icc, obj);
+        else if (key !== 'ihdr') groups.other[key] = obj;
+      }
+      const ihdr = blocks.ihdr && typeof blocks.ihdr === 'object' ? blocks.ihdr : {};
+      if (width === null && ihdr.ImageWidth) { width = ihdr.ImageWidth; height = ihdr.ImageHeight || null; }
+      const extra = Object.entries(ihdr)
+        .filter(([k]) => k !== 'ImageWidth' && k !== 'ImageHeight')
+        .map(([k, v]) => [k, fmtValue(v)]);
+      const orientation = groups.exif.Orientation !== undefined ? String(groups.exif.Orientation) : null;
+      const eff = effectiveDims(width, height, orientation);
+      const nameParts = file.name.split('.');
+      const mismatch = mimeMismatch(file.type, detected);
+      let structItems = null, structKind = null;
+      if (detected && detected.ext === 'png') {
+        const chunks = pngChunks(bytes);
+        if (chunks) { structKind = 'chunks PNG'; structItems = chunks.map(c => ({ name: c.type, offset: c.offset, length: c.length })); }
+      } else if (detected && detected.ext === 'jpg') {
+        const segs = jpegMarkers(bytes);
+        if (segs) { structKind = 'segmentos JPEG'; structItems = segs.map(s => ({ name: s.marker, offset: s.offset, length: s.length })); }
+      }
+      let mapLink = null;
+      if (typeof groups.exif.latitude === 'number' && typeof groups.exif.longitude === 'number') {
+        mapLink = osmLink(groups.exif.latitude, groups.exif.longitude);
+      }
+      if (thumbURL) { URL.revokeObjectURL(thumbURL); thumbURL = null; }
+      if (HAS_EXIFR) {
+        try {
+          const thumb = await exifr.thumbnail(file);
+          if (thumb) thumbURL = URL.createObjectURL(new Blob([thumb], { type: 'image/jpeg' }));
+        } catch { /* sin thumbnail */ }
+      }
+      report = {
+        file: {
+          name: file.name,
+          extension: nameParts.length > 1 ? nameParts.pop().toLowerCase() : '(sin extensión)',
+          mimeDeclared: file.type || '(vacío)',
+          mimeDetected: detected ? `${detected.mime} (.${detected.ext})` : null,
+          mismatch,
+          size: file.size,
+          sizeHuman: fmtSize(file.size),
+          modifiedISO: new Date(file.lastModified).toISOString(),
+          modifiedLocale: new Date(file.lastModified).toLocaleString('es'),
+          hashes,
+          magic: magic || '(vacío)'
+        },
+        image: {
+          width, height,
+          aspect: width && height ? aspect(width, height) : '—',
+          pixels: width && height ? width * height : null,
+          orientation,
+          effW: eff.w, effH: eff.h,
+          color: detected ? colorSummary(detected.ext, ihdr) : null,
+          extra
+        },
+        metadata: {
+          ...(Object.keys(groups.exif).length ? { exif: groups.exif } : {}),
+          ...(Object.keys(groups.xmp).length ? { xmp: groups.xmp } : {}),
+          ...(Object.keys(groups.iptc).length ? { iptc: groups.iptc } : {}),
+          ...(Object.keys(groups.icc).length ? { icc: groups.icc } : {}),
+          ...groups.other
+        },
+        format: { detected: detected, declared: file.type || null },
+        structure: { signature: magic, detectedFormat: detected, kind: structKind, items: structItems },
+        raw: { xmp: extractXmpRaw(bytes), strings: printableStrings(bytes) },
+        mapLink
+      };
+      if (objectURL) URL.revokeObjectURL(objectURL);
+      objectURL = URL.createObjectURL(file);
+      document.getElementById('preview').src = objectURL;
+      render();
+      document.getElementById('drop-section').classList.add('d-none');
+      document.getElementById('result-section').classList.remove('d-none');
+    }
+
+    function resetAll() {
+      report = null;
+      if (objectURL) { URL.revokeObjectURL(objectURL); objectURL = null; }
+      if (thumbURL) { URL.revokeObjectURL(thumbURL); thumbURL = null; }
+      document.getElementById('file-input').value = '';
+      document.getElementById('preview').removeAttribute('src');
+      document.getElementById('sections').innerHTML = '';
+      document.getElementById('drop-error').classList.add('d-none');
+      document.getElementById('result-section').classList.add('d-none');
+      document.getElementById('drop-section').classList.remove('d-none');
+    }
+
+    (() => {
+      const dropzone = document.getElementById('dropzone');
+      const fileInput = document.getElementById('file-input');
+      dropzone.addEventListener('click', () => fileInput.click());
+      dropzone.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); fileInput.click(); }
+      });
+      ['dragenter', 'dragover'].forEach(ev => dropzone.addEventListener(ev, event => {
+        event.preventDefault();
+        dropzone.classList.add('dragging');
+      }));
+      ['dragleave', 'drop'].forEach(ev => dropzone.addEventListener(ev, event => {
+        event.preventDefault();
+        dropzone.classList.remove('dragging');
+      }));
+      dropzone.addEventListener('drop', event => {
+        const f = event.dataTransfer?.files?.[0];
+        if (f) analyze(f);
+      });
+      fileInput.addEventListener('change', () => {
+        if (fileInput.files[0]) analyze(fileInput.files[0]);
+      });
+      document.getElementById('reset').addEventListener('click', resetAll);
+      document.getElementById('another').addEventListener('click', resetAll);
+      document.getElementById('copy-json').addEventListener('click', async () => {
+        const msg = document.getElementById('json-msg');
+        const ok = report && await copyText(JSON.stringify(report._json, null, 2));
+        msg.textContent = ok ? '¡Copiado!' : 'No se pudo copiar.';
+        setTimeout(() => { msg.textContent = ''; }, 2000);
+      });
+      document.getElementById('download-json').addEventListener('click', () => {
+        if (!report) return;
+        const blob = new Blob([JSON.stringify(report._json, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = (report.file.name || 'imagen') + '.inspector.json';
+        document.body.append(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      });
+      if (!crypto?.subtle) {
+        document.getElementById('lib-warning').textContent = 'Tu navegador no permite crypto.subtle acá: los hashes SHA no estarán disponibles (probá en https o localhost).';
+        document.getElementById('lib-warning').classList.remove('d-none');
+      }
+    })();
+
+    // theme toggle: Bootstrap's native data-bs-theme, remembered per browser
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

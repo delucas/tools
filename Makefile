@@ -1,4 +1,4 @@
-PORT ?= 4000
+PORT ?= 5050
 
 .DEFAULT_GOAL := help
 

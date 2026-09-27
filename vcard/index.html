@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1faaa%3B%3C/text%3E%3C/svg%3E">
+  <title>VCard</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    #preview {
+      font-family: var(--bs-font-monospace);
+      font-size: 0.8rem;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    @media (max-width: 576px) {
+      input { font-size: 16px; }
+    }
+    p.signature { font-size: 0.8em; }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">🪪 VCard</h1>
+        <p class="text-body-secondary mb-0">Tu tarjeta laboral: descargala o mostrala como QR para que la escaneen.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="share" class="btn btn-outline-secondary btn-sm" type="button">🔗 Compartir</button>
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+    <hr>
+
+    <div class="row g-4">
+      <div class="col-12 col-lg-5">
+        <div class="mb-2">
+          <label for="f-nombre" class="form-label">Nombre</label>
+          <input id="f-nombre" class="form-control" type="text" placeholder="Ada" autocomplete="off">
+        </div>
+        <div class="mb-2">
+          <label for="f-apellido" class="form-label">Apellido</label>
+          <input id="f-apellido" class="form-control" type="text" placeholder="Lovelace" autocomplete="off">
+        </div>
+        <div class="mb-2">
+          <label for="f-empresa" class="form-label">Empresa</label>
+          <input id="f-empresa" class="form-control" type="text" placeholder="Analytical Engines" autocomplete="off">
+        </div>
+        <div class="mb-2">
+          <label for="f-cargo" class="form-label">Cargo</label>
+          <input id="f-cargo" class="form-control" type="text" placeholder="Matemática" autocomplete="off">
+        </div>
+        <div class="mb-2">
+          <label for="f-telefono" class="form-label">Teléfono</label>
+          <input id="f-telefono" class="form-control" type="tel" inputmode="tel" placeholder="+54 11 1234 5678" autocomplete="off">
+        </div>
+        <div class="mb-2">
+          <label for="f-email" class="form-label">Email</label>
+          <input id="f-email" class="form-control" type="email" inputmode="email" placeholder="ada@ejemplo.com" autocomplete="off">
+        </div>
+        <div class="mb-2">
+          <label for="f-web" class="form-label">Web</label>
+          <input id="f-web" class="form-control" type="text" inputmode="url" placeholder="ejemplo.com" autocomplete="off">
+        </div>
+        <div class="mb-2">
+          <label for="f-instagram" class="form-label">Instagram</label>
+          <input id="f-instagram" class="form-control" type="text" placeholder="usuario o URL" autocomplete="off">
+        </div>
+        <div class="mb-2">
+          <label for="f-twitter" class="form-label">Twitter / X</label>
+          <input id="f-twitter" class="form-control" type="text" placeholder="usuario o URL" autocomplete="off">
+        </div>
+      </div>
+
+      <div class="col-12 col-lg-7">
+        <span class="form-label">Vista previa</span>
+        <div id="preview" class="border rounded p-3 mb-3" aria-live="polite"></div>
+        <div class="d-flex flex-wrap gap-2">
+          <button id="copy" class="btn btn-outline-secondary btn-sm" type="button">📋 Copiar vCard</button>
+          <button id="download" class="btn btn-outline-secondary btn-sm" type="button">⬇️ Descargar .vcf</button>
+          <a id="qr-link" class="btn btn-primary btn-sm" href="../qrlabs/">📱 Abrir en QRlabs</a>
+          <button id="save" class="btn btn-outline-secondary btn-sm" type="button">💾 Guardar</button>
+          <button id="new" class="btn btn-outline-secondary btn-sm" type="button">➕ Nueva</button>
+        </div>
+        <p class="text-body-secondary small mt-2 mb-0">Completá al menos un campo para activar los botones.</p>
+
+        <section class="mt-3" aria-label="vCards guardadas">
+          <h2 class="h6 mb-2">🗂️ Guardadas</h2>
+          <p id="saved-empty" class="text-body-secondary small">Todavía no guardaste ninguna. Se guardan en tu navegador.</p>
+          <div id="saved-list" class="list-group"></div>
+        </section>
+      </div>
+    </div>
+
+    <hr>
+    <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'vcard';
+      const FIELDS = ['nombre', 'apellido', 'empresa', 'cargo', 'telefono', 'email', 'web', 'instagram', 'twitter'];
+      const DEFAULTS = Object.fromEntries(FIELDS.map(k => [k, '']));
+
+      function escVCard(s) {
+        return String(s).replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/;/g, '\\;').replace(/,/g, '\\,');
+      }
+
+      function normUrl(u) {
+        const t = String(u || '').trim();
+        if (!t) return '';
+        return /^[a-z][a-z0-9+.-]*:/i.test(t) ? t : `https://${t}`;
+      }
+
+      function socialUrl(input, domain) {
+        const t = String(input || '').trim().replace(/^@/, '');
+        if (!t) return '';
+        if (/^https?:\/\//i.test(t) || t.includes('/')) return normUrl(t);
+        return `https://${domain}/${t}`;
+      }
+
+      function buildVCard(f) {
+        f = f || {};
+        const nombre = (f.nombre || '').trim();
+        const apellido = (f.apellido || '').trim();
+        const lines = ['BEGIN:VCARD', 'VERSION:3.0'];
+        if (apellido) lines.push(`N:${escVCard(apellido)};${escVCard(nombre)};;;`);
+        const fn = `${nombre} ${apellido}`.trim();
+        if (fn) lines.push(`FN:${escVCard(fn)}`);
+        if ((f.empresa || '').trim()) lines.push(`ORG:${escVCard(f.empresa.trim())}`);
+        if ((f.cargo || '').trim()) lines.push(`TITLE:${escVCard(f.cargo.trim())}`);
+        if ((f.telefono || '').trim()) lines.push(`TEL;TYPE=WORK,VOICE:${escVCard(f.telefono.trim())}`);
+        if ((f.email || '').trim()) lines.push(`EMAIL;TYPE=WORK:${escVCard(f.email.trim())}`);
+        const web = normUrl(f.web);
+        if (web) lines.push(`URL:${escVCard(web)}`);
+        const ig = socialUrl(f.instagram, 'instagram.com');
+        if (ig) lines.push(`URL:${escVCard(ig)}`);
+        const tw = socialUrl(f.twitter, 'x.com');
+        if (tw) lines.push(`URL:${escVCard(tw)}`);
+        if (lines.length === 2) return '';
+        lines.push('END:VCARD');
+        return lines.join('\n');
+      }
+
+      const $ = (id) => document.getElementById(id);
+      const inputs = Object.fromEntries(FIELDS.map(k => [k, $(`f-${k}`)]));
+      const preview = $('preview');
+      const qrLink = $('qr-link');
+      let saved = [];
+      let loadedId = null;
+
+      function nid() {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+        return `id-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+      }
+
+      function buildName(f) {
+        const a = (f.apellido || '').trim();
+        const e = (f.empresa || '').trim();
+        const n = (f.nombre || '').trim();
+        if (a && e) return `${a}@${e}`;
+        return a || n || e || 'Sin nombre';
+      }
+
+      function readForm() {
+        return Object.fromEntries(FIELDS.map(k => [k, inputs[k].value]));
+      }
+
+      function readStore() {
+        const fallback = { form: { ...DEFAULTS }, saved: [] };
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (raw === null) return fallback;
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object' && parsed.form) {
+            const form = { ...DEFAULTS };
+            FIELDS.forEach(k => { if (typeof parsed.form[k] === 'string') form[k] = parsed.form[k]; });
+            const savedList = Array.isArray(parsed.saved) ? parsed.saved.filter(e =>
+              e && typeof e.id === 'string' && e.form && typeof e.form === 'object') : [];
+            return { form, saved: savedList };
+          }
+          // Formato anterior (solo formulario plano): se migra.
+          const form = { ...DEFAULTS };
+          FIELDS.forEach(k => { if (typeof parsed[k] === 'string') form[k] = parsed[k]; });
+          return { form, saved: [] };
+        } catch {
+          return fallback;
+        }
+      }
+
+      function writeStore(form) {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({ form, saved }));
+        } catch { /* modo privado: se sigue sin guardar */ }
+      }
+
+      function qrlabsURL(vcard) {
+        const base = `${window.location.origin}${window.location.pathname.replace(/\/vcard\/?$/, '/qrlabs/')}`;
+        return `${base}?d=${encodeURIComponent(JSON.stringify({ t: 'vcard', vcard }))}`;
+      }
+
+      function update(fromURL) {
+        const form = readForm();
+        if (!fromURL) writeStore(form);
+        const vcard = buildVCard(form);
+        preview.textContent = vcard || 'Completá algún campo para ver la vCard…';
+        const ready = vcard !== '';
+        $('copy').disabled = !ready;
+        $('download').disabled = !ready;
+        qrLink.href = ready ? qrlabsURL(vcard) : '../qrlabs/';
+        qrLink.classList.toggle('disabled', !ready);
+        qrLink.setAttribute('aria-disabled', ready ? 'false' : 'true');
+        return vcard;
+      }
+
+      function loadInitial() {
+        const store = readStore();
+        saved = store.saved;
+        FIELDS.forEach(k => { inputs[k].value = store.form[k]; });
+        history.replaceState(null, '', window.location.pathname);
+      }
+
+      function escapeHtml(text) {
+        return String(text).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
+      }
+
+      function renderSaved() {
+        const list = $('saved-list');
+        $('saved-empty').classList.toggle('d-none', saved.length > 0);
+        list.innerHTML = saved.map(entry => {
+          const active = entry.id === loadedId ? ' list-group-item-primary' : '';
+          return `<div class="list-group-item d-flex justify-content-between align-items-center gap-2${active}">` +
+            `<button type="button" class="btn btn-link text-start text-decoration-none p-0 flex-grow-1" data-open="${escapeHtml(entry.id)}">` +
+            `<span class="text-body">${escapeHtml(entry.name)}</span>` +
+            `</button>` +
+            `<button type="button" class="btn btn-outline-danger btn-sm flex-shrink-0" data-del="${escapeHtml(entry.id)}" aria-label="Borrar">✕</button>` +
+            `</div>`;
+        }).join('');
+      }
+
+      function fillForm(form) {
+        FIELDS.forEach(k => { inputs[k].value = form[k] || ''; });
+      }
+
+      function flash(btn, text) {
+        const original = btn.textContent;
+        btn.textContent = text;
+        setTimeout(() => { btn.textContent = original; }, 1500);
+      }
+
+      FIELDS.forEach(k => {
+        inputs[k].addEventListener('input', () => update(false));
+      });
+
+      $('copy').addEventListener('click', async (e) => {
+        const vcard = update(false);
+        try {
+          await navigator.clipboard.writeText(vcard);
+          flash(e.currentTarget, '¡Copiado!');
+        } catch {
+          flash(e.currentTarget, 'No se pudo copiar');
+        }
+      });
+
+      $('download').addEventListener('click', () => {
+        const vcard = update(false);
+        if (!vcard) return;
+        const url = URL.createObjectURL(new Blob([vcard], { type: 'text/vcard;charset=utf-8' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'contacto.vcf';
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+      });
+
+      $('share').addEventListener('click', (e) => {
+        const vcard = update(false);
+        if (!vcard) { flash(e.currentTarget, 'Completá algo primero'); return; }
+        navigator.clipboard.writeText(qrlabsURL(vcard));
+        flash(e.currentTarget, '¡Copiado!');
+      });
+
+      $('save').addEventListener('click', (e) => {
+        const form = readForm();
+        if (!buildVCard(form)) { flash(e.currentTarget, 'Completá algo primero'); return; }
+        const name = buildName(form);
+        if (loadedId) {
+          const entry = saved.find(x => x.id === loadedId);
+          if (entry) {
+            entry.form = form;
+            entry.name = name;
+            entry.ts = Date.now();
+          } else {
+            loadedId = null;
+          }
+        }
+        if (!loadedId) {
+          loadedId = nid();
+          saved.unshift({ id: loadedId, name, form, ts: Date.now() });
+        }
+        writeStore(form);
+        renderSaved();
+        flash(e.currentTarget, '¡Guardada!');
+      });
+
+      $('new').addEventListener('click', () => {
+        loadedId = null;
+        FIELDS.forEach(k => { inputs[k].value = ''; });
+        update(false);
+        renderSaved();
+        document.getElementById('f-nombre').focus();
+      });
+
+      $('saved-list').addEventListener('click', (e) => {
+        const openBtn = e.target.closest('[data-open]');
+        if (openBtn) {
+          const entry = saved.find(x => x.id === openBtn.dataset.open);
+          if (!entry) return;
+          loadedId = entry.id;
+          fillForm(entry.form);
+          writeStore(readForm());
+          update(false);
+          renderSaved();
+          return;
+        }
+        const delBtn = e.target.closest('[data-del]');
+        if (delBtn) {
+          saved = saved.filter(x => x.id !== delBtn.dataset.del);
+          if (loadedId === delBtn.dataset.del) loadedId = null;
+          writeStore(readForm());
+          renderSaved();
+        }
+      });
+
+      $('reset').addEventListener('click', () => {
+        loadedId = null;
+        FIELDS.forEach(k => { inputs[k].value = ''; });
+        history.replaceState(null, '', window.location.pathname);
+        update(false);
+        renderSaved();
+      });
+
+      loadInitial();
+      update(false);
+      renderSaved();
+    })();
+  </script>
+
+  <script>
+    // theme toggle: Bootstrap's native data-bs-theme, remembered per browser
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

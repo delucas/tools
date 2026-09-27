@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f4f7%3B%3C/text%3E%3C/svg%3E">
+  <title>Lector QR</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    #video {
+      max-width: 100%;
+      max-height: 50vh;
+      border-radius: 0.5rem;
+    }
+    #dropzone {
+      cursor: pointer;
+      border-style: dashed;
+    }
+    #dropzone.dragging {
+      border-color: var(--bs-primary);
+      background: var(--bs-primary-bg-subtle);
+    }
+    .mono {
+      font-family: var(--bs-font-monospace);
+      font-size: 0.85rem;
+      word-break: break-all;
+      white-space: pre-wrap;
+    }
+    @media (max-width: 576px) {
+      input, textarea, select { font-size: 16px; }
+    }
+    p.signature { font-size: 0.8em; }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">📷 Lector QR</h1>
+        <p class="text-body-secondary mb-0">Escaneá códigos con la cámara o una imagen; todo queda en tu navegador.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <p id="engine-note" class="text-body-secondary small"></p>
+
+    <div class="row g-3 mb-3">
+      <section class="col-12 col-lg-6">
+        <div class="card">
+          <div class="card-body text-center">
+            <video id="video" class="d-none bg-black mb-2" playsinline muted></video>
+            <canvas id="frame" class="d-none"></canvas>
+            <div class="d-flex flex-wrap gap-2 justify-content-center">
+              <button id="cam-start" class="btn btn-primary btn-sm" type="button">📷 Iniciar cámara</button>
+              <button id="cam-stop" class="btn btn-outline-secondary btn-sm d-none" type="button">Detener</button>
+              <button id="cam-next" class="btn btn-outline-secondary btn-sm d-none" type="button">Seguir escaneando</button>
+            </div>
+            <select id="cam-select" class="form-select form-select-sm mt-2 d-none" aria-label="Cámara"></select>
+            <div class="d-flex flex-wrap gap-2 justify-content-center mt-2">
+              <button id="cam-torch" class="btn btn-outline-secondary btn-sm d-none" type="button" aria-pressed="false">🔦 Linterna</button>
+            </div>
+            <div id="cam-status" class="text-body-secondary small mt-2" role="status"></div>
+            <div id="cam-error" class="text-danger small mt-2 d-none"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="col-12 col-lg-6">
+        <div class="card h-100">
+          <div class="card-body">
+            <span class="form-label" id="dropzone-label">Imagen con código</span>
+            <div id="dropzone" class="border rounded p-4 text-center text-body-secondary" role="button" tabindex="0" aria-labelledby="dropzone-label">
+              Arrastrá una imagen acá, tocá para elegirla o pegala con Ctrl+V
+            </div>
+            <input id="file-input" class="d-none" type="file" accept="image/*">
+            <div id="file-error" class="text-danger small mt-2 d-none"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <section id="result-section" class="card mb-3 d-none">
+      <div class="card-body">
+        <h2 class="h6">Resultado <span id="result-format" class="badge text-bg-secondary fw-normal"></span>
+          <small id="result-source" class="text-body-secondary fw-normal"></small></h2>
+        <p id="result-payload" class="mono border rounded p-2"></p>
+        <div class="d-flex flex-wrap gap-2">
+          <button id="copy" class="btn btn-outline-secondary btn-sm" type="button">📋 Copiar</button>
+          <a id="open-link" class="btn btn-outline-secondary btn-sm d-none" href="#" target="_blank" rel="noopener">🔗 Abrir</a>
+          <button id="to-qrlabs" class="btn btn-primary btn-sm" type="button">🧪 Reenviar a QRlabs</button>
+        </div>
+      </div>
+    </section>
+
+    <section aria-label="Historial de escaneos">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+        <h2 class="h6 mb-0">🕘 Historial</h2>
+        <button id="history-clear" class="btn btn-outline-danger btn-sm d-none" type="button">Borrar historial</button>
+      </div>
+      <p id="history-empty" class="text-body-secondary small">Todavía no escaneaste nada. Queda guardado en tu navegador.</p>
+      <div id="history-list" class="list-group"></div>
+    </section>
+
+    <hr>
+    <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"
+    integrity="sha384-b5Ya4Bq3qCyz39m2ISh+4DxjAIljdeFwK/BsXLuj9gugaNwAcj/ia15fxNZL9Nlx"
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'lector-qr';
+      const MAX_HISTORY = 50;
+      const HAS_NATIVE = typeof BarcodeDetector !== 'undefined';
+      const HAS_JSQR = typeof jsQR !== 'undefined';
+
+      function classifyPayload(text) {
+        const t = String(text || '').trim();
+        if (/^mailto:/i.test(t)) {
+          const email = t.slice(7).split('?')[0];
+          if (/.+@.+\..+/.test(email)) return { t: 'email', email };
+        }
+        if (/.+@.+\..+/.test(t) && !/\s/.test(t)) return { t: 'email', email: t };
+        if (/^wifi:/i.test(t)) return { t: 'texto', texto: String(text || '') };
+        if (/^[a-z][a-z0-9+.-]*:\/\//i.test(t)) return { t: 'url', url: t };
+        if (/^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(t)) return { t: 'url', url: `https://${t}` };
+        return { t: 'texto', texto: String(text || '') };
+      }
+
+      function nid() {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+        return `id-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+      }
+
+      function pushHistory(list, entry, max) {
+        if (!entry || !entry.payload) return list;
+        if (list.length && list[0].payload === entry.payload) return list;
+        return [{ ...entry }, ...list].slice(0, max);
+      }
+
+      const $ = (id) => document.getElementById(id);
+      const video = $('video'), frame = $('frame');
+      const camStart = $('cam-start'), camStop = $('cam-stop'), camNext = $('cam-next');
+      const camSelect = $('cam-select'), camError = $('cam-error');
+      const camStatus = $('cam-status'), camTorch = $('cam-torch');
+      let stream = null, scanning = false, scanTimer = null, detector = null;
+      let lastResult = null, torchOn = false;
+
+      function setStatus(text) {
+        camStatus.textContent = text;
+      }
+
+      function readHistory() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return [];
+          const arr = JSON.parse(raw);
+          return Array.isArray(arr) ? arr.filter(e => e && typeof e.payload === 'string') : [];
+        } catch { return []; }
+      }
+
+      function writeHistory(list) {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); } catch {}
+      }
+
+      function fmtDate(ts) {
+        try {
+          return new Date(ts).toLocaleString(undefined, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        } catch { return ''; }
+      }
+
+      function qrlabsURL(payload) {
+        const base = window.location.href.split('?')[0].replace(/\/lector-qr\/?$/, '/qrlabs/');
+        return `${base}?d=${encodeURIComponent(JSON.stringify(classifyPayload(payload)))}`;
+      }
+
+      function showResult(payload, format, source) {
+        lastResult = { payload, format };
+        $('result-format').textContent = format || 'código';
+        $('result-source').textContent = source ? ` · ${source}` : '';
+        $('result-payload').textContent = payload;
+        const cls = classifyPayload(payload);
+        const openLink = $('open-link');
+        if (cls.t === 'url') {
+          openLink.href = cls.url;
+          openLink.classList.remove('d-none');
+        } else {
+          openLink.classList.add('d-none');
+        }
+        $('result-section').classList.remove('d-none');
+        $('result-section').scrollIntoView({ block: 'nearest' });
+      }
+
+      function onDetect(payload, format, source) {
+        pauseScan();
+        const history = pushHistory(readHistory(), { id: nid(), payload, format: format || 'desconocido', ts: Date.now() }, MAX_HISTORY);
+        writeHistory(history);
+        renderHistory();
+        showResult(payload, format, source);
+      }
+
+      function grabFrame() {
+        const w = video.videoWidth, h = video.videoHeight;
+        if (!w || !h) return null;
+        frame.width = w;
+        frame.height = h;
+        const ctx = frame.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(video, 0, 0, w, h);
+        return ctx.getImageData(0, 0, w, h);
+      }
+
+      async function scanOnce() {
+        if (!scanning) return;
+        try {
+          if (detector) {
+            const codes = await detector.detect(video);
+            if (codes.length && scanning) {
+              onDetect(codes[0].rawValue, codes[0].format, 'cámara');
+              return;
+            }
+          } else if (HAS_JSQR) {
+            const img = grabFrame();
+            if (img) {
+              const code = jsQR(img.data, img.width, img.height);
+              if (code && scanning) {
+                onDetect(code.data, 'qr_code', 'cámara');
+                return;
+              }
+            }
+          }
+        } catch { /* próximo intento */ }
+        if (scanning) scanTimer = setTimeout(scanOnce, 250);
+      }
+
+      function pauseScan() {
+        scanning = false;
+        clearTimeout(scanTimer);
+        setStatus('En pausa.');
+        camNext.classList.remove('d-none');
+      }
+
+      function resumeScan() {
+        if (!stream) return;
+        camNext.classList.add('d-none');
+        scanning = true;
+        setStatus('Escaneando… acercá el código y mantenelo quieto.');
+        scanOnce();
+      }
+
+      function stopStream() {
+        scanning = false;
+        clearTimeout(scanTimer);
+        torchOn = false;
+        camTorch.classList.add('d-none');
+        camTorch.setAttribute('aria-pressed', 'false');
+        camTorch.textContent = '🔦 Linterna';
+        setStatus('');
+        if (stream) {
+          stream.getTracks().forEach(track => track.stop());
+          stream = null;
+        }
+        video.classList.add('d-none');
+        camStop.classList.add('d-none');
+        camNext.classList.add('d-none');
+        camStart.classList.remove('d-none');
+      }
+
+      async function startCamera(deviceId) {
+        camError.classList.add('d-none');
+        stopStream();
+        if (!navigator.mediaDevices?.getUserMedia) {
+          camError.textContent = 'Tu navegador no permite usar la cámara acá. Probá con una imagen.';
+          camError.classList.remove('d-none');
+          return;
+        }
+        try {
+          const constraints = deviceId
+            ? { video: { deviceId: { exact: deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } } }
+            : { video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } };
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch {
+          camError.textContent = 'No se pudo abrir la cámara (permiso denegado o sin cámara). Probá con una imagen.';
+          camError.classList.remove('d-none');
+          return;
+        }
+        video.srcObject = stream;
+        try { await video.play(); } catch {}
+        // Foco continuo y linterna si el hardware lo permite (ayuda mucho con 1D).
+        try {
+          const track = stream.getVideoTracks()[0];
+          const caps = track.getCapabilities ? track.getCapabilities() : {};
+          if (caps.focusMode && caps.focusMode.includes('continuous')) {
+            await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+          }
+          if (caps.torch) {
+            camTorch.classList.remove('d-none');
+          }
+        } catch { /* opcionales */ }
+        video.classList.remove('d-none');
+        camStart.classList.add('d-none');
+        camStop.classList.remove('d-none');
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const cams = devices.filter(d => d.kind === 'videoinput');
+          if (cams.length > 1) {
+            camSelect.innerHTML = cams.map((d, i) =>
+              `<option value="${d.deviceId}">${d.label || 'Cámara ' + (i + 1)}</option>`).join('');
+            camSelect.classList.remove('d-none');
+          }
+        } catch {}
+        scanning = true;
+        setStatus(detector
+          ? 'Escaneando… acercá el código y mantenelo quieto.'
+          : 'Escaneando QR… (sin motor nativo, los códigos de barras 1D necesitan Chrome, Edge o Safari).');
+        scanOnce();
+      }
+
+      async function decodeImage(blob, source) {
+        const errBox = $('file-error');
+        errBox.classList.add('d-none');
+        let bitmap = null;
+        try {
+          bitmap = await createImageBitmap(blob);
+        } catch {
+          errBox.textContent = 'No se pudo leer esa imagen.';
+          errBox.classList.remove('d-none');
+          return;
+        }
+        try {
+          if (detector) {
+            const codes = await detector.detect(bitmap);
+            if (codes.length) {
+              onDetect(codes[0].rawValue, codes[0].format, source);
+              return;
+            }
+          }
+          if (HAS_JSQR) {
+            const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+            const w = Math.max(1, Math.round(bitmap.width * scale));
+            const h = Math.max(1, Math.round(bitmap.height * scale));
+            frame.width = w;
+            frame.height = h;
+            const ctx = frame.getContext('2d', { willReadFrequently: true });
+            ctx.drawImage(bitmap, 0, 0, w, h);
+            const img = ctx.getImageData(0, 0, w, h);
+            const code = jsQR(img.data, img.width, img.height);
+            if (code) {
+              onDetect(code.data, 'qr_code', source);
+              return;
+            }
+          }
+        } finally {
+          if (bitmap.close) bitmap.close();
+        }
+        errBox.textContent = 'No se encontró ningún código en esa imagen.';
+        errBox.classList.remove('d-none');
+      }
+
+      function flash(btn, text) {
+        const original = btn.textContent;
+        btn.textContent = text;
+        setTimeout(() => { btn.textContent = original; }, 1500);
+      }
+
+      $('copy').addEventListener('click', async (e) => {
+        if (!lastResult) return;
+        try {
+          await navigator.clipboard.writeText(lastResult.payload);
+          flash(e.currentTarget, '¡Copiado!');
+        } catch {
+          flash(e.currentTarget, 'No se pudo copiar');
+        }
+      });
+
+      $('to-qrlabs').addEventListener('click', () => {
+        if (!lastResult) return;
+        window.location.href = qrlabsURL(lastResult.payload);
+      });
+
+      camStart.addEventListener('click', () => startCamera(camSelect.value || null));
+      camStop.addEventListener('click', stopStream);
+      camNext.addEventListener('click', resumeScan);
+      camTorch.addEventListener('click', async () => {
+        try {
+          const track = stream?.getVideoTracks()[0];
+          if (!track) return;
+          torchOn = !torchOn;
+          await track.applyConstraints({ advanced: [{ torch: torchOn }] });
+          camTorch.setAttribute('aria-pressed', String(torchOn));
+          camTorch.textContent = torchOn ? '🔦 Apagar' : '🔦 Linterna';
+        } catch { /* sin linterna */ }
+      });
+      camSelect.addEventListener('change', () => startCamera(camSelect.value || null));
+
+      const dropzone = $('dropzone');
+      const fileInput = $('file-input');
+      dropzone.addEventListener('click', () => fileInput.click());
+      dropzone.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); fileInput.click(); }
+      });
+      ['dragenter', 'dragover'].forEach(ev => dropzone.addEventListener(ev, event => {
+        event.preventDefault();
+        dropzone.classList.add('dragging');
+      }));
+      ['dragleave', 'drop'].forEach(ev => dropzone.addEventListener(ev, event => {
+        event.preventDefault();
+        dropzone.classList.remove('dragging');
+      }));
+      dropzone.addEventListener('drop', event => {
+        const f = event.dataTransfer?.files?.[0];
+        if (f) decodeImage(f, 'imagen');
+      });
+      fileInput.addEventListener('change', () => {
+        if (fileInput.files[0]) decodeImage(fileInput.files[0], 'imagen');
+        fileInput.value = '';
+      });
+      document.addEventListener('paste', (event) => {
+        const f = [...(event.clipboardData?.files || [])].find(x => x.type.startsWith('image/'));
+        if (f) decodeImage(f, 'portapapeles');
+      });
+
+      function renderHistory() {
+        const history = readHistory();
+        const list = $('history-list');
+        $('history-empty').classList.toggle('d-none', history.length > 0);
+        $('history-clear').classList.toggle('d-none', history.length === 0);
+        list.innerHTML = history.map(entry => {
+          const short = entry.payload.length > 60 ? entry.payload.slice(0, 60) + '…' : entry.payload;
+          const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+          return `<div class="list-group-item d-flex justify-content-between align-items-center gap-2">` +
+            `<button type="button" class="btn btn-link text-start text-decoration-none p-0 flex-grow-1" data-load="${esc(entry.id)}">` +
+            `<span class="badge text-bg-secondary me-1">${esc(entry.format)}</span>` +
+            `<span class="text-body small text-break">${esc(short)}</span><br>` +
+            `<small class="text-body-secondary">${esc(fmtDate(entry.ts))}</small>` +
+            `</button>` +
+            `<button type="button" class="btn btn-outline-danger btn-sm flex-shrink-0" data-del="${esc(entry.id)}" aria-label="Borrar">✕</button>` +
+            `</div>`;
+        }).join('');
+      }
+
+      $('history-list').addEventListener('click', (e) => {
+        const loadBtn = e.target.closest('[data-load]');
+        if (loadBtn) {
+          const entry = readHistory().find(x => x.id === loadBtn.dataset.load);
+          if (entry) showResult(entry.payload, entry.format, 'historial');
+          return;
+        }
+        const delBtn = e.target.closest('[data-del]');
+        if (delBtn) {
+          writeHistory(readHistory().filter(x => x.id !== delBtn.dataset.del));
+          renderHistory();
+        }
+      });
+
+      $('history-clear').addEventListener('click', (e) => {
+        const btn = e.currentTarget;
+        if (!btn.dataset.armed) {
+          btn.dataset.armed = '1';
+          btn.textContent = '¿Seguro? Tocá de nuevo';
+          setTimeout(() => { delete btn.dataset.armed; btn.textContent = 'Borrar historial'; }, 4000);
+          return;
+        }
+        delete btn.dataset.armed;
+        btn.textContent = 'Borrar historial';
+        writeHistory([]);
+        renderHistory();
+      });
+
+      $('reset').addEventListener('click', () => {
+        stopStream();
+        lastResult = null;
+        $('result-section').classList.add('d-none');
+      });
+
+      window.addEventListener('pagehide', stopStream);
+
+      (async () => {
+        const note = $('engine-note');
+        if (HAS_NATIVE) {
+          try {
+            let formats = [];
+            try { formats = await BarcodeDetector.getSupportedFormats(); } catch {}
+            detector = new BarcodeDetector(formats.length ? { formats } : undefined);
+            note.textContent = formats.length
+              ? `Motor nativo (${formats.join(', ')})` + (HAS_JSQR ? ' + respaldo jsQR.' : '.')
+              : 'Motor nativo del navegador' + (HAS_JSQR ? ' + respaldo jsQR.' : '.');
+          } catch {
+            detector = null;
+            note.textContent = HAS_JSQR ? 'Sin motor nativo: respaldo jsQR (solo QR).' : 'Tu navegador no puede decodificar códigos.';
+          }
+        } else {
+          note.textContent = HAS_JSQR ? 'Sin motor nativo: respaldo jsQR (solo QR).' : 'Tu navegador no puede decodificar códigos.';
+        }
+        if (!HAS_JSQR) {
+          const warn = document.createElement('div');
+          warn.className = 'alert alert-warning py-2';
+          warn.textContent = 'No se pudo cargar jsQR: sin motor nativo solo funcionará la cámara donde haya BarcodeDetector.';
+          document.querySelector('main').prepend(warn);
+        }
+        renderHistory();
+      })();
+    })();
+  </script>
+
+  <script>
+    // theme toggle: Bootstrap's native data-bs-theme, remembered per browser
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

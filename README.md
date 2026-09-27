@@ -37,5 +37,6 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`image-inspector`](./image-inspector) | DevTools para imágenes: archivo, hashes, dimensiones, EXIF y más, todo local. |
 | [`fontoscope`](./fontoscope) | Cargá una fuente y mirala en todos sus tamaños, con cobertura Unicode real. |
 | [`vcard`](./vcard) | Tu tarjeta laboral: descargala como `.vcf` o abrila en QRlabs para que la escaneen. |
+| [`lector-qr`](./lector-qr) | Escaneá QR y códigos de barras con cámara o imagen, con historial local. |
 
 Cada carpeta tiene su propio `README.md` con el detalle de uso.

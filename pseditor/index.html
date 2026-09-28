@@ -431,7 +431,7 @@ ALGORITMO SumaDePares
       return text.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
     }
 
-    function formattedCodeHtml(code) {
+    function formattedCodeHtml(code, startLine = 1) {
       const dark = isDarkTheme();
       const colors = dark
         ? { background: '#282a36', text: '#f8f8f2', keyword: '#ff79c6', number: '#bd93f9', string: '#f1fa8c', comment: '#6272a4', public: '#8be9fd', private: '#50fa7b', size: '#50fa7b', gutter: '#6272a4' }
@@ -461,10 +461,10 @@ ALGORITMO SumaDePares
       }
 
       const lineCount = code.split('\n').length;
-      const gutterWidth = String(lineCount).length;
+      const gutterWidth = String(startLine + lineCount - 1).length;
       const lines = code.split('\n').map((line, index) => {
         const number = shouldShowLineNumbers
-          ? `<span style="display:inline-block;min-width:${gutterWidth}ch;margin-right:1.25em;color:${colors.gutter};user-select:none">${index + 1}</span>`
+          ? `<span style="display:inline-block;min-width:${gutterWidth}ch;margin-right:1.25em;color:${colors.gutter};user-select:none">${index + startLine}</span>`
           : '';
         return `${number}${formatLine(line)}`;
       });
@@ -472,18 +472,29 @@ ALGORITMO SumaDePares
       return `<div style="margin:0;padding:16px;${background}color:${colors.text};font-family:Consolas,'Courier New',monospace;font-size:14px;line-height:100%;mso-line-height-rule:exactly;white-space:pre">${lines.join('<br>')}</div>`;
     }
 
+    // lo seleccionado en el editor (si hay) o el archivo completo, con su línea inicial real
+    function codeToCopy() {
+      const ranges = editor.state.selection.ranges.filter(range => !range.empty);
+      if (!ranges.length) return { code: activeFile().code, startLine: 1, isSelection: false };
+      return {
+        code: ranges.map(range => editor.state.sliceDoc(range.from, range.to)).join('\n'),
+        startLine: editor.state.doc.lineAt(ranges[0].from).number,
+        isSelection: true
+      };
+    }
+
     async function copyFormattedCode() {
-      const code = activeFile().code;
-      const html = formattedCodeHtml(code);
+      const { code, startLine, isSelection } = codeToCopy();
+      const html = formattedCodeHtml(code, startLine);
       if (navigator.clipboard?.write && window.ClipboardItem) {
         await navigator.clipboard.write([new ClipboardItem({
           'text/plain': new Blob([code], { type: 'text/plain' }),
           'text/html': new Blob([html], { type: 'text/html' })
         })]);
-        return true;
+        return { withFormat: true, isSelection };
       }
       await copyText(code);
-      return false;
+      return { withFormat: false, isSelection };
     }
 
     function workspaceMarkdown() {
@@ -526,6 +537,7 @@ ALGORITMO SumaDePares
     const deleteFileButton = document.getElementById('delete-file');
     const workspaceFile = document.getElementById('workspace-file');
     const showLineNumbers = document.getElementById('show-line-numbers');
+    const copyButton = document.getElementById('copy-formatted');
     const themeCompartment = new Compartment();
     const highlightingCompartment = new Compartment();
     const lineNumbersCompartment = new Compartment();
@@ -548,6 +560,11 @@ ALGORITMO SumaDePares
       notice.textContent = message;
       notice.classList.remove('d-none');
       noticeTimeout = setTimeout(() => notice.classList.add('d-none'), 1800);
+    }
+
+    function updateCopyButtonLabel(view) {
+      const hasSelection = view.state.selection.ranges.some(range => !range.empty);
+      copyButton.textContent = hasSelection ? '📋 Copiar selección' : '📋 Copiar con formato';
     }
 
     function activeFile() {
@@ -627,6 +644,7 @@ ALGORITMO SumaDePares
           highlightingCompartment.of(syntaxHighlighting(isDarkTheme() ? draculaHighlightStyle : eclipseHighlightStyle)),
           inputReplacement,
           EditorView.updateListener.of(update => {
+            if (update.selectionSet) updateCopyButtonLabel(update.view);
             if (!update.docChanged) return;
             const code = update.state.doc.toString();
             activeFile().code = code;
@@ -645,6 +663,7 @@ ALGORITMO SumaDePares
     }
 
     let editor = createEditor(activeFile().code);
+    updateCopyButtonLabel(editor);
 
     updateStatistics(editor.state.doc.toString());
     renderFiles();
@@ -653,6 +672,7 @@ ALGORITMO SumaDePares
       workspace.activeId = fileId;
       editor.destroy();
       editor = createEditor(activeFile().code);
+      updateCopyButtonLabel(editor);
       renderFiles();
       updateStatistics(activeFile().code);
     }
@@ -685,8 +705,10 @@ ALGORITMO SumaDePares
 
     document.getElementById('copy-formatted').addEventListener('click', async () => {
       try {
-        const copiedWithFormat = await copyFormattedCode();
-        showNotice(copiedWithFormat ? 'Se copió el código con formato.' : 'Se copió el código como texto plano.');
+        const { withFormat, isSelection } = await copyFormattedCode();
+        showNotice(isSelection
+          ? (withFormat ? 'Se copió la selección con formato.' : 'Se copió la selección como texto plano.')
+          : (withFormat ? 'Se copió el código con formato.' : 'Se copió el código como texto plano.'));
       } catch {
         showNotice('No se pudo copiar el código.');
       }
@@ -733,6 +755,7 @@ ALGORITMO SumaDePares
       workspace = createWorkspace('algoritmos', [file], file.id);
       editor.destroy();
       editor = createEditor(file.code);
+      updateCopyButtonLabel(editor);
       renderFiles();
       updateStatistics(file.code);
       window.history.replaceState(null, '', window.location.pathname);
@@ -766,6 +789,7 @@ ALGORITMO SumaDePares
         workspace = workspaceFromMarkdown(await file.text());
         editor.destroy();
         editor = createEditor(activeFile().code);
+        updateCopyButtonLabel(editor);
         renderFiles();
         updateStatistics(activeFile().code);
         saveWorkspace();

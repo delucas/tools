@@ -9,7 +9,7 @@ Editor de pseudocódigo en español construido con CodeMirror 6. Resalta sintaxi
 3. Luego de `ALGORITMO`, los nombres en PascalCase se resaltan como públicos y los nombres en camelCase como privados. El tamaño de un arreglo se expresa como `|arreglo|`.
 4. Los bucles admiten `PARA i = inicio HASTA fin HACER` y un salto opcional con `PASO`, por ejemplo `PARA i = 10 HASTA 0 PASO -2 HACER`. También podés recorrer con `PARA CADA elemento EN lista HACER`.
 5. Activá o desactivá Mostrar números de línea para cambiar tanto el editor como la copia con formato.
-6. Copiar con formato copia el archivo activo completo con el tema actual, listo para pegar en diapositivas. Incluye una versión de texto plano como respaldo.
+6. Copiar con formato copia el archivo activo completo con el tema actual, listo para pegar en diapositivas. Incluye una versión de texto plano como respaldo. Si hay texto seleccionado, el botón pasa a Copiar selección y copia solo eso.
 7. Creá, renombrá, elegí o eliminá archivos desde la barra lateral. Los archivos de ejemplo y los nuevos usan la extensión `.pse`; todos se guardan en el navegador.
 8. Compartir archivo copia un enlace que contiene el nombre y el contenido del documento seleccionado. Al abrirlo, el archivo compartido tiene prioridad sobre el almacenamiento local.
 9. Asigná un nombre al workspace, por ejemplo `Grafos - Recorrido.workspace`. Guardar workspace descarga `<nombre>.md` con todos los archivos en bloques de código `.pse`; podés leerlo con cualquier editor de texto o volver a abrirlo desde la herramienta.

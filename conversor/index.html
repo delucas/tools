@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f504%3B%3C/text%3E%3C/svg%3E">
+  <title>Conversor</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    input.form-control, select.form-select {
+      font-size: 16px;
+    }
+
+    p.signature {
+      font-size: 0.8em;
+    }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4" style="max-width: 640px;">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">🔄 Conversor</h1>
+        <p class="text-body-secondary mb-0">Tus conversiones complicadas, sin vueltas.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="share" class="btn btn-outline-secondary btn-sm" type="button">🔗 Compartir</button>
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+    <hr>
+
+    <div class="mb-3">
+      <label for="type" class="form-label">Conversión</label>
+      <select id="type" class="form-select"></select>
+    </div>
+
+    <div class="row g-2 align-items-end">
+      <div class="col-12 col-sm-6">
+        <label id="label-a" for="input-a" class="form-label fw-bold"></label>
+        <input id="input-a" type="text" class="form-control form-control-lg" autocomplete="off">
+      </div>
+      <div class="col-12 col-sm-6">
+        <label id="label-b" for="input-b" class="form-label fw-bold"></label>
+        <input id="input-b" type="text" class="form-control form-control-lg" autocomplete="off">
+      </div>
+    </div>
+    <p id="hint" class="form-text mt-2"></p>
+
+    <div class="d-flex flex-wrap gap-2 mt-2">
+      <button id="save" class="btn btn-primary btn-sm" type="button">💾 Guardar en historial</button>
+    </div>
+
+    <hr>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+      <h2 class="h5 mb-0">Historial</h2>
+      <button id="clear-history" class="btn btn-outline-danger btn-sm" type="button">🗑️ Borrar historial</button>
+    </div>
+    <p id="history-empty" class="text-body-secondary small">Todavía no guardaste nada: cuando una conversión te sirva, tocala en 💾 Guardar en historial.</p>
+    <ul id="history" class="list-group"></ul>
+
+    <hr>
+
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script>
+    const STORAGE_KEY = 'conversor';
+    const MAX_HISTORY = 50;
+
+    // f: cuántas unidades B hay en 1 unidad A (conversiones lineales)
+    const CONVERSIONS = {
+      'km-mi':   { name: 'Kilómetros ↔ Millas', a: 'km', b: 'mi', f: 1 / 1.60934, dec: 4, hint: '1 mi = 1,60934 km' },
+      'cm-in':   { name: 'Centímetros ↔ Pulgadas', a: 'cm', b: 'in', f: 1 / 2.54, dec: 4, hint: '1 in = 2,54 cm' },
+      'm-ft':    { name: 'Metros ↔ Pies', a: 'm', b: 'ft', f: 1 / 0.3048, dec: 4, hint: '1 ft = 0,3048 m' },
+      'kg-lb':   { name: 'Kilos ↔ Libras', a: 'kg', b: 'lb', f: 1 / 0.45359237, dec: 4, hint: '1 lb = 0,45359237 kg' },
+      'l-gal':   { name: 'Litros ↔ Galones (US)', a: 'L', b: 'gal', f: 1 / 3.78541, dec: 4, hint: '1 gal (US) = 3,78541 L' },
+      'psi-bar': { name: 'PSI ↔ Bar', a: 'psi', b: 'bar', f: 1 / 14.5038, dec: 4, hint: '1 bar = 14,5038 psi' },
+      'c-f':     { name: '°C ↔ °F', a: '°C', b: '°F', special: 'temp', hint: '°F = °C × 9/5 + 32' },
+      'tiempo-h':{ name: 'Tiempo ↔ Horas decimales', a: 'tiempo', b: 'horas', special: 'time', hint: 'Ej: 1:06 → 1,1 · 1:06:00 → 1,1 · 66m → 1,1' },
+    };
+    const DEFAULT_STATE = { type: 'km-mi', last: 'a', a: '10', b: '', history: [] };
+
+    const $type = document.getElementById('type');
+    const $inputA = document.getElementById('input-a');
+    const $inputB = document.getElementById('input-b');
+    const $labelA = document.getElementById('label-a');
+    const $labelB = document.getElementById('label-b');
+    const $hint = document.getElementById('hint');
+    const $save = document.getElementById('save');
+    const $share = document.getElementById('share');
+    const $reset = document.getElementById('reset');
+    const $history = document.getElementById('history');
+    const $historyEmpty = document.getElementById('history-empty');
+    const $clearHistory = document.getElementById('clear-history');
+
+    Object.entries(CONVERSIONS).forEach(([key, c]) => {
+      const opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = c.name;
+      $type.append(opt);
+    });
+
+    function fmt(n, dec) {
+      return String(parseFloat(n.toFixed(dec)));
+    }
+
+    function parseNum(s) {
+      const n = parseFloat(String(s).trim().replace(',', '.'));
+      return Number.isFinite(n) ? n : NaN;
+    }
+
+    // "1:06" o "1:06:00" (H:MM[:SS]) o minutos sueltos ("66", "66m") → horas decimales
+    function timeToDecimal(s) {
+      s = String(s).trim().replace(',', '.');
+      if (/^[0-9]*\.?[0-9]+\s*m?$/.test(s)) return parseFloat(s) / 60;
+      const parts = s.split(':').map((p) => Number(p.trim()));
+      if (!parts.length || parts.length > 3 || parts.some((p) => !Number.isFinite(p) || p < 0)) return NaN;
+      const [h, m = 0, sec = 0] = parts;
+      if (m >= 60 || sec >= 60) return NaN;
+      return h + m / 60 + sec / 3600;
+    }
+
+    function decimalToTime(h) {
+      const sign = h < 0 ? '-' : '';
+      h = Math.abs(h);
+      let H = Math.floor(h);
+      let M = Math.floor((h - H) * 60);
+      let S = Math.round(((h - H) * 60 - M) * 60);
+      if (S === 60) { S = 0; M++; }
+      if (M === 60) { M = 0; H++; }
+      const p = (n) => String(n).padStart(2, '0');
+      return S ? `${sign}${H}:${p(M)}:${p(S)}` : `${sign}${H}:${p(M)}`;
+    }
+
+    function convertForward(type, rawA) {
+      const c = CONVERSIONS[type];
+      if (c.special === 'temp') {
+        const n = parseNum(rawA);
+        return Number.isNaN(n) ? '' : fmt(n * 9 / 5 + 32, 1);
+      }
+      if (c.special === 'time') {
+        const h = timeToDecimal(rawA);
+        return Number.isNaN(h) ? '' : fmt(h, 4);
+      }
+      const n = parseNum(rawA);
+      return Number.isNaN(n) ? '' : fmt(n * c.f, c.dec);
+    }
+
+    function convertBackward(type, rawB) {
+      const c = CONVERSIONS[type];
+      if (c.special === 'temp') {
+        const n = parseNum(rawB);
+        return Number.isNaN(n) ? '' : fmt((n - 32) * 5 / 9, 1);
+      }
+      if (c.special === 'time') {
+        const n = parseNum(rawB);
+        return Number.isNaN(n) ? '' : decimalToTime(n);
+      }
+      const n = parseNum(rawB);
+      return Number.isNaN(n) ? '' : fmt(n / c.f, c.dec);
+    }
+
+    const state = { ...DEFAULT_STATE, history: [] };
+
+    function persist() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch {}
+    }
+
+    function readStored() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return null;
+        const data = JSON.parse(raw);
+        if (!data || !CONVERSIONS[data.type]) return null;
+        return data;
+      } catch {
+        return null;
+      }
+    }
+
+    function applyType() {
+      const c = CONVERSIONS[state.type];
+      $type.value = state.type;
+      $labelA.textContent = c.a;
+      $labelB.textContent = c.b;
+      $hint.textContent = c.hint;
+      $inputA.setAttribute('placeholder', c.special === 'time' ? '1:06' : `Valor en ${c.a}`);
+      $inputB.setAttribute('placeholder', c.special === 'time' ? '1,1' : `Valor en ${c.b}`);
+      $inputA.setAttribute('inputmode', c.special === 'time' ? 'text' : 'decimal');
+      $inputB.setAttribute('inputmode', 'decimal');
+    }
+
+    function recalc(from) {
+      state.last = from;
+      if (from === 'a') {
+        state.a = $inputA.value;
+        state.b = convertForward(state.type, state.a);
+        $inputB.value = state.b;
+      } else {
+        state.b = $inputB.value;
+        state.a = convertBackward(state.type, state.b);
+        $inputA.value = state.a;
+      }
+      persist();
+    }
+
+    function currentText() {
+      const c = CONVERSIONS[state.type];
+      if (state.a === '' || state.b === '') return null;
+      return `${state.a} ${c.a} = ${state.b} ${c.b}`;
+    }
+
+    function renderHistory() {
+      $history.innerHTML = '';
+      $historyEmpty.classList.toggle('d-none', state.history.length > 0);
+      $clearHistory.classList.toggle('d-none', state.history.length === 0);
+      state.history.forEach((item, i) => {
+        const li = document.createElement('li');
+        li.className = 'list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2';
+        const when = new Date(item.t).toLocaleString('es');
+        li.innerHTML = `<span><span class="fw-bold"></span><br><small class="text-body-secondary"></small></span>`;
+        li.querySelector('.fw-bold').textContent = item.text;
+        li.querySelector('small').textContent = `${item.name} · ${when}`;
+        const actions = document.createElement('span');
+        actions.className = 'd-flex gap-2';
+        const load = document.createElement('button');
+        load.className = 'btn btn-outline-secondary btn-sm';
+        load.type = 'button';
+        load.textContent = '↩️';
+        load.title = 'Cargar en el conversor';
+        load.addEventListener('click', () => {
+          state.type = item.type;
+          applyType();
+          $inputA.value = item.a;
+          recalc('a');
+        });
+        const del = document.createElement('button');
+        del.className = 'btn btn-outline-danger btn-sm';
+        del.type = 'button';
+        del.textContent = '🗑️';
+        del.title = 'Borrar';
+        del.addEventListener('click', () => {
+          state.history.splice(i, 1);
+          persist();
+          renderHistory();
+        });
+        actions.append(load, del);
+        li.append(actions);
+        $history.append(li);
+      });
+    }
+
+    // init: URL > localStorage > default (si viene por URL, no se toca localStorage hasta el primer cambio)
+    let fromUrl = false;
+    (function init() {
+      const params = new URLSearchParams(window.location.search);
+      const urlType = params.get('c');
+      const urlValue = params.get('v');
+      const urlLast = params.get('l');
+      if (urlType && CONVERSIONS[urlType] && urlValue !== null) {
+        fromUrl = true;
+        state.type = urlType;
+        state.last = urlLast === 'b' ? 'b' : 'a';
+        applyType();
+        if (state.last === 'a') {
+          $inputA.value = urlValue;
+          state.a = urlValue;
+          state.b = convertForward(state.type, state.a);
+          $inputB.value = state.b;
+        } else {
+          $inputB.value = urlValue;
+          state.b = urlValue;
+          state.a = convertBackward(state.type, state.b);
+          $inputA.value = state.a;
+        }
+      } else {
+        const stored = readStored();
+        Object.assign(state, DEFAULT_STATE, stored || {}, { history: (stored && stored.history) || [] });
+        applyType();
+        $inputA.value = state.a;
+        recalc(state.last === 'b' ? 'b' : 'a');
+        if (!stored) persist();
+      }
+      renderHistory();
+    })();
+
+    $type.addEventListener('change', () => {
+      state.type = $type.value;
+      fromUrl = false;
+      applyType();
+      recalc('a');
+    });
+    $inputA.addEventListener('input', () => { fromUrl = false; recalc('a'); });
+    $inputB.addEventListener('input', () => { fromUrl = false; recalc('b'); });
+
+    $save.addEventListener('click', () => {
+      const text = currentText();
+      if (!text) return;
+      state.history.unshift({
+        t: new Date().toISOString(),
+        type: state.type,
+        name: CONVERSIONS[state.type].name,
+        a: state.a,
+        b: state.b,
+        text,
+      });
+      state.history = state.history.slice(0, MAX_HISTORY);
+      fromUrl = false;
+      persist();
+      renderHistory();
+      $save.textContent = '¡Guardado!';
+      setTimeout(() => { $save.textContent = '💾 Guardar en historial'; }, 1500);
+    });
+
+    $clearHistory.addEventListener('click', () => {
+      state.history = [];
+      fromUrl = false;
+      persist();
+      renderHistory();
+    });
+
+    $share.addEventListener('click', () => {
+      const value = state.last === 'b' ? state.b : state.a;
+      const url = `${window.location.origin}${window.location.pathname}?c=${encodeURIComponent(state.type)}&v=${encodeURIComponent(value)}&l=${state.last}`;
+      navigator.clipboard.writeText(url);
+      $share.textContent = '¡Copiado!';
+      setTimeout(() => { $share.textContent = '🔗 Compartir'; }, 1500);
+    });
+
+    $reset.addEventListener('click', () => {
+      try { localStorage.removeItem(STORAGE_KEY); } catch {}
+      Object.assign(state, DEFAULT_STATE, { history: [] });
+      history.replaceState(null, '', window.location.pathname);
+      applyType();
+      $inputA.value = state.a;
+      recalc('a');
+      renderHistory();
+    });
+
+    // theme toggle: Bootstrap's native data-bs-theme, remembered per browser
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

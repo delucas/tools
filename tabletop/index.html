@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f5c2%3B%3C/text%3E%3C/svg%3E">
+  <title>Tabletop</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    textarea.form-control, input.form-control {
+      font-size: 16px;
+    }
+
+    #grid input {
+      min-width: 6rem;
+    }
+
+    #output {
+      max-height: 24rem;
+    }
+
+    p.signature {
+      font-size: 0.8em;
+    }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4" style="max-width: 720px;">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">🗂️ Tabletop</h1>
+        <p class="text-body-secondary mb-0">Convertí tablas entre Markdown, CSV, HTML y ASCII.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="share" class="btn btn-outline-secondary btn-sm" type="button">🔗 Compartir</button>
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+    <hr>
+
+    <h2 class="h5">1. Pegar tabla</h2>
+    <div class="mb-2">
+      <label for="import-text" class="form-label visually-hidden">Tabla a importar</label>
+      <textarea id="import-text" class="form-control font-monospace" rows="6" autocomplete="off" spellcheck="false" placeholder="Pegá un CSV, Markdown, HTML o ASCII…"></textarea>
+    </div>
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+      <button id="import-load" class="btn btn-primary btn-sm" type="button">📥 Cargar a la grilla</button>
+      <span id="format-badge" class="badge text-bg-secondary d-none"></span>
+    </div>
+
+    <hr>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+      <h2 class="h5 mb-0">2. Corregir en la grilla</h2>
+      <div class="form-check form-switch mb-0">
+        <input id="has-header" class="form-check-input" type="checkbox" role="switch">
+        <label for="has-header" class="form-check-label small">Primera fila = encabezado</label>
+      </div>
+    </div>
+    <div class="table-responsive mb-2">
+      <table id="grid" class="table table-bordered table-sm align-middle mb-0"></table>
+    </div>
+    <div class="d-flex flex-wrap gap-2 mb-3">
+      <button id="add-row" class="btn btn-outline-secondary btn-sm" type="button">+ Fila</button>
+      <button id="del-row" class="btn btn-outline-secondary btn-sm" type="button">− Fila</button>
+      <button id="add-col" class="btn btn-outline-secondary btn-sm" type="button">+ Columna</button>
+      <button id="del-col" class="btn btn-outline-secondary btn-sm" type="button">− Columna</button>
+    </div>
+
+    <hr>
+
+    <h2 class="h5">3. Llevarse el resultado</h2>
+    <div id="out-tabs" class="d-flex flex-wrap gap-2 mb-2" role="tablist"></div>
+    <div id="ascii-opts" class="d-none align-items-center gap-2 mb-2">
+      <label for="ascii-wrap" class="form-label small mb-0">Ancho máx. columna</label>
+      <input id="ascii-wrap" type="number" class="form-control form-control-sm" style="width: 5.5rem" min="5" max="200" step="1" value="20">
+    </div>
+    <pre id="output" class="border rounded p-3 bg-body-tertiary overflow-auto small font-monospace"></pre>
+    <div id="preview" class="border rounded p-3 bg-body-tertiary overflow-auto d-none"></div>
+    <div class="d-flex flex-wrap gap-2">
+      <button id="copy-out" class="btn btn-primary btn-sm" type="button">📋 Copiar</button>
+      <button id="download-out" class="btn btn-outline-secondary btn-sm" type="button">⬇️ Descargar</button>
+    </div>
+    <p id="notice" class="small mt-2 mb-0 d-none" role="status"></p>
+
+    <hr>
+
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script>
+    // __PURE_START__ (lógica sin DOM: se testea con node)
+    const STORAGE_KEY = 'tabletop';
+    const MAX_ROWS = 300;
+    const MAX_COLS = 50;
+
+    const OUT_TABS = [
+      { id: 'md', label: 'Markdown', ext: 'md', mime: 'text/markdown;charset=utf-8' },
+      { id: 'csv-c', label: 'CSV (,)', ext: 'csv', mime: 'text/csv;charset=utf-8' },
+      { id: 'csv-s', label: 'CSV (;)', ext: 'csv', mime: 'text/csv;charset=utf-8' },
+      { id: 'tsv', label: 'TSV', ext: 'tsv', mime: 'text/tab-separated-values;charset=utf-8' },
+      { id: 'html', label: 'HTML', ext: 'html', mime: 'text/html;charset=utf-8' },
+      { id: 'rich', label: 'Enriquecido', ext: 'html', mime: 'text/html;charset=utf-8' },
+      { id: 'ascii', label: 'ASCII', ext: 'txt', mime: 'text/plain;charset=utf-8' },
+    ];
+
+    function normalize(rows) {
+      const width = Math.max(0, ...rows.map(r => r.length));
+      return rows.map(r => [...r.map(c => String(c ?? '')), ...Array(Math.max(0, width - r.length)).fill('')]);
+    }
+
+    function parseDelimited(text, sep) {
+      const rows = [];
+      let row = [], cur = '', quoted = false;
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (quoted) {
+          if (ch === '"') {
+            if (text[i + 1] === '"') { cur += '"'; i++; }
+            else quoted = false;
+          } else cur += ch;
+        } else if (ch === '"') quoted = true;
+        else if (ch === sep) { row.push(cur); cur = ''; }
+        else if (ch === '\n') { row.push(cur); rows.push(row); row = []; cur = ''; }
+        else if (ch !== '\r') cur += ch;
+      }
+      row.push(cur);
+      rows.push(row);
+      while (rows.length && rows[rows.length - 1].every(c => c === '')) rows.pop();
+      return normalize(rows.filter(r => !(r.length === 1 && r[0] === '')));
+    }
+
+    function guessSep(text) {
+      const bare = text.replace(/"([^"]|"")*"/g, '');
+      const semis = (bare.match(/;/g) || []).length;
+      const commas = (bare.match(/,/g) || []).length;
+      return semis > 0 && semis >= commas ? ';' : ',';
+    }
+
+    function splitMdRow(line) {
+      return line.replace(/^\s*\||\|\s*$/g, '').split('|').map(c => c.trim());
+    }
+
+    function parseMarkdown(text) {
+      const lines = text.split('\n').map(l => l.trim()).filter(l => l !== '');
+      const sepIdx = lines.findIndex(l => l.includes('|') && l.includes('-') && /^[\s|:.\-]+$/.test(l));
+      if (sepIdx < 1) return null;
+      const head = splitMdRow(lines[sepIdx - 1]);
+      const body = lines.slice(sepIdx + 1).filter(l => l.includes('|')).map(splitMdRow);
+      if (!body.length) return null;
+      return { rows: normalize([head, ...body]), hasHeader: true };
+    }
+
+    function parseAscii(text) {
+      const data = text.split('\n')
+        .map(l => l.trim())
+        .filter(l => /^\|.*\|?$/.test(l))
+        .map(l => l.replace(/^\||\|$/g, '').split('|').map(c => c.trim()));
+      if (data.length < 1) return null;
+      return { rows: normalize(data), hasHeader: false };
+    }
+
+    function parseHtmlTable(text, doc) {
+      const table = doc.querySelector('table');
+      if (!table) return null;
+      const rows = [...table.rows].map(tr => [...tr.cells].map(td => td.textContent.trim()));
+      if (!rows.length) return null;
+      const firstRowCells = table.rows[0] ? [...table.rows[0].cells] : [];
+      const hasHeader = firstRowCells.length > 0 && firstRowCells.every(c => c.tagName === 'TH');
+      return { rows: normalize(rows), hasHeader };
+    }
+
+    // texto pegado → { rows, hasHeader, format }
+    function detectAndParse(text, doc) {
+      const clean = text.trim();
+      if (!clean) return null;
+      if (/<\s*table[\s>]/i.test(clean) && doc) {
+        const parsed = parseHtmlTable(clean, doc);
+        if (parsed) return { ...parsed, format: 'HTML' };
+      }
+      const md = parseMarkdown(clean);
+      if (md) return { ...md, format: 'Markdown' };
+      if (/^\+[-+ ]+\+$/m.test(clean)) {
+        const ascii = parseAscii(clean);
+        if (ascii) return { ...ascii, format: 'ASCII' };
+      }
+      const lines = clean.split('\n').filter(l => l.trim() !== '');
+      if (clean.includes('\t') || /[,;]/.test(clean)) {
+        const sep = clean.includes('\t') ? '\t' : guessSep(clean);
+        const rows = parseDelimited(clean, sep);
+        if (rows.length) {
+          return { rows, hasHeader: false, format: sep === '\t' ? 'TSV' : 'CSV' };
+        }
+      }
+      if (lines.length) return { rows: lines.map(l => [l.trim()]), hasHeader: false, format: 'Texto' };
+      return null;
+    }
+
+    function flat(cell) {
+      return String(cell ?? '').replace(/\s*\n\s*/g, ' ');
+    }
+
+    function escapeHtmlCell(cell) {
+      return flat(cell).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+    }
+
+    function csvCell(cell, sep) {
+      const s = String(cell ?? '');
+      return (s.includes(sep) || s.includes('"') || s.includes('\n') || s.includes('\r'))
+        ? `"${s.replace(/"/g, '""')}"` : s;
+    }
+
+    function toMarkdown(rows) {
+      const [head, ...body] = rows;
+      const widths = head.map((_, i) => Math.max(...rows.map(r => flat(r[i]).length)));
+      const line = r => `| ${r.map((c, i) => flat(c).padEnd(widths[i])).join(' | ')} |`;
+      return [line(head), `| ${widths.map(w => '-'.repeat(Math.max(3, w))).join(' | ')} |`, ...body.map(line)].join('\n');
+    }
+
+    function toDelimited(rows, sep) {
+      return rows.map(r => r.map(c => csvCell(c, sep)).join(sep)).join('\n');
+    }
+
+    function toHtml(rows, hasHeader) {
+      const [head, ...body] = rows;
+      const tag = (t, c) => `<${t}>${escapeHtmlCell(c)}</${t}>`;
+      const thead = hasHeader ? `<thead>\n<tr>${head.map(c => tag('th', c)).join('')}</tr>\n</thead>\n` : '';
+      const data = hasHeader ? body : rows;
+      return `<table>\n${thead}<tbody>\n${data.map(r => `<tr>${r.map(c => tag('td', c)).join('')}</tr>`).join('\n')}\n</tbody>\n</table>`;
+    }
+
+    function toAscii(rows, hasHeader, wrap = 20) {
+      const w = Math.min(200, Math.max(5, parseInt(wrap, 10) || 20));
+      const cells = rows.map(r => r.map(c => wrapCell(c, w)));
+      const widths = cells[0].map((_, i) => Math.max(1, ...cells.map(r => Math.max(...r[i].map(l => l.length)))));
+      const border = ch => `+${widths.map(x => ch.repeat(x + 2)).join('+')}+`;
+      const renderRow = r => {
+        const height = Math.max(...r.map(ls => ls.length));
+        const out = [];
+        for (let k = 0; k < height; k++) {
+          out.push(`|${r.map((ls, i) => ` ${(ls[k] ?? '').padEnd(widths[i])} `).join('|')}|`);
+        }
+        return out;
+      };
+      const out = [border('-'), ...renderRow(cells[0])];
+      cells.slice(1).forEach((r, i) => {
+        out.push(border(i === 0 && hasHeader ? '=' : '-'));
+        out.push(...renderRow(r));
+      });
+      out.push(border('-'));
+      return out.join('\n');
+    }
+
+    // parte una celda en líneas de hasta `width` (por palabra; corta palabras más largas)
+    function wrapCell(text, width) {
+      const s = flat(text);
+      if (s.length <= width) return [s];
+      const lines = [];
+      let cur = '';
+      const push = () => { if (cur) { lines.push(cur); cur = ''; } };
+      for (const word of s.split(/\s+/).filter(w => w !== '')) {
+        if (word.length > width) {
+          push();
+          for (let i = 0; i < word.length; i += width) lines.push(word.slice(i, i + width));
+        } else if (!cur) cur = word;
+        else if ((cur + ' ' + word).length <= width) cur += ` ${word}`;
+        else { push(); cur = word; }
+      }
+      push();
+      return lines.length ? lines : [''];
+    }
+
+    // tabla con estilos en línea: Word/Docs/Outlook la pegan como tabla real
+    function toRichTable(rows, hasHeader) {
+      const [head, ...body] = rows;
+      const td = c => `<td style="border:1px solid #999;padding:4px 8px">${escapeHtmlCell(c)}</td>`;
+      const th = c => `<th style="border:1px solid #999;padding:4px 8px;background:#eee">${escapeHtmlCell(c)}</th>`;
+      const thead = hasHeader ? `<thead><tr>${head.map(th).join('')}</tr></thead>` : '';
+      const data = hasHeader ? body : rows;
+      const tbody = `<tbody>${data.map(r => `<tr>${r.map(td).join('')}</tr>`).join('')}</tbody>`;
+      return `<table style="border-collapse:collapse">${thead}${tbody}</table>`;
+    }
+
+    function generate(tabId, rows, hasHeader, asciiWrap = 20) {
+      switch (tabId) {
+        case 'md': return toMarkdown(rows);
+        case 'csv-c': return toDelimited(rows, ',');
+        case 'csv-s': return toDelimited(rows, ';');
+        case 'tsv': return toDelimited(rows, '\t');
+        case 'html': return toHtml(rows, hasHeader);
+        case 'rich': return toRichTable(rows, hasHeader);
+        case 'ascii': return toAscii(rows, hasHeader, asciiWrap);
+        default: return '';
+      }
+    }
+    // __PURE_END__
+
+    const EXAMPLE = 'nombre,edad,ciudad\nAna,30,Rosario\nBruno,25,CABA\nCarla,28,Córdoba';
+    const DEFAULT_STATE = { input: EXAMPLE, hasHeader: false, rows: [['nombre', 'edad', 'ciudad'], ['Ana', '30', 'Rosario'], ['Bruno', '25', 'CABA'], ['Carla', '28', 'Córdoba']], outTab: 'md', asciiWrap: 20 };
+
+    const $importText = document.getElementById('import-text');
+    const $importLoad = document.getElementById('import-load');
+    const $formatBadge = document.getElementById('format-badge');
+    const $hasHeader = document.getElementById('has-header');
+    const $grid = document.getElementById('grid');
+    const $outTabs = document.getElementById('out-tabs');
+    const $output = document.getElementById('output');
+    const $preview = document.getElementById('preview');
+    const $asciiOpts = document.getElementById('ascii-opts');
+    const $asciiWrap = document.getElementById('ascii-wrap');
+    const $copyOut = document.getElementById('copy-out');
+    const $downloadOut = document.getElementById('download-out');
+    const $share = document.getElementById('share');
+    const $reset = document.getElementById('reset');
+    const $notice = document.getElementById('notice');
+
+    const state = { ...DEFAULT_STATE, rows: DEFAULT_STATE.rows.map(r => [...r]) };
+    let noticeTimer;
+    let fromUrl = false;
+
+    function showNotice(text) {
+      $notice.textContent = text;
+      $notice.classList.remove('d-none');
+      clearTimeout(noticeTimer);
+      noticeTimer = setTimeout(() => $notice.classList.add('d-none'), 3500);
+    }
+
+    function copyText(text) {
+      if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
+      const input = document.createElement('textarea');
+      input.value = text;
+      input.style.position = 'fixed';
+      document.body.append(input);
+      input.select();
+      document.execCommand('copy');
+      input.remove();
+      return Promise.resolve();
+    }
+
+    function persist() {
+      if (fromUrl) return; // desde URL compartida no se toca localStorage hasta el primer cambio propio
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          input: state.input, hasHeader: state.hasHeader, rows: state.rows, outTab: state.outTab, asciiWrap: state.asciiWrap
+        }));
+      } catch {}
+    }
+
+    function readStored() {
+      try {
+        const data = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (!data || !Array.isArray(data.rows) || !data.rows.length) return null;
+        if (data.rows.length > MAX_ROWS || data.rows.some(r => !Array.isArray(r) || r.length > MAX_COLS)) return null;
+        return data;
+      } catch {
+        return null;
+      }
+    }
+
+    function colCount() {
+      return Math.max(1, ...state.rows.map(r => r.length));
+    }
+
+    function fitGrid() {
+      const cols = Math.min(MAX_COLS, colCount());
+      state.rows = normalize(state.rows.map(r => r.slice(0, cols))).slice(0, MAX_ROWS);
+      if (!state.rows.length) state.rows = [['']];
+    }
+
+    function renderGrid() {
+      fitGrid();
+      const cols = colCount();
+      $grid.innerHTML = '';
+      const showHead = state.hasHeader;
+      state.rows.forEach((row, ri) => {
+        const tr = document.createElement('tr');
+        const del = document.createElement('td');
+        del.className = 'text-center';
+        del.style.width = '1%';
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-outline-danger btn-sm';
+        btn.type = 'button';
+        btn.textContent = '✕';
+        btn.title = ri === 0 && showHead ? 'Borrar encabezado' : `Borrar fila ${ri + 1}`;
+        btn.disabled = state.rows.length === 1;
+        btn.addEventListener('click', () => {
+          fromUrl = false;
+          state.rows.splice(ri, 1);
+          persist();
+          renderGrid();
+          renderOutput();
+        });
+        del.append(btn);
+        tr.append(del);
+        for (let ci = 0; ci < cols; ci++) {
+          const td = document.createElement('td');
+          if (ri === 0 && showHead) td.classList.add('table-active', 'fw-bold');
+          const input = document.createElement('input');
+          input.className = 'form-control form-control-sm border-0 bg-transparent';
+          input.value = row[ci] ?? '';
+          input.setAttribute('aria-label', `Fila ${ri + 1}, columna ${ci + 1}`);
+          input.addEventListener('input', () => {
+            state.rows[ri][ci] = input.value;
+            persist();
+            renderOutput();
+          });
+          td.append(input);
+          tr.append(td);
+        }
+        $grid.append(tr);
+      });
+      $hasHeader.checked = state.hasHeader;
+    }
+
+    function renderTabs() {
+      $outTabs.innerHTML = '';
+      OUT_TABS.forEach(tab => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.setAttribute('role', 'tab');
+        btn.className = `btn btn-sm ${tab.id === state.outTab ? 'btn-primary' : 'btn-outline-secondary'}`;
+        btn.textContent = tab.label;
+        btn.addEventListener('click', () => {
+          fromUrl = false;
+          state.outTab = tab.id;
+          persist();
+          renderTabs();
+          renderOutput();
+        });
+        $outTabs.append(btn);
+      });
+    }
+
+    function currentTab() {
+      return OUT_TABS.find(t => t.id === state.outTab) || OUT_TABS[0];
+    }
+
+    function clampWrap(n) {
+      return Math.min(200, Math.max(5, parseInt(n, 10) || 20));
+    }
+
+    function renderOutput() {
+      const isAscii = state.outTab === 'ascii';
+      const isRich = state.outTab === 'rich';
+      $asciiOpts.classList.toggle('d-none', !isAscii);
+      $asciiOpts.classList.toggle('d-flex', isAscii);
+      if (isAscii && document.activeElement !== $asciiWrap) $asciiWrap.value = state.asciiWrap;
+      $output.classList.toggle('d-none', isRich);
+      $preview.classList.toggle('d-none', !isRich);
+      if (!state.rows.length) {
+        $output.textContent = '';
+        $preview.innerHTML = '';
+        return;
+      }
+      if (isRich) $preview.innerHTML = generate('rich', state.rows, state.hasHeader);
+      else $output.textContent = generate(state.outTab, state.rows, state.hasHeader, state.asciiWrap);
+    }
+
+    function showBadge(format) {
+      $formatBadge.textContent = `Detectado: ${format}`;
+      $formatBadge.classList.remove('d-none');
+    }
+
+    function hideBadge() {
+      $formatBadge.classList.add('d-none');
+    }
+
+    $importLoad.addEventListener('click', () => {
+      fromUrl = false;
+      const text = $importText.value;
+      const doc = new DOMParser().parseFromString(text, 'text/html');
+      const parsed = detectAndParse(text, doc);
+      if (!parsed || !parsed.rows.length) {
+        showNotice('No se encontró ninguna tabla en ese texto.');
+        return;
+      }
+      if (parsed.rows.length > MAX_ROWS || parsed.rows[0].length > MAX_COLS) {
+        showNotice(`Tabla muy grande: se cargan las primeras ${MAX_ROWS} filas y ${MAX_COLS} columnas.`);
+      }
+      state.rows = normalize(parsed.rows.map(r => r.slice(0, MAX_COLS))).slice(0, MAX_ROWS);
+      state.hasHeader = parsed.hasHeader;
+      state.input = text;
+      showBadge(parsed.format);
+      persist();
+      renderGrid();
+      renderOutput();
+    });
+
+    $hasHeader.addEventListener('change', () => {
+      fromUrl = false;
+      state.hasHeader = $hasHeader.checked;
+      persist();
+      renderGrid();
+      renderOutput();
+    });
+
+    $asciiWrap.addEventListener('input', () => {
+      fromUrl = false;
+      state.asciiWrap = clampWrap($asciiWrap.value);
+      persist();
+      renderOutput();
+    });
+
+    $grid.addEventListener('input', () => { fromUrl = false; }, true);
+
+    document.getElementById('add-row').addEventListener('click', () => {
+      fromUrl = false;
+      if (state.rows.length >= MAX_ROWS) { showNotice(`Límite de ${MAX_ROWS} filas.`); return; }
+      state.rows.push(Array(colCount()).fill(''));
+      persist();
+      renderGrid();
+      renderOutput();
+    });
+    document.getElementById('del-row').addEventListener('click', () => {
+      fromUrl = false;
+      if (state.rows.length <= 1) return;
+      state.rows.pop();
+      persist();
+      renderGrid();
+      renderOutput();
+    });
+    document.getElementById('add-col').addEventListener('click', () => {
+      fromUrl = false;
+      if (colCount() >= MAX_COLS) { showNotice(`Límite de ${MAX_COLS} columnas.`); return; }
+      state.rows.forEach(r => r.push(''));
+      persist();
+      renderGrid();
+      renderOutput();
+    });
+    document.getElementById('del-col').addEventListener('click', () => {
+      fromUrl = false;
+      if (colCount() <= 1) return;
+      state.rows.forEach(r => r.pop());
+      persist();
+      renderGrid();
+      renderOutput();
+    });
+
+    $copyOut.addEventListener('click', async () => {
+      try {
+        if (state.outTab === 'rich' && navigator.clipboard?.write && window.ClipboardItem) {
+          // HTML real: Word/Docs lo pegan como tabla; TSV como respaldo en texto plano
+          await navigator.clipboard.write([new ClipboardItem({
+            'text/html': new Blob([generate('rich', state.rows, state.hasHeader)], { type: 'text/html' }),
+            'text/plain': new Blob([toDelimited(state.rows, '\t')], { type: 'text/plain' })
+          })]);
+        } else {
+          await copyText($output.textContent);
+        }
+        $copyOut.textContent = '¡Copiado!';
+        setTimeout(() => { $copyOut.textContent = '📋 Copiar'; }, 1500);
+      } catch {
+        showNotice('No se pudo copiar.');
+      }
+    });
+
+    $downloadOut.addEventListener('click', () => {
+      const tab = currentTab();
+      const content = tab.id === 'rich'
+        ? generate('rich', state.rows, state.hasHeader)
+        : $output.textContent;
+      const blob = new Blob([content], { type: tab.mime });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `tabla.${tab.ext}`;
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    });
+
+    $share.addEventListener('click', async () => {
+      const payload = encodeURIComponent(JSON.stringify({
+        hasHeader: state.hasHeader, rows: state.rows, outTab: state.outTab, asciiWrap: state.asciiWrap
+      }));
+      if (payload.length > 1800) {
+        showNotice('Tabla muy grande para la URL: descargala o copiala en vez de compartirla.');
+        return;
+      }
+      const url = `${window.location.origin}${window.location.pathname}?d=${payload}`;
+      try {
+        await copyText(url);
+        showNotice('Se copió el enlace con la tabla.');
+      } catch {
+        showNotice('No se pudo copiar el enlace.');
+      }
+    });
+
+    function resetAll() {
+      try { localStorage.removeItem(STORAGE_KEY); } catch {}
+      Object.assign(state, { input: EXAMPLE, hasHeader: false, rows: DEFAULT_STATE.rows.map(r => [...r]), outTab: 'md', asciiWrap: 20 });
+      history.replaceState(null, '', window.location.pathname);
+      $importText.value = EXAMPLE;
+      hideBadge();
+      renderGrid();
+      renderTabs();
+      renderOutput();
+    }
+    $reset.addEventListener('click', resetAll);
+
+    // init: URL > localStorage > ejemplo (desde URL no se toca localStorage hasta el primer cambio)
+    (function init() {
+      const params = new URLSearchParams(window.location.search);
+      const shared = params.get('d');
+      if (shared) {
+        try {
+          const data = JSON.parse(decodeURIComponent(shared));
+          if (data && Array.isArray(data.rows) && data.rows.length) {
+            fromUrl = true;
+            state.rows = normalize(data.rows.map(r => (Array.isArray(r) ? r : [r]).slice(0, MAX_COLS))).slice(0, MAX_ROWS);
+            state.hasHeader = data.hasHeader === true;
+            if (OUT_TABS.some(t => t.id === data.outTab)) state.outTab = data.outTab;
+            if (data.asciiWrap !== undefined) state.asciiWrap = clampWrap(data.asciiWrap);
+            state.input = '';
+          }
+        } catch { /* se cae al resto */ }
+      }
+      if (!fromUrl) {
+        const stored = readStored();
+        if (stored) {
+          state.input = stored.input ?? '';
+          state.hasHeader = stored.hasHeader === true;
+          state.rows = normalize(stored.rows);
+          if (OUT_TABS.some(t => t.id === stored.outTab)) state.outTab = stored.outTab;
+          if (stored.asciiWrap !== undefined) state.asciiWrap = clampWrap(stored.asciiWrap);
+        }
+      }
+      $importText.value = state.input;
+      renderGrid();
+      renderTabs();
+      renderOutput();
+    })();
+
+    // las ediciones de celdas adoptan el estado (los demás controles ya limpian fromUrl en su handler)
+    $grid.addEventListener('input', () => { fromUrl = false; }, true);
+
+    // theme toggle: Bootstrap's native data-bs-theme, remembered per browser
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

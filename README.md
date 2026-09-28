@@ -39,5 +39,6 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`vcard`](./vcard) | Tu tarjeta laboral: descargala como `.vcf` o abrila en QRlabs para que la escaneen. |
 | [`lector-qr`](./lector-qr) | Escaneá QR y códigos de barras con cámara o imagen, con historial local. |
 | [`conversor`](./conversor) | Conversor mínimo de unidades, con dos casillas mutuas e historial manual. |
+| [`tabletop`](./tabletop) | Convertí tablas entre Markdown, CSV, HTML y ASCII, con grilla editable. |
 
 Cada carpeta tiene su propio `README.md` con el detalle de uso.

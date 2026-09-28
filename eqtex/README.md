@@ -12,4 +12,4 @@ Editor de ecuaciones LaTeX con vista previa en fondo blanco, lista para capturar
 5. Exportá la colección a un Markdown legible (`Guardar .md`) o importala desde un archivo (`Abrir .md`).
 6. El cheatsheet lateral inserta el comando con un clic en la posición del cursor.
 
-Todo corre en el navegador, sin backend. Dependencias por CDN: Vue 3, KaTeX y html2canvas.
+Todo corre en el navegador, sin backend. Dependencias por CDN: Vue 3, KaTeX y html-to-image.

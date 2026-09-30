@@ -718,8 +718,8 @@
         },
         hexDe(p) { return p.colores.map(c => c.hex).join('\n'); },
         analizarEnChromatic(p) {
-          const hexes = [colorPara(p, 'bg'), colorPara(p, 'fg'), colorPara(p, 'ac1'), colorPara(p, 'ac2')]
-            .filter((h, i, arr) => h && arr.indexOf(h) === i).slice(0, 4);
+          // Se envía la paleta completa: Chromatic la recibe en bandeja y analiza de a 4.
+          const hexes = p.colores.map(c => c.hex).filter((h, i, arr) => h && arr.indexOf(h) === i);
           if (!hexes.length) { this.showNotice('La paleta no tiene colores.'); return; }
           const url = new URL('../chromatic/', window.location.href);
           url.searchParams.set('c', JSON.stringify(hexes));

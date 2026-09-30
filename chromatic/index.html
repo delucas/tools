@@ -85,8 +85,14 @@
             <div class="card-body">
               <div class="d-flex justify-content-between align-items-center mb-2">
                 <span class="fw-semibold small">COLOR {{ i + 1 }}</span>
-                <button class="btn btn-sm btn-link text-body-secondary text-decoration-none p-0" type="button"
-                  v-if="c" @click="clearSlot(i)" title="Eliminar color">✕</button>
+                <span class="d-flex gap-1">
+                  <button class="btn btn-sm btn-link text-body-secondary text-decoration-none p-0" type="button"
+                    v-if="c && i > 0" @click="moveSlot(i, -1)" title="Mover a la izquierda">←</button>
+                  <button class="btn btn-sm btn-link text-body-secondary text-decoration-none p-0" type="button"
+                    v-if="c && i < 3" @click="moveSlot(i, 1)" title="Mover a la derecha">→</button>
+                  <button class="btn btn-sm btn-link text-body-secondary text-decoration-none p-0" type="button"
+                    v-if="c" @click="clearSlot(i)" title="Eliminar color">✕</button>
+                </span>
               </div>
               <div class="slot-swatch d-flex align-items-center justify-content-center mb-2"
                 :style="{ backgroundColor: c || 'transparent' }">
@@ -214,21 +220,21 @@
               :style="{ backgroundColor: c.hex, color: ink(c.hex) }">C{{ c.idx + 1 }} · {{ c.hex }}</span>
           </div>
           <h3 class="h6 mb-2">Slide Preview
-            <small class="text-body-secondary fw-normal" v-if="slide">(fondo/texto: mejor contraste {{ slide.ratio.toFixed(1) }}:1)</small>
+            <small class="text-body-secondary fw-normal" v-if="slide">({{ slideRoles }} · {{ slide.ratio.toFixed(1) }}:1)</small>
           </h3>
-          <div v-if="slide" class="p-4 rounded border" :style="{ backgroundColor: slide.bg, color: slide.fg }">
-            <div class="small fw-bold mb-1" :style="{ color: slide.accent || slide.fg }">INFORME MENSUAL · DESTACADO</div>
+          <div v-if="slide" class="p-4 rounded border" :style="{ backgroundColor: slide.bg.hex, color: slide.fg.hex }">
+            <div class="small fw-bold mb-1" :style="{ color: slideAccent }">INFORME MENSUAL · DESTACADO</div>
             <div class="fs-3 fw-bold">Título de la diapositiva</div>
             <div class="mb-2 opacity-75">Subtítulo que acompaña sin competir</div>
             <p class="mb-2">Párrafo de ejemplo para evaluar si la paleta sostiene texto real en una presentación.</p>
-            <div class="fs-2 fw-bold mb-2" :style="{ color: slide.accent || slide.fg }">+38% dato destacado</div>
+            <div class="fs-2 fw-bold mb-2" :style="{ color: slideAccent }">+38% dato destacado</div>
             <div class="d-flex gap-1 align-items-end mb-2" style="height: 3rem;" aria-hidden="true">
-              <span class="rounded" :style="{ width: '18%', height: '40%', backgroundColor: slide.accent || slide.fg, opacity: 0.55 }"></span>
-              <span class="rounded" :style="{ width: '18%', height: '70%', backgroundColor: slide.accent || slide.fg, opacity: 0.8 }"></span>
-              <span class="rounded" :style="{ width: '18%', height: '100%', backgroundColor: slide.accent || slide.fg }"></span>
-              <span class="rounded" :style="{ width: '18%', height: '55%', backgroundColor: slide.fg, opacity: 0.45 }"></span>
+              <span class="rounded" :style="{ width: '18%', height: '40%', backgroundColor: slideAccent, opacity: 0.55 }"></span>
+              <span class="rounded" :style="{ width: '18%', height: '70%', backgroundColor: slideAccent, opacity: 0.8 }"></span>
+              <span class="rounded" :style="{ width: '18%', height: '100%', backgroundColor: slideAccent }"></span>
+              <span class="rounded" :style="{ width: '18%', height: '55%', backgroundColor: slide.fg.hex, opacity: 0.45 }"></span>
             </div>
-            <span class="badge fw-normal" :style="{ border: '1px solid ' + (slide.accent || slide.fg), color: slide.accent || slide.fg }">Etiqueta / callout</span>
+            <span class="badge fw-normal" :style="{ border: '1px solid ' + slideExtra, color: slideExtra }">Etiqueta / callout</span>
           </div>
         </div>
       </section>
@@ -417,21 +423,22 @@
       };
     }
 
-    function pickSlide(hexes) {
-      const list = (hexes || []).filter(Boolean);
+    function pickSlide(items) {
+      const list = (items || []).filter(o => o && o.hex);
       if (list.length < 2) return null;
       let best = null;
       for (let i = 0; i < list.length; i++) {
         for (let j = i + 1; j < list.length; j++) {
-          const r = pairAnalysis(list[i], list[j]);
+          const r = pairAnalysis(list[i].hex, list[j].hex);
           if (!best || r.ratio > best.ratio) best = { a: list[i], b: list[j], ratio: r.ratio };
         }
       }
-      const lumA = culori.wcagLuminance(best.a);
-      const lumB = culori.wcagLuminance(best.b);
+      const lumA = culori.wcagLuminance(best.a.hex);
+      const lumB = culori.wcagLuminance(best.b.hex);
       const bg = lumA <= lumB ? best.a : best.b;
       const fg = lumA <= lumB ? best.b : best.a;
-      return { bg, fg, accent: list.find(h => h !== best.a && h !== best.b) || null, ratio: best.ratio };
+      const rest = list.filter(o => o !== best.a && o !== best.b);
+      return { bg, fg, accent: rest[0] || null, extra: rest[1] || null, ratio: best.ratio };
     }
 
     const app = typeof Vue === 'undefined' ? null : Vue.createApp({
@@ -528,10 +535,29 @@
         slide() {
           if (this.activeCount < 2 || !HAS_CULORI) return null;
           try {
-            return pickSlide(this.colors);
+            return pickSlide(this.activeColors);
           } catch {
             return null;
           }
+        },
+        slideAccent() {
+          const s = this.slide;
+          return s && s.accent ? s.accent.hex : (s ? s.fg.hex : null);
+        },
+        slideExtra() {
+          const s = this.slide;
+          return s && s.extra ? s.extra.hex : this.slideAccent;
+        },
+        slideRoles() {
+          const s = this.slide;
+          if (!s) return '';
+          const tag = o => 'C' + (o.idx + 1);
+          const parts = [tag(s.bg) + ' fondo', tag(s.fg) + ' texto'];
+          if (s.accent) parts.push(tag(s.accent) + ' acento');
+          if (s.extra) parts.push(tag(s.extra) + ' detalle');
+          const usados = new Set([s.bg, s.fg, s.accent, s.extra].filter(Boolean).map(o => o.idx));
+          this.activeColors.forEach(o => { if (!usados.has(o.idx)) parts.push(tag(o) + ' sin usar'); });
+          return parts.join(' · ');
         }
       },
       methods: {
@@ -572,6 +598,14 @@
         },
         devolverABandeja(hex) {
           if (hex && !this.tray.includes(hex) && this.tray.length < 20) this.tray.push(hex);
+        },
+        moveSlot(i, dir) {
+          const j = i + dir;
+          if (j < 0 || j > 3) return;
+          const t = this.colors[i]; this.colors[i] = this.colors[j]; this.colors[j] = t;
+          const d = this.drafts[i]; this.drafts[i] = this.drafts[j]; this.drafts[j] = d;
+          const e = this.errors[i]; this.errors[i] = this.errors[j]; this.errors[j] = e;
+          this.persist();
         },
         clearSlot(i) {
           // Quitar no elimina: el color vuelve a la reserva; solo se va del todo con Descartar.

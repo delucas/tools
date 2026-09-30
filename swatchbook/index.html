@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f3a8%3B%3C/text%3E%3C/svg%3E">
+  <title>Swatchbook — Biblioteca de paletas</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    #app input[type="text"], #app input[type="search"], #app input[type="number"],
+    #app textarea, #app select { font-size: 16px; }
+    .mono { font-family: var(--bs-font-monospace); }
+    .tira { display: flex; height: 2.5rem; border-radius: var(--bs-border-radius) var(--bs-border-radius) 0 0; overflow: hidden; }
+    .tira > span { flex: 1 1 0; }
+    .tira-lg { height: 3.5rem; }
+    .sw { width: 2.5rem; height: 2.5rem; border-radius: var(--bs-border-radius); border: 1px solid rgba(0,0,0,.15); flex-shrink: 0; }
+    .card-paleta { cursor: pointer; }
+    .card-paleta:hover { border-color: var(--bs-primary); }
+    .code-prev { font-family: var(--bs-font-monospace); font-size: .85em; line-height: 1.6; padding: 1rem; border-radius: var(--bs-border-radius); overflow-x: auto; white-space: pre; }
+    textarea#import-text { font-family: var(--bs-font-monospace); min-height: 140px; }
+    p.signature { font-size: 0.8em; }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4" style="max-width: 960px;">
+    <div id="app">
+      <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+      <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+        <div>
+          <h1 class="h3 mb-1">🎨 Swatchbook</h1>
+          <p class="text-body-secondary mb-0">Tu biblioteca personal de paletas: explorá, compará y reutilizá.</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ shared ? '¡Copiado!' : '🔗 Compartir' }}</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset">🗑️ Reiniciar</button>
+          <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+        </div>
+      </div>
+
+      <div v-if="notice" class="alert alert-success py-2" role="status">{{ notice }}</div>
+      <div v-if="error" class="alert alert-danger py-2" role="alert">{{ error }}</div>
+
+      <ul class="nav nav-pills flex-wrap gap-1 mb-3">
+        <li class="nav-item"><button class="nav-link btn-sm" :class="{active: vista==='lib'}" @click="vista='lib'">Biblioteca</button></li>
+        <li class="nav-item"><button class="nav-link btn-sm" :class="{active: vista==='comparar'}" @click="vista='comparar'">Comparar <span class="badge text-bg-secondary">{{ comparar.length }}</span></button></li>
+        <li class="nav-item"><button class="nav-link btn-sm" :class="{active: vista==='previews'}" @click="vista='previews'">Previsualizar</button></li>
+        <li class="nav-item"><button class="nav-link btn-sm" :class="{active: vista==='importar'}" @click="vista='importar'">Importar</button></li>
+        <li class="nav-item"><button class="nav-link btn-sm" :class="{active: vista==='datos'}" @click="vista='datos'">Mi biblioteca</button></li>
+      </ul>
+
+      <!-- BIBLIOTECA -->
+      <section v-if="vista==='lib'">
+        <div class="row g-2 mb-3">
+          <div class="col-12 col-md-6">
+            <input class="form-control" type="search" v-model="filtro" placeholder="🔍 Filtrar por paleta o color…" aria-label="Filtrar paletas">
+          </div>
+          <div class="col-6 col-md-3">
+            <select class="form-select" v-model="filtroOrigen" aria-label="Origen">
+              <option value="todas">Todas</option>
+              <option value="incluida">Incluidas</option>
+              <option value="propia">Mías</option>
+            </select>
+          </div>
+          <div class="col-6 col-md-3 d-flex align-items-center">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="solo-fav" v-model="soloFav">
+              <label class="form-check-label" for="solo-fav">★ Favoritas</label>
+            </div>
+          </div>
+        </div>
+        <div v-if="!filtradas.length" class="text-body-secondary">Sin paletas para ese filtro.</div>
+        <div class="row g-3">
+          <div v-for="p in filtradas" :key="p.id" class="col-12 col-md-6">
+            <div class="card card-paleta h-100" @click="abrir(p.id)">
+              <div class="tira">
+                <span v-for="c in p.colores" :key="c.nombre" :style="{background: c.hex}" :title="c.nombre + ' ' + c.hex"></span>
+              </div>
+              <div class="card-body py-2">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                  <strong>{{ p.nombre }}</strong>
+                  <span class="d-flex gap-1">
+                    <span class="badge" :class="p.fuente==='propia' ? 'text-bg-primary' : 'text-bg-secondary'">{{ p.fuente==='propia' ? 'mía' : 'incluida' }}</span>
+                    <span class="badge text-bg-light border">{{ p.colores.length }} colores</span>
+                  </span>
+                </div>
+                <div class="d-flex flex-wrap gap-2 mt-2" @click.stop>
+                  <button class="btn btn-outline-secondary btn-sm" type="button" @click="toggleFav(p.id)">{{ esFav(p.id) ? '★ Favorita' : '☆ Marcar' }}</button>
+                  <div class="form-check d-flex align-items-center gap-1 m-0">
+                    <input class="form-check-input" type="checkbox" :id="'cmp-'+p.id" :checked="comparar.includes(p.id)" @change="toggleComparar(p.id)">
+                    <label class="form-check-label small" :for="'cmp-'+p.id">Comparar</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- DETALLE -->
+      <section v-if="vista==='detalle' && paleta">
+        <button class="btn btn-outline-secondary btn-sm mb-2" type="button" @click="vista='lib'">← Biblioteca</button>
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+          <h2 class="h4 mb-0">{{ paleta.nombre }}</h2>
+          <span class="d-flex flex-wrap gap-2">
+            <span class="badge" :class="paleta.fuente==='propia' ? 'text-bg-primary' : 'text-bg-secondary'">{{ paleta.fuente==='propia' ? 'mía' : 'incluida' }}</span>
+            <button class="btn btn-outline-secondary btn-sm" type="button" @click="toggleFav(paleta.id)">{{ esFav(paleta.id) ? '★ Favorita' : '☆ Marcar' }}</button>
+            <button class="btn btn-outline-secondary btn-sm" type="button" @click="toggleComparar(paleta.id)">{{ comparar.includes(paleta.id) ? '✓ En comparación' : 'Comparar' }}</button>
+            <button v-if="paleta.fuente==='propia'" class="btn btn-outline-danger btn-sm" type="button" @click="borrarPropia(paleta.id)">Eliminar</button>
+          </span>
+        </div>
+        <div class="tira tira-lg mb-3 border">
+          <span v-for="c in paleta.colores" :key="c.nombre" :style="{background: c.hex}" :title="c.nombre + ' ' + c.hex"></span>
+        </div>
+        <div class="table-responsive mb-3">
+          <table class="table table-sm align-middle mono">
+            <thead><tr><th></th><th>Nombre</th><th>HEX</th><th>RGB</th><th>HSL</th><th></th></tr></thead>
+            <tbody>
+              <tr v-for="c in paleta.colores" :key="c.nombre">
+                <td><span class="sw d-inline-block" :style="{background: c.hex}" style="width:1.75rem;height:1.75rem;"></span></td>
+                <td>{{ c.nombre }}</td>
+                <td>{{ c.hex }}</td>
+                <td class="small">{{ rgbDe(c.hex) }}</td>
+                <td class="small">{{ hslDe(c.hex) }}</td>
+                <td><button class="btn btn-outline-secondary btn-sm" type="button" @click="copiar(c.hex, c.nombre + ' copiado.')">📋</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <h3 class="h6">Copiar paleta completa</h3>
+        <div class="d-flex flex-wrap gap-2 mb-2">
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="copiar(cssDe(paleta), 'CSS copiado.')">📋 CSS</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="copiar(jsonDe(paleta), 'JSON copiado.')">📋 JSON</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="copiar(hexDe(paleta), 'HEX copiados.')">📋 HEX</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="descargar(cssDe(paleta), slug(paleta.nombre)+'.css', 'text/css')">⬇️ .css</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="descargar(jsonDe(paleta), slug(paleta.nombre)+'.json', 'application/json')">⬇️ .json</button>
+        </div>
+        <h3 class="h6">Llevar a otras vistas</h3>
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="analizarEnChromatic(paleta)">🎨 Analizar en Chromatic</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="previsualizar(paleta.id)">👁️ Previsualizar</button>
+        </div>
+      </section>
+
+      <!-- COMPARAR -->
+      <section v-if="vista==='comparar'">
+        <p v-if="comparar.length < 2" class="text-body-secondary">Elegí al menos 2 paletas con la casilla “Comparar” de cada tarjeta (máximo 4).</p>
+        <div v-else class="table-responsive">
+          <table class="table table-sm align-middle">
+            <thead><tr><th>#</th><th v-for="p in paletasComparadas" :key="p.id">{{ p.nombre }}</th></tr></thead>
+            <tbody>
+              <tr v-for="i in filasComparar" :key="i">
+                <th class="mono">{{ i }}</th>
+                <td v-for="p in paletasComparadas" :key="p.id">
+                  <span v-if="p.colores[i-1]" class="d-flex align-items-center gap-2">
+                    <span class="sw d-inline-block" :style="{background: p.colores[i-1].hex}" style="width:1.5rem;height:1.5rem;"></span>
+                    <span class="small"><strong>{{ p.colores[i-1].nombre }}</strong><br><span class="mono">{{ p.colores[i-1].hex }}</span></span>
+                  </span>
+                  <span v-else class="text-body-secondary">—</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- PREVIEWS -->
+      <section v-if="vista==='previews'">
+        <div class="col-12 col-md-6 mb-3">
+          <label class="form-label" for="prev-pal">Paleta</label>
+          <select id="prev-pal" class="form-select" v-model="prevId">
+            <option v-for="p in todas" :key="p.id" :value="p.id">{{ p.nombre }}</option>
+          </select>
+        </div>
+        <div v-if="paletaPrev" class="mb-4">
+          <h3 class="h6">Interfaz de ejemplo</h3>
+          <div class="border rounded p-3 mb-3" :style="{background: uso(paletaPrev,'bg'), color: uso(paletaPrev,'fg')}">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 pb-2 mb-2" :style="{borderBottom: '1px solid ' + uso(paletaPrev,'surface')}">
+              <strong>Mi app</strong>
+              <span class="small" :style="{color: uso(paletaPrev,'muted')}">ejemplo con {{ paletaPrev.nombre }}</span>
+            </div>
+            <p class="small mb-2">Así se ven el fondo, el texto y los acentos de la paleta en una interfaz típica.</p>
+            <div class="d-flex flex-wrap gap-2 mb-2">
+              <button class="btn btn-sm" type="button" :style="{background: uso(paletaPrev,'ac1'), color: textoSobre(uso(paletaPrev,'ac1'))}">Guardar</button>
+              <button class="btn btn-sm" type="button" :style="{background: 'transparent', color: uso(paletaPrev,'ac1'), border: '1px solid ' + uso(paletaPrev,'ac1')}">Cancelar</button>
+            </div>
+            <div class="rounded p-2 small" :style="{background: uso(paletaPrev,'surface')}">Tarjeta sobre superficie: títulos, bordes y texto secundario.</div>
+          </div>
+          <h3 class="h6">Código de ejemplo</h3>
+          <div class="code-prev" :style="{background: uso(paletaPrev,'bg'), color: uso(paletaPrev,'fg')}" v-html="codigoColoreado(paletaPrev)"></div>
+        </div>
+      </section>
+
+      <!-- IMPORTAR -->
+      <section v-if="vista==='importar'">
+        <ul class="nav nav-pills flex-wrap gap-1 mb-3">
+          <li class="nav-item"><button class="nav-link btn-sm" :class="{active: tabImport==='json'}" @click="tabImport='json'">JSON</button></li>
+          <li class="nav-item"><button class="nav-link btn-sm" :class="{active: tabImport==='hex'}" @click="tabImport='hex'">Lista HEX</button></li>
+          <li class="nav-item"><button class="nav-link btn-sm" :class="{active: tabImport==='css'}" @click="tabImport='css'">Variables CSS</button></li>
+          <li class="nav-item"><button class="nav-link btn-sm" :class="{active: tabImport==='chromatic'}" @click="tabImport='chromatic'">Desde Chromatic</button></li>
+        </ul>
+        <div v-if="tabImport==='json'">
+          <p class="text-body-secondary small">JSON con <code class="mono">{"nombre": "...", "colores": [{"nombre": "...", "hex": "#…"}]}</code> (también vale un arreglo de colores o de HEX).</p>
+          <textarea id="import-text" class="form-control mono mb-2" v-model="importText" spellcheck="false" placeholder='{"nombre": "Mi paleta", "colores": [{"nombre": "Fondo", "hex": "#1e1e2e"}]}'></textarea>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="previsualizarImport('json')">Vista previa</button>
+        </div>
+        <div v-if="tabImport==='hex'">
+          <p class="text-body-secondary small">Pegá valores HEX separados por comas, espacios o saltos de línea.</p>
+          <textarea id="import-text" class="form-control mono mb-2" v-model="importText" spellcheck="false" placeholder="#1e1e2e, #cdd6f4, #cba6f7"></textarea>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="previsualizarImport('hex')">Vista previa</button>
+        </div>
+        <div v-if="tabImport==='css'">
+          <p class="text-body-secondary small">Pegá variables CSS (<code class="mono">--fondo: #1e1e2e;</code>). El nombre sale de la variable.</p>
+          <textarea id="import-text" class="form-control mono mb-2" v-model="importText" spellcheck="false" placeholder=":root {&#10;  --fondo: #1e1e2e;&#10;  --texto: #cdd6f4;&#10;}"></textarea>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="previsualizarImport('css')">Vista previa</button>
+        </div>
+        <div v-if="tabImport==='chromatic'">
+          <p class="text-body-secondary small">Pegá la URL de Chromatic (la que copia su botón 🔗 Compartir, con <code class="mono">?c=…</code>) y se importan sus colores.</p>
+          <textarea id="import-text" class="form-control mono mb-2" v-model="importText" spellcheck="false" placeholder="https://…/chromatic/?c=%5B%22%231e1e2e%22%5D"></textarea>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="previsualizarImport('chromatic')">Vista previa</button>
+        </div>
+        <div v-if="importPrev" class="card mt-3">
+          <div class="tira"><span v-for="c in importPrev.colores" :key="c.nombre" :style="{background: c.hex}" :title="c.nombre + ' ' + c.hex"></span></div>
+          <div class="card-body">
+            <div class="row g-2 align-items-end">
+              <div class="col-12 col-md-6">
+                <label class="form-label small" for="import-nombre">Nombre de la paleta</label>
+                <input id="import-nombre" class="form-control" type="text" v-model="importNombre" maxlength="60">
+              </div>
+              <div class="col-12 col-md-6">
+                <p class="small mb-2">{{ importPrev.colores.length }} colores válidos.</p>
+                <button class="btn btn-primary btn-sm" type="button" @click="guardarImport">Guardar en mi biblioteca</button>
+              </div>
+            </div>
+            <ul class="small mono mt-2 mb-0">
+              <li v-for="c in importPrev.colores" :key="c.nombre">{{ c.nombre }} — {{ c.hex }}</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- MI BIBLIOTECA -->
+      <section v-if="vista==='datos'">
+        <h2 class="h5">Exportar</h2>
+        <p class="text-body-secondary small">Descarga tus paletas propias y tus favoritas en un JSON para conservarlas o llevarlas a otro navegador.</p>
+        <div class="d-flex flex-wrap gap-2 mb-4">
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="exportarBiblioteca(false)">💾 Exportar</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="exportarBiblioteca(true)">📋 Copiar JSON</button>
+        </div>
+        <h2 class="h5">Importar</h2>
+        <p class="text-body-secondary small">Restaura un JSON exportado. Se fusiona con lo que ya tenés (los id repetidos se agregan como copia).</p>
+        <div class="d-flex flex-wrap gap-2 mb-4">
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="$refs.bibfile.click()">📥 Importar archivo</button>
+          <input ref="bibfile" type="file" accept=".json,application/json" class="d-none" @change="importarBiblioteca">
+        </div>
+        <h2 class="h5">Mis paletas <span class="badge text-bg-secondary">{{ propias.length }}</span></h2>
+        <div v-if="!propias.length" class="text-body-secondary small mb-2">Todavía no agregaste paletas. Probá la solapa Importar.</div>
+        <div v-else class="list-group mb-2">
+          <div v-for="p in propias" :key="p.id" class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <button class="btn btn-link text-start text-decoration-none p-0" type="button" @click="abrir(p.id)">{{ p.nombre }} <small class="text-body-secondary">({{ p.colores.length }})</small></button>
+            <button class="btn btn-outline-danger btn-sm" type="button" @click="borrarPropia(p.id)">Eliminar</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <hr>
+
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/culori@4.0.2/bundled/culori.umd.js"
+    integrity="sha384-LieXRHyZ2ZIgIZXDHE7RNy5l9aOGL5GavA2Kkh5BBEj+QXDmcItcgnnSqTscoJbX"
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.5.42/vue.global.prod.min.js"
+    integrity="sha512-PREsKi18CyKMgwXMJWtvkzinqjiN0znVfDovmVadp7pKiUpyNGtq7bD2fKElDBmdfH4DGJz8pmAdgihN8NZ8TQ=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script>
+    const STORAGE_KEY = 'swatchbook';
+    const APP = 'swatchbook-biblioteca';
+    const HAS_CULORI = typeof culori !== 'undefined';
+
+    function normHex(h) {
+      const t = String(h || '').trim();
+      if (!t) return null;
+      if (HAS_CULORI) {
+        try {
+          const p = culori.parse(t);
+          if (!p) return null;
+          return culori.formatHex(p);
+        } catch { return null; }
+      }
+      const m = t.match(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/);
+      if (!m) return null;
+      let x = m[1];
+      if (x.length === 3) x = x.split('').map(c => c + c).join('');
+      if (x.length === 8) x = x.slice(0, 6);
+      return '#' + x.toLowerCase();
+    }
+
+    function rgbStr(h) {
+      if (HAS_CULORI) {
+        try { return culori.formatRgb(culori.parse(h)); } catch {}
+      }
+      const m = String(h).match(/^#(..)(..)(..)$/);
+      if (!m) return h;
+      return `rgb(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)})`;
+    }
+
+    function hslStr(h) {
+      if (HAS_CULORI) {
+        try { return culori.formatHsl(culori.parse(h)); } catch {}
+      }
+      return '—';
+    }
+
+    function luminancia(h) {
+      let r = 0, g = 0, b = 0;
+      if (HAS_CULORI) {
+        try { const p = culori.parse(h); r = p.r; g = p.g; b = p.b; } catch {}
+      } else {
+        const m = String(h).match(/^#(..)(..)(..)$/);
+        if (m) { r = parseInt(m[1], 16) / 255; g = parseInt(m[2], 16) / 255; b = parseInt(m[3], 16) / 255; }
+      }
+      const f = c => c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+      return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+    }
+
+    function textoSobreHex(h) { return luminancia(h) > 0.45 ? '#1a1a1a' : '#ffffff'; }
+
+    function slugify(s) {
+      return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'paleta';
+    }
+
+    function escHtml(s) {
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // Paletas incluidas (valores oficiales verificados).
+    const INCLUIDAS = [
+      { id: 'dracula', nombre: 'Dracula', fuente: 'incluida', colores: [
+        { nombre: 'Background', hex: '#282a36', rol: 'bg' },
+        { nombre: 'Current Line', hex: '#44475a', rol: 'surface' },
+        { nombre: 'Foreground', hex: '#f8f8f2', rol: 'fg' },
+        { nombre: 'Comment', hex: '#6272a4', rol: 'muted' },
+        { nombre: 'Cyan', hex: '#8be9fd', rol: 'ac1' },
+        { nombre: 'Green', hex: '#50fa7b' },
+        { nombre: 'Orange', hex: '#ffb86c' },
+        { nombre: 'Pink', hex: '#ff79c6', rol: 'ac2' },
+        { nombre: 'Purple', hex: '#bd93f9' },
+        { nombre: 'Red', hex: '#ff5555' },
+        { nombre: 'Yellow', hex: '#f1fa8c' }
+      ] },
+      { id: 'catppuccin-mocha', nombre: 'Catppuccin Mocha', fuente: 'incluida', colores: [
+        { nombre: 'Rosewater', hex: '#f5e0dc' },
+        { nombre: 'Flamingo', hex: '#f2cdcd' },
+        { nombre: 'Pink', hex: '#f5c2e7' },
+        { nombre: 'Mauve', hex: '#cba6f7', rol: 'ac1' },
+        { nombre: 'Red', hex: '#f38ba8' },
+        { nombre: 'Maroon', hex: '#eba0ac' },
+        { nombre: 'Peach', hex: '#fab387' },
+        { nombre: 'Yellow', hex: '#f9e2af' },
+        { nombre: 'Green', hex: '#a6e3a1', rol: 'ac2' },
+        { nombre: 'Teal', hex: '#94e2d5' },
+        { nombre: 'Sky', hex: '#89dceb' },
+        { nombre: 'Sapphire', hex: '#74c7ec' },
+        { nombre: 'Blue', hex: '#89b4fa' },
+        { nombre: 'Lavender', hex: '#b4befe' },
+        { nombre: 'Text', hex: '#cdd6f4', rol: 'fg' },
+        { nombre: 'Subtext 0', hex: '#a6adc8', rol: 'muted' },
+        { nombre: 'Surface 0', hex: '#313244', rol: 'surface' },
+        { nombre: 'Base', hex: '#1e1e2e', rol: 'bg' },
+        { nombre: 'Mantle', hex: '#181825' },
+        { nombre: 'Crust', hex: '#11111b' }
+      ] },
+      { id: 'nord', nombre: 'Nord', fuente: 'incluida', colores: [
+        { nombre: 'Polar Night 0', hex: '#2e3440', rol: 'bg' },
+        { nombre: 'Polar Night 1', hex: '#3b4252', rol: 'surface' },
+        { nombre: 'Polar Night 2', hex: '#434c5e' },
+        { nombre: 'Polar Night 3', hex: '#4c566a' },
+        { nombre: 'Snow Storm 0', hex: '#d8dee9' },
+        { nombre: 'Snow Storm 1', hex: '#e5e9f0' },
+        { nombre: 'Snow Storm 2', hex: '#eceff4', rol: 'fg' },
+        { nombre: 'Frost 0', hex: '#8fbcbb' },
+        { nombre: 'Frost 1', hex: '#88c0d0', rol: 'ac1' },
+        { nombre: 'Frost 2', hex: '#81a1c1' },
+        { nombre: 'Frost 3', hex: '#5e81ac' },
+        { nombre: 'Aurora Red', hex: '#bf616a' },
+        { nombre: 'Aurora Orange', hex: '#d08770' },
+        { nombre: 'Aurora Yellow', hex: '#ebcb8b' },
+        { nombre: 'Aurora Green', hex: '#a3be8c', rol: 'ac2' },
+        { nombre: 'Aurora Purple', hex: '#b48ead' }
+      ] },
+      { id: 'tokyo-night-storm', nombre: 'Tokyo Night Storm', fuente: 'incluida', colores: [
+        { nombre: 'Background', hex: '#24283b', rol: 'bg' },
+        { nombre: 'Background dark', hex: '#1f2335' },
+        { nombre: 'Foreground', hex: '#c0caf5', rol: 'fg' },
+        { nombre: 'Comment', hex: '#565f89', rol: 'muted' },
+        { nombre: 'Blue', hex: '#7aa2f7', rol: 'ac1' },
+        { nombre: 'Purple', hex: '#bb9af7' },
+        { nombre: 'Cyan', hex: '#7dcfff' },
+        { nombre: 'Green', hex: '#9ece6a', rol: 'ac2' },
+        { nombre: 'Yellow', hex: '#e0af68' },
+        { nombre: 'Orange', hex: '#ff9e64' },
+        { nombre: 'Red', hex: '#f7768e' },
+        { nombre: 'Terminal black', hex: '#414868', rol: 'surface' }
+      ] },
+      { id: 'gruvbox-dark', nombre: 'Gruvbox Dark', fuente: 'incluida', colores: [
+        { nombre: 'Background', hex: '#282828', rol: 'bg' },
+        { nombre: 'Background hard', hex: '#1d2021' },
+        { nombre: 'Foreground', hex: '#ebdbb2', rol: 'fg' },
+        { nombre: 'Gray', hex: '#928374', rol: 'muted' },
+        { nombre: 'Red', hex: '#fb4934' },
+        { nombre: 'Green', hex: '#b8bb26', rol: 'ac2' },
+        { nombre: 'Yellow', hex: '#fabd2f' },
+        { nombre: 'Blue', hex: '#83a598', rol: 'ac1' },
+        { nombre: 'Purple', hex: '#d3869b' },
+        { nombre: 'Aqua', hex: '#8ec07c' },
+        { nombre: 'Orange', hex: '#fe8019' }
+      ] },
+      { id: 'solarized-dark', nombre: 'Solarized Dark', fuente: 'incluida', colores: [
+        { nombre: 'Base03', hex: '#002b36', rol: 'bg' },
+        { nombre: 'Base02', hex: '#073642', rol: 'surface' },
+        { nombre: 'Base01', hex: '#586e75', rol: 'muted' },
+        { nombre: 'Base00', hex: '#657b83' },
+        { nombre: 'Base0', hex: '#839496', rol: 'fg' },
+        { nombre: 'Base1', hex: '#93a1a1' },
+        { nombre: 'Base2', hex: '#eee8d5' },
+        { nombre: 'Base3', hex: '#fdf6e3' },
+        { nombre: 'Yellow', hex: '#b58900' },
+        { nombre: 'Orange', hex: '#cb4b16' },
+        { nombre: 'Red', hex: '#dc322f' },
+        { nombre: 'Magenta', hex: '#d33682' },
+        { nombre: 'Violet', hex: '#6c71c4' },
+        { nombre: 'Blue', hex: '#268bd2', rol: 'ac1' },
+        { nombre: 'Cyan', hex: '#2aa198' },
+        { nombre: 'Green', hex: '#859900', rol: 'ac2' }
+      ] },
+      { id: 'one-dark', nombre: 'One Dark', fuente: 'incluida', colores: [
+        { nombre: 'Background', hex: '#282c34', rol: 'bg' },
+        { nombre: 'Foreground', hex: '#abb2bf', rol: 'fg' },
+        { nombre: 'Red', hex: '#e06c75' },
+        { nombre: 'Green', hex: '#98c379', rol: 'ac2' },
+        { nombre: 'Yellow', hex: '#e5c07b' },
+        { nombre: 'Blue', hex: '#61afef', rol: 'ac1' },
+        { nombre: 'Purple', hex: '#c678dd' },
+        { nombre: 'Cyan', hex: '#56b6c2' },
+        { nombre: 'Gray', hex: '#5c6370', rol: 'muted' }
+      ] },
+      { id: 'github-light', nombre: 'GitHub Light', fuente: 'incluida', colores: [
+        { nombre: 'Canvas', hex: '#ffffff', rol: 'bg' },
+        { nombre: 'Canvas subtle', hex: '#f6f8fa', rol: 'surface' },
+        { nombre: 'Foreground', hex: '#1f2328', rol: 'fg' },
+        { nombre: 'Muted', hex: '#59636e', rol: 'muted' },
+        { nombre: 'Border', hex: '#d0d7de' },
+        { nombre: 'Blue', hex: '#0969da', rol: 'ac1' },
+        { nombre: 'Green', hex: '#1a7f37', rol: 'ac2' },
+        { nombre: 'Red', hex: '#d1242f' },
+        { nombre: 'Orange', hex: '#bc4c00' },
+        { nombre: 'Purple', hex: '#8250df' }
+      ] }
+    ];
+
+    const CODE_SAMPLE = [
+      [{ t: '// suma con la paleta activa', k: 'comment' }],
+      [{ t: 'const ', k: 'keyword' }, { t: 'total', k: 'fg' }, { t: ' = ', k: 'fg' }, { t: 'a', k: 'fg' }, { t: ' + ', k: 'fg' }, { t: 'b', k: 'fg' }, { t: ';', k: 'fg' }],
+      [{ t: 'function ', k: 'keyword' }, { t: 'saludar', k: 'fn' }, { t: '(nombre) {', k: 'fg' }],
+      [{ t: '  return ', k: 'keyword' }, { t: '"hola, "', k: 'string' }, { t: ' + nombre + ', k: 'fg' }, { t: '"!"', k: 'string' }, { t: ';', k: 'fg' }],
+      [{ t: '}', k: 'fg' }],
+      [{ t: 'const ', k: 'keyword' }, { t: 'n', k: 'fg' }, { t: ' = ', k: 'fg' }, { t: '42', k: 'number' }, { t: ';', k: 'fg' }]
+    ];
+
+    function masOscuro(pal) {
+      return pal.colores.reduce((a, b) => luminancia(a.hex) <= luminancia(b.hex) ? a : b).hex;
+    }
+    function masClaro(pal) {
+      return pal.colores.reduce((a, b) => luminancia(a.hex) >= luminancia(b.hex) ? a : b).hex;
+    }
+    // Resuelve un uso (bg, fg, ac1…) al hex correspondiente: rol, nombre o fallback.
+    function colorPara(pal, uso) {
+      const porRol = r => { const c = pal.colores.find(c => c.rol === r); return c ? c.hex : null; };
+      const porNombre = re => { const c = pal.colores.find(c => re.test(c.nombre)); return c ? c.hex : null; };
+      const primero = pal.colores[0] ? pal.colores[0].hex : '#888888';
+      const segundo = pal.colores[1] ? pal.colores[1].hex : primero;
+      switch (uso) {
+        case 'bg': return porRol('bg') || masOscuro(pal);
+        case 'surface': return porRol('surface') || porRol('bg') || masOscuro(pal);
+        case 'fg': return porRol('fg') || masClaro(pal);
+        case 'muted':
+        case 'comment': return porRol('muted') || porNombre(/comment|gray|muted|subtext|overlay|border/i) || porRol('fg') || masClaro(pal);
+        case 'ac1':
+        case 'keyword':
+        case 'fn': return porRol('ac1') || porNombre(/purple|mauve|magenta|violet|blue|cyan/i) || primero;
+        case 'ac2':
+        case 'string':
+        case 'number': return porRol('ac2') || porNombre(/green|teal|aqua|orange|yellow|peach/i) || segundo;
+        default: return porRol('fg') || masClaro(pal);
+      }
+    }
+
+    function validarPropia(obj) {
+      if (!obj || typeof obj !== 'object') return null;
+      const nombre = String(obj.nombre || obj.name || '').trim().slice(0, 60);
+      const arr = obj.colores || obj.colors || obj.palette;
+      if (!nombre || !Array.isArray(arr)) return null;
+      const colores = [];
+      for (const c of arr) {
+        if (typeof c === 'string') {
+          const hex = normHex(c);
+          if (hex) colores.push({ nombre: 'Color ' + (colores.length + 1), hex });
+        } else if (c && typeof c === 'object') {
+          const hex = normHex(c.hex || c.color || c.value);
+          const n = String(c.nombre || c.name || '').trim().slice(0, 40) || ('Color ' + (colores.length + 1));
+          if (hex) colores.push({ nombre: n, hex });
+        }
+        if (colores.length >= 64) break;
+      }
+      if (colores.length < 2) return null;
+      return { nombre, colores };
+    }
+
+    function parseHEXList(text) {
+      const found = String(text).match(/#[0-9a-fA-F]{3,8}\b/g) || [];
+      const colores = [];
+      for (const h of found) {
+        const hex = normHex(h);
+        if (hex && !colores.some(c => c.hex === hex)) colores.push({ nombre: 'Color ' + (colores.length + 1), hex });
+        if (colores.length >= 64) break;
+      }
+      return colores;
+    }
+
+    function parseCSSVars(text) {
+      const colores = [];
+      const re = /--([\w-]+)\s*:\s*(#[0-9a-fA-F]{3,8})\b/g;
+      let m;
+      while ((m = re.exec(String(text))) !== null) {
+        const hex = normHex(m[2]);
+        if (!hex || colores.some(c => c.hex === hex)) continue;
+        const nombre = m[1].replace(/[-_]+/g, ' ').trim() || ('Color ' + (colores.length + 1));
+        colores.push({ nombre, hex });
+        if (colores.length >= 64) break;
+      }
+      return colores;
+    }
+
+    function hexDesdeParams(params) {
+      const out = [];
+      const c = params.get('c');
+      if (c !== null) {
+        try {
+          const arr = JSON.parse(c);
+          if (Array.isArray(arr)) for (const v of arr) out.push(v);
+        } catch { /* no es JSON: se ignora */ }
+      } else {
+        for (let i = 1; i <= 4; i++) {
+          const v = params.get('c' + i);
+          if (v !== null) out.push(v);
+        }
+      }
+      return out;
+    }
+
+    function parseChromaticURL(text) {
+      const t = String(text || '').trim();
+      if (!t) return [];
+      let params = null;
+      try { params = new URL(t).searchParams; }
+      catch {
+        const q = t.indexOf('?') >= 0 ? t.slice(t.indexOf('?') + 1) : t;
+        try { params = new URLSearchParams(q); } catch { return []; }
+      }
+      const colores = [];
+      for (const v of hexDesdeParams(params)) {
+        const hex = normHex(v);
+        if (hex && !colores.some(c => c.hex === hex)) colores.push({ nombre: 'Color ' + (colores.length + 1), hex });
+      }
+      return colores;
+    }
+
+    function estadoInicial() {
+      const q = new URLSearchParams(window.location.search);
+      let favoritas = [], propias = [], comparar = [];
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const s = JSON.parse(raw);
+          if (Array.isArray(s.favoritas)) favoritas = s.favoritas.filter(x => typeof x === 'string');
+          if (Array.isArray(s.propias)) {
+            for (const p of s.propias) {
+              const v = validarPropia(p);
+              if (v) propias.push({ id: String(p.id || ('propia-' + Date.now() + '-' + propias.length)), nombre: v.nombre, fuente: 'propia', colores: v.colores });
+            }
+          }
+          if (Array.isArray(s.comparar)) comparar = s.comparar.filter(x => typeof x === 'string').slice(0, 4);
+        }
+      } catch { /* almacenamiento corrupto: se empieza limpio */ }
+      const todas = INCLUIDAS.concat(propias);
+      const pid = q.get('p');
+      if (pid !== null && todas.some(p => p.id === pid)) {
+        return { favoritas, propias, comparar, paletaId: pid, fromUrl: true };
+      }
+      return { favoritas, propias, comparar, paletaId: null, fromUrl: q.get('p') !== null };
+    }
+
+    const init = estadoInicial();
+    let noticeTimeout;
+
+    Vue.createApp({
+      data() {
+        return {
+          vista: init.paletaId ? 'detalle' : 'lib',
+          paletaId: init.paletaId,
+          prevId: null,
+          filtro: '',
+          filtroOrigen: 'todas',
+          soloFav: false,
+          favoritas: init.favoritas,
+          propias: init.propias,
+          comparar: init.comparar,
+          tabImport: 'json',
+          importText: '',
+          importNombre: '',
+          importPrev: null,
+          notice: '',
+          error: '',
+          shared: false,
+          fromUrl: init.fromUrl
+        };
+      },
+      computed: {
+        todas() { return INCLUIDAS.concat(this.propias); },
+        paleta() { return this.todas.find(p => p.id === this.paletaId) || null; },
+        paletaPrev() { return this.todas.find(p => p.id === this.prevId) || this.paleta || this.todas[0] || null; },
+        filtradas() {
+          const q = this.filtro.trim().toLowerCase();
+          return this.todas.filter(p => {
+            if (this.filtroOrigen !== 'todas' && p.fuente !== this.filtroOrigen) return false;
+            if (this.soloFav && !this.favoritas.includes(p.id)) return false;
+            if (!q) return true;
+            if (p.nombre.toLowerCase().includes(q)) return true;
+            return p.colores.some(c => c.nombre.toLowerCase().includes(q) || c.hex.toLowerCase().includes(q));
+          });
+        },
+        paletasComparadas() {
+          return this.comparar.map(id => this.todas.find(p => p.id === id)).filter(Boolean);
+        },
+        filasComparar() {
+          return Math.max(0, ...this.paletasComparadas.map(p => p.colores.length));
+        }
+      },
+      watch: {
+        tabImport() { this.importPrev = null; this.error = ''; }
+      },
+      methods: {
+        showNotice(msg) {
+          clearTimeout(noticeTimeout);
+          this.notice = msg;
+          noticeTimeout = setTimeout(() => { this.notice = ''; }, 2000);
+        },
+        persist() {
+          if (this.fromUrl) return;
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ favoritas: this.favoritas, propias: this.propias, comparar: this.comparar })); } catch {}
+        },
+        abrir(id) { this.paletaId = id; this.vista = 'detalle'; window.scrollTo(0, 0); },
+        previsualizar(id) { this.prevId = id; this.vista = 'previews'; window.scrollTo(0, 0); },
+        esFav(id) { return this.favoritas.includes(id); },
+        toggleFav(id) {
+          this.fromUrl = false;
+          this.favoritas = this.esFav(id) ? this.favoritas.filter(x => x !== id) : [...this.favoritas, id];
+          this.persist();
+        },
+        toggleComparar(id) {
+          if (this.comparar.includes(id)) {
+            this.comparar = this.comparar.filter(x => x !== id);
+          } else {
+            if (this.comparar.length >= 4) { this.showNotice('Máximo 4 paletas en comparación.'); return; }
+            this.comparar = [...this.comparar, id];
+            if (this.vista === 'lib') this.showNotice('Agregada a Comparar (' + this.comparar.length + ').');
+          }
+          this.persist();
+        },
+        rgbDe(h) { return rgbStr(h); },
+        hslDe(h) { return hslStr(h); },
+        uso(pal, cual) { return colorPara(pal, cual); },
+        textoSobre(h) { return textoSobreHex(h); },
+        slug(s) { return slugify(s); },
+        copiar(texto, msg) {
+          const done = ok => this.showNotice(ok ? msg : 'No se pudo copiar.');
+          if (navigator.clipboard?.writeText) navigator.clipboard.writeText(texto).then(() => done(true), () => done(false));
+          else done(false);
+        },
+        descargar(contenido, nombre, tipo) {
+          const blob = new Blob([contenido], { type: tipo + ';charset=utf-8' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = nombre;
+          document.body.append(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+        },
+        cssDe(p) {
+          const base = slugify(p.nombre);
+          return ':root {\n' + p.colores.map(c => `  --${base}-${slugify(c.nombre)}: ${c.hex};`).join('\n') + '\n}';
+        },
+        jsonDe(p) {
+          return JSON.stringify({ nombre: p.nombre, colores: p.colores.map(c => ({ nombre: c.nombre, hex: c.hex, rgb: rgbStr(c.hex), hsl: hslStr(c.hex) })) }, null, 2);
+        },
+        hexDe(p) { return p.colores.map(c => c.hex).join('\n'); },
+        analizarEnChromatic(p) {
+          const hexes = [colorPara(p, 'bg'), colorPara(p, 'fg'), colorPara(p, 'ac1'), colorPara(p, 'ac2')]
+            .filter((h, i, arr) => h && arr.indexOf(h) === i).slice(0, 4);
+          if (!hexes.length) { this.showNotice('La paleta no tiene colores.'); return; }
+          const url = new URL('../chromatic/', window.location.href);
+          url.searchParams.set('c', JSON.stringify(hexes));
+          window.open(url.toString(), '_blank', 'noopener');
+        },
+        codigoColoreado(pal) {
+          return CODE_SAMPLE.map(line => line.map(tok =>
+            `<span style="color:${colorPara(pal, tok.k)}">${escHtml(tok.t)}</span>`).join('')
+          ).join('\n');
+        },
+        previsualizarImport(tipo) {
+          this.error = '';
+          this.importPrev = null;
+          try {
+            let colores = [], sugerido = '';
+            if (tipo === 'json') {
+              let doc;
+              try { doc = JSON.parse(this.importText); }
+              catch { this.error = 'JSON inválido: revisá comas y comillas.'; return; }
+              if (Array.isArray(doc)) {
+                const v = validarPropia({ nombre: 'x', colores: doc });
+                colores = v ? v.colores : [];
+                sugerido = 'Mi paleta ' + (this.propias.length + 1);
+              } else {
+                const v = validarPropia(doc);
+                if (!v) { this.error = 'Ese JSON no trae al menos 2 colores válidos (nombre + hex).'; return; }
+                colores = v.colores;
+                sugerido = v.nombre;
+              }
+            } else if (tipo === 'hex') {
+              colores = parseHEXList(this.importText);
+              sugerido = 'Mi paleta ' + (this.propias.length + 1);
+            } else if (tipo === 'css') {
+              colores = parseCSSVars(this.importText);
+              sugerido = 'Mi paleta ' + (this.propias.length + 1);
+            } else {
+              colores = parseChromaticURL(this.importText);
+              sugerido = 'Desde Chromatic';
+            }
+            if (colores.length < 2) { this.error = 'Se necesitan al menos 2 colores válidos.'; return; }
+            this.importPrev = { colores };
+            this.importNombre = sugerido;
+          } catch { this.error = 'No se pudo interpretar el contenido.'; }
+        },
+        guardarImport() {
+          const nombre = this.importNombre.trim().slice(0, 60) || 'Mi paleta';
+          const id = 'propia-' + Date.now();
+          this.propias.push({ id, nombre, fuente: 'propia', colores: this.importPrev.colores });
+          this.fromUrl = false;
+          this.persist();
+          this.importText = '';
+          this.importNombre = '';
+          this.importPrev = null;
+          this.showNotice('Paleta guardada en tu biblioteca.');
+          this.abrir(id);
+        },
+        borrarPropia(id) {
+          if (!window.confirm('¿Eliminar esta paleta de tu biblioteca?')) return;
+          this.propias = this.propias.filter(p => p.id !== id);
+          this.favoritas = this.favoritas.filter(x => x !== id);
+          this.comparar = this.comparar.filter(x => x !== id);
+          if (this.paletaId === id) { this.paletaId = null; this.vista = 'lib'; }
+          this.persist();
+          this.showNotice('Paleta eliminada.');
+        },
+        exportarBiblioteca(soloCopiar) {
+          const payload = { app: APP, v: 1, exportedAt: new Date().toISOString(), propias: this.propias, favoritas: this.favoritas };
+          if (!this.propias.length && !this.favoritas.length) { this.showNotice('No hay nada para exportar.'); return; }
+          if (soloCopiar) { this.copiar(JSON.stringify(payload, null, 2), 'Biblioteca copiada.'); return; }
+          const d = new Date();
+          const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          this.descargar(JSON.stringify(payload), `swatchbook-${stamp}.json`, 'application/json');
+          this.showNotice('Biblioteca exportada.');
+        },
+        importarBiblioteca(ev) {
+          const file = ev.target.files[0];
+          ev.target.value = '';
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = () => {
+            let data;
+            try { data = JSON.parse(reader.result); }
+            catch { this.showNotice('Ese archivo no es un JSON válido.'); return; }
+            if (!data || data.app !== APP || !Array.isArray(data.propias)) { this.showNotice('No es un respaldo de Swatchbook.'); return; }
+            const existentes = new Set(this.todas.map(p => p.id));
+            let n = 0;
+            for (const p of data.propias) {
+              const v = validarPropia(p);
+              if (!v) continue;
+              let id = String(p.id || ('propia-' + Date.now() + '-' + n));
+              if (existentes.has(id)) id = id + '-copia';
+              existentes.add(id);
+              this.propias.push({ id, nombre: v.nombre, fuente: 'propia', colores: v.colores });
+              n++;
+            }
+            if (Array.isArray(data.favoritas)) {
+              for (const f of data.favoritas) {
+                if (typeof f === 'string' && existentes.has(f) && !this.favoritas.includes(f)) this.favoritas.push(f);
+              }
+            }
+            this.fromUrl = false;
+            this.persist();
+            this.showNotice(n ? `Se importaron ${n} paleta(s).` : 'El archivo no traía paletas válidas.');
+          };
+          reader.readAsText(file);
+        },
+        share() {
+          const url = new URL(window.location.href);
+          url.search = '';
+          if (this.vista === 'detalle' && this.paletaId) url.searchParams.set('p', this.paletaId);
+          const txt = url.toString();
+          const done = ok => {
+            if (ok) { this.shared = true; setTimeout(() => { this.shared = false; }, 1500); }
+            else this.showNotice('No se pudo copiar el enlace.');
+          };
+          if (navigator.clipboard?.writeText) navigator.clipboard.writeText(txt).then(() => done(true), () => done(false));
+          else done(false);
+        },
+        reset() {
+          try { localStorage.removeItem(STORAGE_KEY); } catch {}
+          this.favoritas = [];
+          this.propias = [];
+          this.comparar = [];
+          this.vista = 'lib';
+          this.paletaId = null;
+          this.fromUrl = false;
+          history.replaceState(null, '', window.location.pathname);
+          this.showNotice('Biblioteca restaurada: solo las 8 incluidas.');
+        }
+      },
+      mounted() {
+        if (!this.prevId && this.todas.length) this.prevId = this.todas[0].id;
+      }
+    }).mount('#app');
+
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

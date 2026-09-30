@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f0cf%3B%3C/text%3E%3C/svg%3E">
+  <title>AlgoLab — mesa para enseñar algoritmos</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    input.form-control, select.form-select {
+      font-size: 16px;
+    }
+
+    #mesa {
+      position: relative;
+      min-height: 420px;
+      height: 60vh;
+      overflow: hidden;
+      border-radius: 0.5rem;
+      background: #0f7a3d;
+      background-image: radial-gradient(ellipse at 50% 30%, rgba(255, 255, 255, 0.09), rgba(0, 0, 0, 0) 60%);
+      border: 8px solid #5b3a1e;
+      touch-action: auto;
+    }
+
+    #empty-hint {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: rgba(255, 255, 255, 0.85);
+      pointer-events: none;
+      padding: 1rem;
+    }
+
+    #discard {
+      position: absolute;
+      right: 12px;
+      bottom: 12px;
+      width: 150px;
+      height: 104px;
+      border: 2px dashed rgba(255, 255, 255, 0.7);
+      border-radius: 0.5rem;
+      background: rgba(0, 0, 0, 0.25);
+      color: rgba(255, 255, 255, 0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      font-size: 0.85rem;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    #discard.over {
+      background: rgba(200, 20, 20, 0.55);
+      border-color: #fff;
+    }
+
+    .al-obj {
+      position: absolute;
+      cursor: grab;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .al-obj.dragging {
+      cursor: grabbing;
+    }
+
+    .al-obj:focus-visible {
+      outline: 3px solid #ffd43b;
+      outline-offset: 2px;
+    }
+
+    .al-card {
+      width: 64px;
+      height: 90px;
+      border-radius: 8px;
+      background: #fff;
+      border: 1px solid #adb5bd;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .al-card.red {
+      color: #c0392b;
+    }
+
+    .al-card.black {
+      color: #212529;
+    }
+
+    .al-card .al-val {
+      font-size: 1.25rem;
+    }
+
+    .al-card .al-suit {
+      font-size: 1.5rem;
+    }
+
+    .al-card .al-joker-suit {
+      font-size: 2.6rem;
+      line-height: 1;
+    }
+
+    .al-card.al-down {
+      background-color: #c8102e;
+      background-image:
+        repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.28) 0 2px, rgba(255, 255, 255, 0) 2px 6px),
+        repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.28) 0 2px, rgba(255, 255, 255, 0) 2px 6px);
+      border: 4px solid #fff;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45), inset 0 0 0 2px #c8102e;
+    }
+
+    .al-chip {
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      border: 3px solid #fff;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+      position: absolute;
+    }
+
+    .al-chip::after {
+      content: "";
+      position: absolute;
+      inset: 5px;
+      border-radius: 50%;
+      border: 3px dashed rgba(255, 255, 255, 0.9);
+    }
+
+    .al-marker {
+      width: 22px;
+      height: 100px;
+      border-radius: 999px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(0, 0, 0, 0.35);
+      position: absolute;
+    }
+
+    .al-marker::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 22px;
+      border-radius: 0 0 999px 999px;
+      background: rgba(0, 0, 0, 0.3);
+    }
+
+    .al-marker.al-h {
+      transform: rotate(90deg);
+    }
+
+    #notice {
+      position: fixed;
+      bottom: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1050;
+      max-width: min(92vw, 560px);
+      margin-bottom: 0;
+      box-shadow: var(--bs-box-shadow);
+    }
+
+    p.signature {
+      font-size: 0.8em;
+    }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4" style="max-width: 1100px;">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">🃏 AlgoLab</h1>
+        <p class="text-body-secondary mb-0">Mesa virtual para enseñar algoritmos con cartas, fichas y fibrones.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="share" class="btn btn-outline-secondary btn-sm" type="button">🔗 Compartir</button>
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🧹 Recoger todo</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+      <section class="col-12 col-md-4">
+        <div class="card h-100">
+          <div class="card-body">
+            <h2 class="h6">🃏 Cartas</h2>
+            <label for="c-count" class="form-label small mb-1">Cantidad</label>
+            <input id="c-count" class="form-control form-control-sm mb-2" type="number" min="1" max="50" step="1" value="5">
+            <label for="c-suit" class="form-label small mb-1">Palo</label>
+            <select id="c-suit" class="form-select form-select-sm mb-2">
+              <option value="hearts">♥️ Corazones</option>
+              <option value="diamonds">♦️ Diamantes</option>
+              <option value="clubs">♣️ Tréboles</option>
+              <option value="spades">♠️ Picas</option>
+              <option value="joker">🃏 Comodín</option>
+            </select>
+            <div class="row g-2 mb-2">
+              <div class="col-6">
+                <label for="c-min" class="form-label small mb-1">Valor mín.</label>
+                <input id="c-min" class="form-control form-control-sm" type="number" step="1" value="1">
+              </div>
+              <div class="col-6">
+                <label for="c-max" class="form-label small mb-1">Valor máx.</label>
+                <input id="c-max" class="form-control form-control-sm" type="number" step="1" value="13">
+              </div>
+            </div>
+            <div class="form-check mb-2">
+              <input id="c-repeat" class="form-check-input" type="checkbox">
+              <label for="c-repeat" class="form-check-label small">Permitir repeticiones</label>
+            </div>
+            <button id="add-cards" class="btn btn-primary btn-sm w-100" type="button">+ Agregar cartas</button>
+            <p class="text-body-secondary small mb-0 mt-2">Sin repetición no salen cartas iguales entre sí ni repetidas de la mesa. El comodín viene de a uno por pedido y no se agota nunca.</p>
+          </div>
+        </div>
+      </section>
+      <section class="col-12 col-md-4">
+        <div class="card h-100">
+          <div class="card-body">
+            <h2 class="h6">🎰 Fichas</h2>
+            <label for="chip-count" class="form-label small mb-1">Cantidad</label>
+            <input id="chip-count" class="form-control form-control-sm mb-2" type="number" min="1" max="50" step="1" value="3">
+            <button id="add-chips" class="btn btn-primary btn-sm w-100" type="button">+ Agregar fichas</button>
+            <p class="text-body-secondary small mb-0 mt-2">Color aleatorio. Sirven como marcadores o punteros.</p>
+          </div>
+        </div>
+      </section>
+      <section class="col-12 col-md-4">
+        <div class="card h-100">
+          <div class="card-body">
+            <h2 class="h6">🖊️ Fibrones</h2>
+            <label for="marker-count" class="form-label small mb-1">Cantidad</label>
+            <input id="marker-count" class="form-control form-control-sm mb-2" type="number" min="1" max="20" step="1" value="1">
+            <button id="add-markers" class="btn btn-primary btn-sm w-100" type="button">+ Agregar fibrones</button>
+            <p class="text-body-secondary small mb-0 mt-2">Color aleatorio. Son objetos para separar o marcar, no dibujan.</p>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+      <h2 class="h5 mb-0">Mesa</h2>
+      <span id="obj-count" class="badge text-bg-secondary" role="status">Mesa vacía</span>
+    </div>
+    <div id="mesa" aria-label="Mesa de trabajo">
+      <div id="empty-hint">La mesa está vacía.<br>Agregá cartas, fichas o fibrones desde el panel.</div>
+      <div id="discard" role="note" aria-label="Zona de descarte: arrastrá objetos aquí para quitarlos de la mesa.">🗑️<br>Descarte</div>
+    </div>
+    <p class="text-body-secondary small mt-2 mb-0">Arrastrá con el mouse para mover. Lo que movés pasa al frente. Doble clic en una carta (o Enter con el teclado) la voltea; doble clic en el paño voltea todas; doble clic en un fibrón lo rota 90°. Arrastrá al 🗑️ Descarte para quitar objetos (o Supr con el teclado).</p>
+
+    <div id="notice" class="alert alert-success py-2 d-none" role="status"></div>
+
+    <hr>
+
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script>
+    // __PURE_START__ (lógica sin DOM: se testea con node)
+    const STORAGE_KEY = 'algolab';
+    const MAX_OBJECTS = 200;
+    const SHARE_LIMIT = 8000;
+
+    const SUITS = [
+      { id: 'hearts', symbol: '♥️', red: true },
+      { id: 'diamonds', symbol: '♦️', red: true },
+      { id: 'clubs', symbol: '♣️', red: false },
+      { id: 'spades', symbol: '♠️', red: false },
+      { id: 'joker', symbol: '🃏', red: false },
+    ];
+    const CHIP_COLORS = ['#d63031', '#0984e3', '#00b894', '#6c5ce7', '#e17055', '#fdcb6a', '#2d3436'];
+    const MARKER_COLORS = ['#d63031', '#0984e3', '#00b894', '#2d3436'];
+
+    function suitById(id) {
+      return SUITS.find(s => s.id === id) || SUITS[0];
+    }
+
+    function pickRandom(arr, rnd) {
+      const r = typeof rnd === 'function' ? rnd() : Math.random();
+      return arr[Math.floor(r * arr.length)];
+    }
+
+    function cardKey(valor, palo) {
+      return `${valor}|${palo}`;
+    }
+
+    // Solo presentación: 1→A, 11→J, 12→Q, 13→K. El estado sigue numérico.
+    function faceLabel(valor) {
+      if (valor === 1) return 'A';
+      if (valor === 11) return 'J';
+      if (valor === 12) return 'Q';
+      if (valor === 13) return 'K';
+      return String(valor);
+    }
+
+    function existingKeys(objects) {
+      const s = new Set();
+      (objects || []).forEach(o => {
+        if (o && o.kind === 'card') s.add(cardKey(o.valor, o.palo));
+      });
+      return s;
+    }
+
+    // Arma un pedido de cartas respetando unicidad contra la mesa y dentro del pedido.
+    function buildCardRequest(usedKeys, opts) {
+      let cantidad = Math.floor(Number(opts.cantidad));
+      let min = Math.floor(Number(opts.min));
+      let max = Math.floor(Number(opts.max));
+      if (!Number.isFinite(cantidad)) cantidad = 1;
+      if (!Number.isFinite(min)) min = 1;
+      if (!Number.isFinite(max)) max = 13;
+      cantidad = Math.min(50, Math.max(1, cantidad));
+      if (min > max) { const t = min; min = max; max = t; }
+      min = Math.max(-1000000, Math.min(1000000, min));
+      max = Math.max(-1000000, Math.min(1000000, max));
+      const repetir = opts.repetir === true;
+      const palo = suitById(opts.palo).id;
+      if (palo === 'joker') {
+        // El comodín no tiene valor: viene de a uno por pedido y no se agota nunca.
+        return { cards: [{ valor: null, palo }], pedidas: 1, resto: 0, agotadas: false };
+      }
+      const cards = [];
+      if (!repetir) {
+        const avail = [];
+        for (let v = min; v <= max; v++) {
+          if (!usedKeys.has(cardKey(v, palo))) avail.push(v);
+        }
+        for (let i = avail.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          const t = avail[i]; avail[i] = avail[j]; avail[j] = t;
+        }
+        const n = Math.min(cantidad, avail.length);
+        for (let i = 0; i < n; i++) cards.push({ valor: avail[i], palo });
+        return { cards, pedidas: cantidad, resto: cantidad - n, agotadas: n < cantidad };
+      }
+      for (let i = 0; i < cantidad; i++) {
+        cards.push({ valor: min + Math.floor(Math.random() * (max - min + 1)), palo });
+      }
+      return { cards, pedidas: cantidad, resto: 0, agotadas: false };
+    }
+
+    function clamp(n, lo, hi) {
+      return Math.min(hi, Math.max(lo, n));
+    }
+
+    function rectsOverlap(a, b) {
+      const x = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+      const y = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+      return x > 0 && y > 0 ? x * y : 0;
+    }
+
+    // Miembros de la pila sobre la que cae (x, y): solapamiento significativo
+    // (>=10% del área, para ignorar roces) con clausura transitiva, así valen
+    // pilas de cualquier altura se suelte donde se suelte.
+    // `others` lleva {x, y, w, h, ...} (sin el propio).
+    function pileMembers(x, y, w, h, others) {
+      const minArea = w * h * 0.1;
+      const box = o => ({ x: o.x, y: o.y, w: o.w || w, h: o.h || h });
+      const me = { x, y, w, h };
+      const pile = new Set();
+      const queue = [];
+      (others || []).forEach(o => {
+        if (rectsOverlap(me, box(o)) >= minArea) { pile.add(o); queue.push(o); }
+      });
+      while (queue.length) {
+        const pb = box(queue.pop());
+        (others || []).forEach(o => {
+          if (pile.has(o)) return;
+          if (rectsOverlap(pb, box(o)) >= minArea) { pile.add(o); queue.push(o); }
+        });
+      }
+      return [...pile];
+    }
+
+    // Si un objeto cae sobre una pila, lo ubicamos arriba de la carta de más
+    // arriba para que la cascada quede ordenada.
+    // `others` lleva {x, y, w, h, z} (sin el propio).
+    function nudgeStack(x, y, w, h, others, bw, bh) {
+      const pile = pileMembers(x, y, w, h, others);
+      if (!pile.length) return { x, y };
+      let top = null;
+      pile.forEach(o => { if (!top || (o.z || 0) > (top.z || 0)) top = o; });
+      return {
+        x: clamp(Math.round(top.x + 8), 0, Math.max(0, bw - w)),
+        y: clamp(Math.round(top.y + 8), 0, Math.max(0, bh - h)),
+      };
+    }
+
+    // ¿el centro del objeto cae en la zona? `zone` en coords de mesa {x, y, w, h}.
+    function centerInZone(x, y, w, h, zone) {
+      if (!zone) return false;
+      const cx = x + w / 2, cy = y + h / 2;
+      return cx >= zone.x && cx <= zone.x + zone.w && cy >= zone.y && cy <= zone.y + zone.h;
+    }
+
+    // Valida un estado cargado (URL o storage): filtra basura, reindexa z y pule ids.
+    function sanitizeState(data) {
+      if (!data || !Array.isArray(data.objects)) return null;
+      const raw = data.objects.slice(0, MAX_OBJECTS);
+      const objects = [];
+      let maxId = 0;
+      raw.forEach((o, i) => {
+        if (!o || (o.kind !== 'card' && o.kind !== 'chip' && o.kind !== 'marker')) return;
+        const x = Number(o.x), y = Number(o.y);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+        const id = Math.floor(Number(o.id));
+        const obj = {
+          id: Number.isFinite(id) && id > 0 ? id : 0,
+          kind: o.kind,
+          x: clamp(Math.round(x), 0, 5000),
+          y: clamp(Math.round(y), 0, 5000),
+          z: 0,
+        };
+        if (obj.id > maxId) maxId = obj.id;
+        if (o.kind === 'card') {
+          if (o.palo === 'joker') {
+            obj.valor = null;
+            obj.palo = 'joker';
+          } else {
+            const v = Number(o.valor);
+            if (!Number.isFinite(v)) return;
+            obj.valor = clamp(Math.floor(v), -1000000, 1000000);
+            obj.palo = suitById(o.palo).id;
+          }
+          obj.bocaAbajo = o.bocaAbajo === true;
+        } else if (o.kind === 'chip') {
+          obj.color = typeof o.color === 'string' && o.color ? o.color.slice(0, 32) : CHIP_COLORS[0];
+        } else {
+          obj.color = typeof o.color === 'string' && o.color ? o.color.slice(0, 32) : MARKER_COLORS[0];
+          obj.rot = o.rot === true || o.rot === 1;
+        }
+        obj._z = Number(o.z);
+        objects.push(obj);
+      });
+      objects.sort((a, b) => {
+        const za = Number.isFinite(a._z) ? a._z : -1;
+        const zb = Number.isFinite(b._z) ? b._z : -1;
+        return za - zb;
+      });
+      objects.forEach((o, i) => { o.z = i + 1; delete o._z; });
+      objects.forEach(o => { if (!o.id) o.id = ++maxId; });
+      const nextRaw = Math.floor(Number(data.nextId));
+      const nextId = Math.max(maxId + 1, Number.isFinite(nextRaw) && nextRaw > 0 ? nextRaw : maxId + 1, 1);
+      return { objects, nextId, maxZ: objects.length };
+    }
+    // Formato compacto para compartir (v2): una letra por tipo, campos
+    // posicionales, palos/colores como índices. El orden del array define z,
+    // los ids se reasignan al cargar. Ej: "A1;C,10,20,7,0;F,30,40,2".
+    // Ahorra ~5x frente al JSON (que se sigue aceptando al leer).
+    function suitIndex(id) {
+      const i = SUITS.findIndex(s => s.id === id);
+      return i === -1 ? 0 : i;
+    }
+
+    function encodeState(data) {
+      const parts = ['A1'];
+      (data.objects || []).forEach(o => {
+        if (!o) return;
+        const x = Math.round(Number(o.x)), y = Math.round(Number(o.y));
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+        if (o.kind === 'card') {
+          if (o.palo === 'joker') {
+            const base = ['C', x, y, '', suitIndex('joker')];
+            if (o.bocaAbajo === true) base.push(1);
+            parts.push(base.join(','));
+            return;
+          }
+          const v = Number(o.valor);
+          if (!Number.isFinite(v)) return;
+          const base = ['C', x, y, Math.floor(v), suitIndex(o.palo)];
+          if (o.bocaAbajo === true) base.push(1);
+          parts.push(base.join(','));
+        } else if (o.kind === 'chip') {
+          parts.push(['F', x, y, Math.max(0, CHIP_COLORS.indexOf(o.color))].join(','));
+        } else if (o.kind === 'marker') {
+          const base = ['M', x, y, Math.max(0, MARKER_COLORS.indexOf(o.color))];
+          if (o.rot === true) base.push(1);
+          parts.push(base.join(','));
+        }
+      });
+      return parts.join(';');
+    }
+
+    function decodeState(str) {
+      if (typeof str !== 'string' || !str) return null;
+      if (str[0] === 'A') {
+        if (!str.startsWith('A1;') && str !== 'A1') return null;
+        const objects = [];
+        const tokens = str === 'A1' ? [] : str.slice(3).split(';');
+        for (const t of tokens) {
+          const f = t.split(',');
+          const kind = f[0];
+          const x = Number(f[1]), y = Number(f[2]);
+          if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+          if (kind === 'C') {
+            const p = Number(f[4]);
+            if (!Number.isFinite(p)) return null;
+            const suit = SUITS[Math.floor(p)] || SUITS[0];
+            if (suit.id === 'joker') {
+              objects.push({
+                kind: 'card', x: clamp(Math.round(x), 0, 5000), y: clamp(Math.round(y), 0, 5000),
+                valor: null, palo: 'joker', bocaAbajo: f[5] === '1',
+              });
+              continue;
+            }
+            const v = Number(f[3]);
+            if (!Number.isFinite(v)) return null;
+            objects.push({
+              kind: 'card', x: clamp(Math.round(x), 0, 5000), y: clamp(Math.round(y), 0, 5000),
+              valor: clamp(Math.floor(v), -1000000, 1000000), palo: suit.id, bocaAbajo: f[5] === '1',
+            });
+          } else if (kind === 'F' || kind === 'M') {
+            const c = Number(f[3]);
+            if (!Number.isFinite(c)) return null;
+            const pal = kind === 'F' ? CHIP_COLORS : MARKER_COLORS;
+            objects.push({
+              kind: kind === 'F' ? 'chip' : 'marker',
+              x: clamp(Math.round(x), 0, 5000), y: clamp(Math.round(y), 0, 5000),
+              color: pal[Math.floor(c)] || pal[0],
+              ...(kind === 'M' ? { rot: f[4] === '1' } : {}),
+            });
+          } else return null;
+          if (objects.length > MAX_OBJECTS) return null;
+        }
+        objects.forEach((o, i) => { o.id = i + 1; o.z = i + 1; });
+        return { objects, nextId: objects.length + 1, maxZ: objects.length };
+      }
+      try {
+        return sanitizeState(JSON.parse(str)); // enlaces viejos en JSON
+      } catch {
+        return null;
+      }
+    }
+
+    // __PURE_END__
+
+    const $mesa = document.getElementById('mesa');
+    const $hint = document.getElementById('empty-hint');
+    const $discard = document.getElementById('discard');
+    const $count = document.getElementById('obj-count');
+    const $notice = document.getElementById('notice');
+    const $share = document.getElementById('share');
+    const $reset = document.getElementById('reset');
+
+    const SIZES = { card: { w: 64, h: 90 }, chip: { w: 46, h: 46 }, marker: { w: 22, h: 100 } };
+
+    const state = { objects: [], nextId: 1, maxZ: 0 };
+    let noticeTimer;
+    let fromUrl = false;
+    let drag = null;
+
+    function showNotice(text) {
+      $notice.textContent = text;
+      $notice.classList.remove('d-none');
+      clearTimeout(noticeTimer);
+      noticeTimer = setTimeout(() => $notice.classList.add('d-none'), 3500);
+    }
+
+    function copyText(text) {
+      if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
+      const input = document.createElement('textarea');
+      input.value = text;
+      input.style.position = 'fixed';
+      document.body.append(input);
+      input.select();
+      document.execCommand('copy');
+      input.remove();
+      return Promise.resolve();
+    }
+
+    function persist() {
+      if (fromUrl) return; // desde URL compartida no se toca localStorage hasta el primer cambio propio
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          objects: state.objects, nextId: state.nextId, maxZ: state.maxZ
+        }));
+      } catch {}
+    }
+
+    function readStored() {
+      try {
+        return sanitizeState(JSON.parse(localStorage.getItem(STORAGE_KEY)));
+      } catch {
+        return null;
+      }
+    }
+
+    function objSize(obj) {
+      return SIZES[obj.kind] || SIZES.card;
+    }
+
+    function spawnPos(kind, i) {
+      const s = objSize({ kind });
+      const w = Math.max(1, $mesa.clientWidth - s.w);
+      const h = Math.max(1, $mesa.clientHeight - s.h);
+      const n = state.objects.length + i;
+      return { x: Math.min(16 + (n % 10) * 18, w), y: Math.min(16 + (n % 8) * 18, h) };
+    }
+
+    function addObject(obj) {
+      if (state.objects.length >= MAX_OBJECTS) { showNotice(`Mesa llena: tope de ${MAX_OBJECTS} objetos.`); return false; }
+      obj.id = state.nextId++;
+      obj.z = ++state.maxZ;
+      state.objects.push(obj);
+      return true;
+    }
+
+    function bringToFront(obj, el) {
+      obj.z = ++state.maxZ;
+      if (el) el.style.zIndex = String(obj.z);
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+    }
+
+    function renderObj(el, obj) {
+      el.style.left = `${obj.x}px`;
+      el.style.top = `${obj.y}px`;
+      el.style.zIndex = String(obj.z);
+      el.className = 'al-obj';
+      if (obj.kind === 'card') {
+        const suit = suitById(obj.palo);
+        el.classList.add('al-card', suit.red ? 'red' : 'black');
+        if (obj.bocaAbajo) {
+          el.classList.add('al-down');
+          el.innerHTML = '';
+          el.setAttribute('aria-label', `Carta boca abajo. Activá para voltear.`);
+        } else if (obj.palo === 'joker') {
+          el.innerHTML = `<span class="al-joker-suit">🃏</span>`;
+          el.setAttribute('aria-label', `Comodín. Activá para voltear.`);
+        } else {
+          el.innerHTML = `<span class="al-val">${escapeHtml(faceLabel(obj.valor))}</span><span class="al-suit">${suit.symbol}</span>`;
+          el.setAttribute('aria-label', `Carta ${faceLabel(obj.valor)} de ${suit.id}. Activá para voltear.`);
+        }
+      } else if (obj.kind === 'chip') {
+        el.classList.add('al-chip');
+        el.style.background = obj.color;
+        el.setAttribute('aria-label', 'Ficha. Arrastrá para mover.');
+      } else {
+        el.classList.add('al-marker');
+        el.style.background = obj.color;
+        el.classList.toggle('al-h', obj.rot === true);
+        el.setAttribute('aria-label', 'Fibrón. Arrastrá para mover, doble clic para rotar.');
+      }
+    }
+
+    function makeEl(obj) {
+      const el = document.createElement('div');
+      el.dataset.id = String(obj.id);
+      el.tabIndex = 0;
+      renderObj(el, obj);
+      return el;
+    }
+
+    function findObj(id) {
+      return state.objects.find(o => o.id === id);
+    }
+
+    function renderAll() {
+      $mesa.querySelectorAll('.al-obj').forEach(el => el.remove());
+      [...state.objects].sort((a, b) => a.z - b.z).forEach(obj => $mesa.append(makeEl(obj)));
+      updateCount();
+    }
+
+    function updateCount() {
+      const n = state.objects.length;
+      $count.textContent = n === 0 ? 'Mesa vacía' : `${n} objeto${n === 1 ? '' : 's'}`;
+      $hint.style.display = n === 0 ? 'flex' : 'none';
+    }
+
+    function discardZone() {
+      return { x: $discard.offsetLeft, y: $discard.offsetTop, w: $discard.offsetWidth, h: $discard.offsetHeight };
+    }
+
+    function discardObj(obj, el) {
+      state.objects = state.objects.filter(o => o.id !== obj.id);
+      if (el) el.remove();
+      const name = obj.kind === 'card'
+        ? (obj.palo === 'joker' ? 'Comodín descartado.' : 'Carta descartada.')
+        : obj.kind === 'chip' ? 'Ficha descartada.' : 'Fibrón descartado.';
+      showNotice(`🗑️ ${name}`);
+      fromUrl = false;
+      persist();
+      updateCount();
+    }
+
+    $mesa.addEventListener('pointerdown', e => {
+      if (e.pointerType && e.pointerType !== 'mouse') return; // v1: solo mouse
+      if (e.button !== undefined && e.button !== 0) return;
+      const el = e.target.closest('.al-obj');
+      if (!el || !$mesa.contains(el)) return;
+      const obj = findObj(Number(el.dataset.id));
+      if (!obj) return;
+      e.preventDefault();
+      el.focus({ preventScroll: true });
+      bringToFront(obj, el);
+      // Pila de origen: si soltamos dentro de la misma pila de la que partimos,
+      // no aplica el desfasaje (permite reacomodar/mirar cartas sin que
+      // "tironee" a la cima). Si venimos de afuera o de otra pila, sí.
+      const s0 = objSize(obj);
+      const startOthers = state.objects
+        .filter(o => o.id !== obj.id)
+        .map(o => ({ ...o, ...objSize(o) }));
+      const startPileIds = pileMembers(obj.x, obj.y, s0.w, s0.h, startOthers).map(o => o.id);
+      drag = { id: obj.id, el, obj, startX: e.clientX, startY: e.clientY, baseX: obj.x, baseY: obj.y, moved: false, startPileIds };
+      el.classList.add('dragging');
+    });
+
+    document.addEventListener('pointermove', e => {
+      if (!drag) return;
+      if (e.pointerType && e.pointerType !== 'mouse') return;
+      const dx = e.clientX - drag.startX, dy = e.clientY - drag.startY;
+      if (!drag.moved && Math.hypot(dx, dy) > 4) drag.moved = true;
+      if (!drag.moved) return;
+      const s = objSize(drag.obj);
+      drag.obj.x = clamp(Math.round(drag.baseX + dx), 0, Math.max(0, $mesa.clientWidth - s.w));
+      drag.obj.y = clamp(Math.round(drag.baseY + dy), 0, Math.max(0, $mesa.clientHeight - s.h));
+      drag.el.style.left = `${drag.obj.x}px`;
+      drag.el.style.top = `${drag.obj.y}px`;
+      const r = $discard.getBoundingClientRect();
+      $discard.classList.toggle('over',
+        e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom);
+    });
+
+    function endDrag(e) {
+      if (!drag) return;
+      if (e && e.pointerType && e.pointerType !== 'mouse') return;
+      const d = drag;
+      drag = null;
+      d.el.classList.remove('dragging');
+      $discard.classList.remove('over');
+      if (d.moved) {
+        const s = objSize(d.obj);
+        if (centerInZone(d.obj.x, d.obj.y, s.w, s.h, discardZone())) {
+          discardObj(d.obj, d.el);
+          return;
+        }
+      }
+      if (d.moved && d.obj.kind === 'card') {
+        const s = objSize(d.obj);
+        const others = state.objects
+          .filter(o => o.id !== d.obj.id)
+          .map(o => ({ ...o, ...objSize(o) }));
+        const stayed = pileMembers(d.obj.x, d.obj.y, s.w, s.h, others)
+          .some(o => d.startPileIds.includes(o.id));
+        if (!stayed) {
+          const p = nudgeStack(d.obj.x, d.obj.y, s.w, s.h, others, $mesa.clientWidth, $mesa.clientHeight);
+          d.obj.x = p.x;
+          d.obj.y = p.y;
+          d.el.style.left = `${p.x}px`;
+          d.el.style.top = `${p.y}px`;
+        }
+      }
+      fromUrl = false;
+      persist();
+      updateCount();
+    }
+    document.addEventListener('pointerup', endDrag);
+    document.addEventListener('pointercancel', endDrag);
+
+    $mesa.addEventListener('dblclick', e => {
+      fromUrl = false;
+      const el = e.target.closest('.al-obj');
+      if (el && $mesa.contains(el)) {
+        const obj = findObj(Number(el.dataset.id));
+        if (!obj) return;
+        bringToFront(obj, el);
+        if (obj.kind === 'card') obj.bocaAbajo = !obj.bocaAbajo;
+        else if (obj.kind === 'marker') obj.rot = !obj.rot;
+        else return;
+        renderObj(el, obj);
+      } else {
+        const cards = state.objects.filter(o => o.kind === 'card');
+        if (!cards.length) return;
+        cards.forEach(o => { o.bocaAbajo = !o.bocaAbajo; });
+        renderAll();
+      }
+      persist();
+    });
+
+    $mesa.addEventListener('keydown', e => {
+      const el = e.target.closest('.al-obj');
+      if (!el) return;
+      const obj = findObj(Number(el.dataset.id));
+      if (!obj) return;
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        discardObj(obj, el);
+        return;
+      }
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      if (obj.kind !== 'card' && obj.kind !== 'marker') return;
+      fromUrl = false;
+      bringToFront(obj, el);
+      if (obj.kind === 'card') obj.bocaAbajo = !obj.bocaAbajo;
+      else obj.rot = !obj.rot;
+      renderObj(el, obj);
+      persist();
+    });
+
+    function numOf(id, def, lo, hi) {
+      const v = Math.floor(Number(document.getElementById(id).value));
+      if (!Number.isFinite(v)) return def;
+      return clamp(v, lo, hi);
+    }
+
+    const $suit = document.getElementById('c-suit');
+    const $cCount = document.getElementById('c-count');
+    const $cMin = document.getElementById('c-min');
+    const $cMax = document.getElementById('c-max');
+    // El comodín no tiene valor ni cantidad: con ese palo solo esos campos no aplican.
+    const syncSuit = () => {
+      const j = $suit.value === 'joker';
+      $cCount.disabled = j;
+      $cMin.disabled = j;
+      $cMax.disabled = j;
+    };
+    $suit.addEventListener('change', syncSuit);
+    syncSuit();
+
+    document.getElementById('add-cards').addEventListener('click', () => {      fromUrl = false;
+      const res = buildCardRequest(existingKeys(state.objects), {
+        cantidad: numOf('c-count', 5, 1, 50),
+        palo: document.getElementById('c-suit').value,
+        min: Math.floor(Number(document.getElementById('c-min').value)),
+        max: Math.floor(Number(document.getElementById('c-max').value)),
+        repetir: document.getElementById('c-repeat').checked,
+      });
+      if (!res.cards.length) {
+        showNotice('No quedan combinaciones nuevas: ampliá el rango o permití repeticiones.');
+        return;
+      }
+      let added = 0;
+      res.cards.forEach((c, i) => {
+        const p = spawnPos('card', i);
+        if (addObject({ kind: 'card', valor: c.valor, palo: c.palo, bocaAbajo: false, x: p.x, y: p.y })) added++;
+      });
+      if (res.agotadas) showNotice(`Se agregaron ${added} de ${res.pedidas}: no había más combinaciones nuevas.`);
+      persist();
+      renderAll();
+    });
+
+    document.getElementById('add-chips').addEventListener('click', () => {
+      fromUrl = false;
+      const n = numOf('chip-count', 3, 1, 50);
+      for (let i = 0; i < n; i++) {
+        const p = spawnPos('chip', i);
+        if (!addObject({ kind: 'chip', color: pickRandom(CHIP_COLORS), x: p.x, y: p.y })) break;
+      }
+      persist();
+      renderAll();
+    });
+
+    document.getElementById('add-markers').addEventListener('click', () => {
+      fromUrl = false;
+      const n = numOf('marker-count', 1, 1, 20);
+      for (let i = 0; i < n; i++) {
+        const p = spawnPos('marker', i);
+        if (!addObject({ kind: 'marker', color: pickRandom(MARKER_COLORS), x: p.x, y: p.y })) break;
+      }
+      persist();
+      renderAll();
+    });
+
+    $share.addEventListener('click', async () => {
+      const payload = encodeURIComponent(encodeState(state));
+      if (payload.length > SHARE_LIMIT) {
+        showNotice('Mesa muy grande para la URL: usá 💾 Escritorio para llevarla a otra máquina.');
+        return;
+      }
+      const url = `${window.location.origin}${window.location.pathname}?d=${payload}`;
+      try {
+        await copyText(url);
+        showNotice('Se copió el enlace con la mesa.');
+      } catch {
+        showNotice('No se pudo copiar el enlace.');
+      }
+    });
+
+    function resetAll() {
+      try { localStorage.removeItem(STORAGE_KEY); } catch {}
+      state.objects = [];
+      state.nextId = 1;
+      state.maxZ = 0;
+      fromUrl = false;
+      history.replaceState(null, '', window.location.pathname);
+      renderAll();
+    }
+    $reset.addEventListener('click', resetAll);
+
+    // init: URL > localStorage > vacía (desde URL no se toca localStorage hasta el primer cambio)
+    (function init() {
+      const params = new URLSearchParams(window.location.search);
+      const shared = params.get('d');
+      if (shared) {
+        try {
+          const data = decodeState(decodeURIComponent(shared));
+          if (data) {
+            fromUrl = true;
+            Object.assign(state, data);
+          }
+        } catch { /* se cae al resto */ }
+      }
+      if (!fromUrl) {
+        const stored = readStored();
+        if (stored) Object.assign(state, stored);
+      }
+      renderAll();
+    })();
+
+    // theme toggle: Bootstrap's native data-bs-theme, remembered per browser
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -39,7 +39,8 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`vcard`](./vcard) | Tu tarjeta laboral: descargala como `.vcf` o abrila en QRlabs para que la escaneen. |
 | [`lector-qr`](./lector-qr) | Escaneá QR y códigos de barras con cámara o imagen, con historial local. |
 | [`conversor`](./conversor) | Conversor mínimo de unidades, con dos casillas mutuas e historial manual. |
-| [`tabletop`](./tabletop) | Convertí tablas entre Markdown, CSV, HTML y ASCII, con grilla editable. |
+| [`tabletop`](./tabletop) | Convertí tablas entre Markdown, CSV, HTML, ASCII y LaTeX, con grilla editable. |
+| [`algolab`](./algolab) | Mesa virtual para enseñar algoritmos con cartas, fichas y fibrones. |
 | [`swatchbook`](./swatchbook) | Biblioteca de paletas: explorá, compará y reutilizá, con ida y vuelta a Chromatic. |
 | [`n-muestra`](./n-muestra) | n?: calculá cuántas observaciones necesita tu estudio, para proporciones y medias. |
 | [`p-value`](./p-value) | Inferencia rápida: p-value, valores críticos y decisión sobre H₀. |

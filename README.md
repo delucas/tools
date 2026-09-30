@@ -40,6 +40,6 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`lector-qr`](./lector-qr) | Escaneá QR y códigos de barras con cámara o imagen, con historial local. |
 | [`conversor`](./conversor) | Conversor mínimo de unidades, con dos casillas mutuas e historial manual. |
 | [`tabletop`](./tabletop) | Convertí tablas entre Markdown, CSV, HTML y ASCII, con grilla editable. |
-| [`n-factorial`](./n-factorial) | n! Finite Set Explorer: estructuras combinatorias de un conjunto finito, con fórmulas y conteos exactos. |
+| [`n-factorial`](./n-factorial) | n! Explorador de conjuntos finitos: estructuras combinatorias con fórmulas y conteos exactos. |
 
 Cada carpeta tiene su propio `README.md` con el detalle de uso.

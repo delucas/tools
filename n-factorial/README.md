@@ -1,4 +1,4 @@
-# n! — Finite Set Explorer
+# n! — Explorador de conjuntos finitos
 
 Explorador visual de combinatoria sobre conjuntos finitos: definí un conjunto y recorré sus 10 estructuras (potencia, combinaciones, permutaciones, variaciones, variaciones con repetición, combinaciones con repetición, derangements, particiones, particiones en k bloques y composiciones), con fórmulas en LaTeX, conteos exactos y enumeración paginada. Incluye la sección Explosión combinatoria para comparar el crecimiento de 2ⁿ, n!, n³ y Bₙ.
 

@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x2044%3B%3C/text%3E%3C/svg%3E">
+  <title>n! — Finite Set Explorer</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.18.6/katex.min.css" rel="stylesheet"
+    integrity="sha512-hlhL0Hg3cxOco8tCQqGSQJpKClqXth8ioVSeCyXoRBvcWvMJGlKAtgz6McECrKqrzwiTtZf/p8U+LPzShtmgVw=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    .mono { font-family: var(--bs-font-monospace); }
+    textarea#conjunto-input { font-family: var(--bs-font-monospace); font-size: 16px; min-height: 76px; }
+    .fam-btn { white-space: normal; }
+    .enum-grid { display: flex; flex-wrap: wrap; gap: .35rem; }
+    .enum-chip { font-family: var(--bs-font-monospace); font-size: .85em; }
+    .katex-display { margin: .25rem 0; overflow-x: auto; }
+    #chart-wrap { position: relative; height: 220px; }
+    p.signature { font-size: 0.8em; }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4" style="max-width: 960px;">
+    <div id="app">
+      <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+      <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+        <div>
+          <h1 class="h3 mb-1">n! Finite Set Explorer</h1>
+          <p class="text-body-secondary mb-0">Explorá las estructuras combinatorias de un conjunto finito.</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ shared ? '¡Copiado!' : '🔗 Compartir' }}</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset">🗑️ Reiniciar</button>
+          <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+        </div>
+      </div>
+
+      <div v-if="notice" class="alert alert-success py-2" role="status">{{ notice }}</div>
+
+      <!-- Conjunto de entrada -->
+      <section class="card mb-3">
+        <div class="card-body">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+            <h2 class="h6 mb-0">Conjunto S</h2>
+            <span class="badge text-bg-secondary mono">n = {{ elementos.length }}</span>
+          </div>
+          <label for="conjunto-input" class="form-label small text-body-secondary">Elementos separados por comas o saltos de línea. Acepta números, palabras y símbolos.</label>
+          <textarea id="conjunto-input" class="form-control mono" v-model="entrada" @input="onConjunto" spellcheck="false" placeholder="a, b, c, d"></textarea>
+          <div v-if="duplicados.length" class="alert alert-warning py-2 mt-2 mb-0 small" role="alert">
+            Duplicados ignorados (es un conjunto): <span class="mono">{{ duplicados.join(', ') }}</span>
+          </div>
+          <div class="d-flex flex-wrap gap-2 mt-2">
+            <button v-for="ej in ejemplos" :key="ej.nombre" class="btn btn-outline-secondary btn-sm" type="button" @click="cargarEjemplo(ej)">{{ ej.nombre }}</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Navegación de familias -->
+      <nav class="d-flex flex-wrap gap-2 mb-3" aria-label="Familias combinatorias">
+        <button v-for="f in familias" :key="f.id" type="button" @click="familia = f.id"
+          :class="['btn btn-sm fam-btn', familia === f.id ? 'btn-primary' : 'btn-outline-secondary']"
+          :title="f.desc">{{ f.icono }} {{ f.nombre }}</button>
+      </nav>
+
+      <!-- Panel de resultados -->
+      <section class="card mb-3">
+        <div class="card-body">
+          <h2 class="h5 mb-1">{{ fam.nombre }}</h2>
+          <p class="text-body-secondary small mb-2">{{ fam.desc }}</p>
+          <div ref="formula"></div>
+          <p class="mono small mb-1">{{ sustitucion }}</p>
+          <p class="fs-4 mb-2">Resultado: <strong class="mono">{{ conteoFormateado }}</strong> <small class="text-body-secondary fs-6">{{ fam.unidad }}</small></p>
+
+          <div v-if="fam.params === 'k'" class="row g-2 align-items-end mb-2">
+            <div class="col-12 col-sm-6">
+              <label :for="'k-input'" class="form-label small mb-1">k (0 a {{ elementos.length }})</label>
+              <input :id="'k-input'" class="form-control" type="number" min="0" :max="elementos.length" v-model.number="k" @input="onParam">
+            </div>
+            <div class="col-12 col-sm-6">
+              <input class="form-range" type="range" min="0" :max="elementos.length" v-model.number="k" @input="onParam" aria-label="k">
+            </div>
+            <div v-if="fam.simetria" class="col-12">
+              <p class="small text-body-secondary mb-0">Simetría: C({{ elementos.length }},{{ k }}) = C({{ elementos.length }},{{ elementos.length - k }}) = <span class="mono">{{ simetria }}</span></p>
+            </div>
+          </div>
+
+          <div v-if="fam.params === 'len'" class="row g-2 align-items-end mb-2">
+            <div class="col-12 col-sm-6">
+              <label for="len-input" class="form-label small mb-1">Longitud k (0 a 6)</label>
+              <input id="len-input" class="form-control" type="number" min="0" max="6" v-model.number="len" @input="onParam">
+            </div>
+            <div class="col-12 col-sm-6">
+              <p class="small text-body-secondary mb-0">{{ elementos.length }} posibilidades por posición → {{ elementos.length }}<sup>{{ len }}</sup></p>
+            </div>
+          </div>
+
+          <div v-if="avisoTamano" class="alert alert-warning py-2 small" role="alert">{{ avisoTamano }}</div>
+          <div v-if="errorParam" class="alert alert-danger py-2 small" role="alert">{{ errorParam }}</div>
+
+          <div v-if="fam.id === 'potencia' && elementos.length <= 10" class="mb-3">
+            <h3 class="h6">Distribución por cardinalidad</h3>
+            <div id="chart-wrap"><canvas id="chart-potencia"></canvas></div>
+            <p class="small text-body-secondary mb-0">Cada nivel r tiene C(n,r) subconjuntos.</p>
+          </div>
+
+          <h3 class="h6">Enumeración <span class="badge text-bg-secondary fw-normal">{{ totalFiltrado }} de {{ total }} mostrables</span></h3>
+          <div class="row g-2 mb-2">
+            <div class="col-12 col-md-5">
+              <input class="form-control form-control-sm" type="search" v-model="filtro" @input="pagina = 1" placeholder="🔍 Filtrar…" aria-label="Filtrar resultados">
+            </div>
+            <div class="col-6 col-md-3">
+              <select class="form-select form-select-sm" v-model.number="porPagina" aria-label="Por página">
+                <option :value="25">25 / pág.</option>
+                <option :value="50">50 / pág.</option>
+                <option :value="100">100 / pág.</option>
+              </select>
+            </div>
+            <div class="col-6 col-md-4 d-flex flex-wrap gap-2 justify-content-md-end">
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="copiar">📋 Copiar</button>
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="exportar('txt')">⬇️ TXT</button>
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="exportar('csv')">⬇️ CSV</button>
+            </div>
+          </div>
+          <div v-if="!itemsPagina.length" class="text-body-secondary small">Sin resultados para mostrar.</div>
+          <div v-else class="enum-grid mb-2">
+            <span v-for="(it, i) in itemsPagina" :key="i" class="badge text-bg-light border enum-chip">{{ it }}</span>
+          </div>
+          <nav v-if="paginas > 1" class="d-flex flex-wrap align-items-center gap-2" aria-label="Paginación">
+            <button class="btn btn-outline-secondary btn-sm" type="button" :disabled="pagina <= 1" @click="pagina--">←</button>
+            <span class="small text-body-secondary">Página {{ pagina }} de {{ paginas }}</span>
+            <button class="btn btn-outline-secondary btn-sm" type="button" :disabled="pagina >= paginas" @click="pagina++">→</button>
+          </nav>
+
+          <hr>
+          <dl class="row small mb-0">
+            <dt class="col-sm-3">Complejidad</dt>
+            <dd class="col-sm-9 mono">{{ fam.complejidad }}</dd>
+            <dt class="col-sm-3">Por qué</dt>
+            <dd class="col-sm-9">{{ fam.porque }}</dd>
+          </dl>
+        </div>
+      </section>
+
+      <p class="text-body-secondary small">Entrega 1 de 2: familias 1–5. En la entrega 2 llegan combinaciones con repetición, derangements, particiones, composiciones y la sección Explosión combinatoria.</p>
+    </div>
+
+    <hr>
+
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.5.42/vue.global.prod.min.js"
+    integrity="sha512-PREsKi18CyKMgwXMJWtvkzinqjiN0znVfDovmVadp7pKiUpyNGtq7bD2fKElDBmdfH4DGJz8pmAdgihN8NZ8TQ=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.18.6/katex.min.js"
+    integrity="sha512-R6ebU8e1iPsUu+8q3BMGd8M7DyKQcB2lVvWSyTC1RK7O3ywVWCbHDr4a9C10w3HNbYvhxiRtIwjE5w3hPRwzRw=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"
+    integrity="sha512-WoViKhKD4qI2WruSZqv9+kvM4WfFhUMQCLN4QlDTt5aU56fLQy2gYoxWIqlEnXqJy/+Ac5q/hk1oWfqnMDhwMA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script>
+    const STORAGE_KEY = 'n-factorial';
+    const MAX_ENUM = 2000;   // no se enumeran espacios más grandes
+    const MUESTRA = 200;     // muestra cuando excede el máximo
+    const DEFAULT_ENTRADA = 'a, b, c, d';
+
+    const EJEMPLOS = [
+      { nombre: '{a,b,c,d}', entrada: 'a, b, c, d' },
+      { nombre: '{1,2,3}', entrada: '1, 2, 3' },
+      { nombre: '{x,y}', entrada: 'x, y' },
+      { nombre: 'vacío', entrada: '' }
+    ];
+
+    // --- Matemática exacta con BigInt ---
+    function factBI(n) {
+      let r = 1n;
+      for (let i = 2n; i <= BigInt(n); i++) r *= i;
+      return r;
+    }
+    function combBI(n, k) {
+      if (k < 0 || k > n) return 0n;
+      k = Math.min(k, n - k);
+      let r = 1n;
+      for (let i = 1; i <= k; i++) r = r * BigInt(n - k + i) / BigInt(i);
+      return r;
+    }
+    function varBI(n, k) {
+      if (k < 0 || k > n) return 0n;
+      let r = 1n;
+      for (let i = 0; i < k; i++) r *= BigInt(n - i);
+      return r;
+    }
+    function powBI(n, k) { return BigInt(n) ** BigInt(k); }
+
+    // --- Generadores perezosos (arrays solo hasta el límite) ---
+    function* genPotencia(els) {
+      const n = els.length;
+      for (let mask = 0; mask < 2 ** n; mask++) {
+        const sub = [];
+        for (let i = 0; i < n; i++) if (mask & (1 << i)) sub.push(els[i]);
+        yield sub;
+      }
+    }
+    function* genCombinaciones(els, k, start = 0, acc = []) {
+      if (acc.length === k) { yield [...acc]; return; }
+      for (let i = start; i < els.length; i++) {
+        acc.push(els[i]);
+        yield* genCombinaciones(els, k, i + 1, acc);
+        acc.pop();
+      }
+    }
+    function* genPermutaciones(els) {
+      if (els.length <= 1) { yield [...els]; return; }
+      for (let i = 0; i < els.length; i++) {
+        const resto = [...els.slice(0, i), ...els.slice(i + 1)];
+        for (const p of genPermutaciones(resto)) yield [els[i], ...p];
+      }
+    }
+    function* genVariaciones(els, k, acc = [], usadas = []) {
+      if (acc.length === k) { yield [...acc]; return; }
+      for (let i = 0; i < els.length; i++) {
+        if (usadas[i]) continue;
+        usadas[i] = true; acc.push(els[i]);
+        yield* genVariaciones(els, k, acc, usadas);
+        acc.pop(); usadas[i] = false;
+      }
+    }
+    function* genVariacionesRep(els, k, acc = []) {
+      if (acc.length === k) { yield [...acc]; return; }
+      for (const e of els) { acc.push(e); yield* genVariacionesRep(els, k, acc); acc.pop(); }
+    }
+    function tomar(gen, limite) {
+      const out = [];
+      for (const v of gen) { out.push(v); if (out.length >= limite) break; }
+      return out;
+    }
+    function fmt(obj) {
+      if (Array.isArray(obj)) return '{' + obj.join(', ') + '}';
+      return String(obj);
+    }
+    function fmtMiles(bi) { return bi.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
+
+    function parseEntrada(texto) {
+      const crudos = texto.split(/[\n,]+/).map(s => s.trim()).filter(s => s.length);
+      const vistos = new Set(), elementos = [], duplicados = [];
+      for (const c of crudos) {
+        if (vistos.has(c)) { if (!duplicados.includes(c)) duplicados.push(c); continue; }
+        vistos.add(c); elementos.push(c);
+      }
+      return { elementos, duplicados };
+    }
+
+    const FAMILIAS = [
+      { id: 'potencia', icono: 'ⓟ', nombre: 'Potencia', desc: 'Todos los subconjuntos de S, agrupados por cardinalidad.',
+        latex: '|\\mathcal{P}(S)| = 2^{n}', unidad: 'subconjuntos',
+        complejidad: 'contar O(n) · enumerar O(n·2ⁿ)',
+        porque: 'Cada elemento puede estar o no en el subconjunto: 2 opciones por elemento.' },
+      { id: 'combinaciones', icono: 'Ⓒ', nombre: 'Combinaciones', desc: 'Elegir exactamente k elementos, sin orden y sin repetición.',
+        latex: 'C(n,k) = \\frac{n!}{k!(n-k)!}', unidad: 'combinaciones', params: 'k', simetria: true,
+        complejidad: 'contar O(k) · enumerar O(k·C(n,k))',
+        porque: 'Se eligen k de n sin importar el orden; por eso se divide por k!.' },
+      { id: 'permutaciones', icono: 'ⓟ', nombre: 'Permutaciones', desc: 'Todos los ordenamientos posibles de los n elementos.',
+        latex: 'P(n) = n!', unidad: 'permutaciones',
+        complejidad: 'contar O(n) · enumerar O(n·n!)',
+        porque: 'n opciones para el 1.º, n−1 para el 2.º, y así: crece factorial. ¡Cuidado con n grande!' },
+      { id: 'variaciones', icono: 'ⓥ', nombre: 'Variaciones', desc: 'Elegir y ordenar k elementos distintos. A diferencia de las combinaciones, el orden importa.',
+        latex: 'V(n,k) = \\frac{n!}{(n-k)!}', unidad: 'secuencias', params: 'k',
+        complejidad: 'contar O(k) · enumerar O(k·V(n,k))',
+        porque: 'Como permutar pero frenando en k: n·(n−1)…(n−k+1). Son k! veces las combinaciones.' },
+      { id: 'variaciones-rep', icono: 'ⓡ', nombre: 'Variaciones c/rep.', desc: 'Secuencias de longitud k donde cada posición admite cualquiera de los n elementos.',
+        latex: 'VR(n,k) = n^{k}', unidad: 'secuencias', params: 'len',
+        complejidad: 'contar O(log k) · enumerar O(k·nᵏ)',
+        porque: 'k posiciones independientes con n opciones cada una: el árbol de decisiones se multiplica.' }
+    ];
+
+    function estadoInicial() {
+      const q = new URLSearchParams(window.location.search);
+      const fromUrl = q.get('e') !== null || q.get('f') !== null;
+      if (fromUrl) {
+        return {
+          entrada: q.get('e') ?? DEFAULT_ENTRADA,
+          familia: q.get('f') || 'potencia',
+          k: Number(q.get('k') ?? 2), len: Number(q.get('l') ?? 2),
+          fromUrl: true
+        };
+      }
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const s = JSON.parse(raw);
+          if (typeof s?.entrada === 'string') return { ...s, fromUrl: false };
+        }
+      } catch { /* se usa el ejemplo */ }
+      return { entrada: DEFAULT_ENTRADA, familia: 'potencia', k: 2, len: 2, fromUrl: false };
+    }
+
+    const init = estadoInicial();
+    const parsed0 = parseEntrada(init.entrada);
+
+    let noticeTimeout;
+    let chartPotencia = null;
+
+    Vue.createApp({
+      data() {
+        return {
+          entrada: init.entrada,
+          elementos: parsed0.elementos,
+          duplicados: parsed0.duplicados,
+          ejemplos: EJEMPLOS,
+          familias: FAMILIAS,
+          familia: FAMILIAS.some(f => f.id === init.familia) ? init.familia : 'potencia',
+          k: Number.isFinite(init.k) ? init.k : 2,
+          len: Number.isFinite(init.len) ? init.len : 2,
+          filtro: '',
+          pagina: 1,
+          porPagina: 50,
+          notice: '',
+          shared: false,
+          fromUrl: init.fromUrl
+        };
+      },
+      computed: {
+        fam() { return this.familias.find(f => f.id === this.familia); },
+        n() { return this.elementos.length; },
+        conteo() {
+          const n = this.n;
+          if (this.familia === 'potencia') return 2n ** BigInt(n);
+          if (this.familia === 'combinaciones') return combBI(n, this.kValido ? this.k : -1);
+          if (this.familia === 'permutaciones') return factBI(n);
+          if (this.familia === 'variaciones') return varBI(n, this.kValido ? this.k : -1);
+          if (this.familia === 'variaciones-rep') return powBI(Math.max(n, 0), this.lenValido ? this.len : 0);
+          return 0n;
+        },
+        conteoFormateado() { return fmtMiles(this.conteo); },
+        total() { return this.conteo <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(this.conteo) : Infinity; },
+        kValido() { return Number.isInteger(this.k) && this.k >= 0 && this.k <= this.n; },
+        lenValido() { return Number.isInteger(this.len) && this.len >= 0 && this.len <= 6; },
+        errorParam() {
+          if (this.fam.params === 'k' && !this.kValido) return 'k debe ser un entero entre 0 y ' + this.n + '.';
+          if (this.fam.params === 'len' && !this.lenValido) return 'La longitud debe ser un entero entre 0 y 6 (límite anti-explosión).';
+          return '';
+        },
+        simetria() { return fmtMiles(combBI(this.n, this.n - this.k)); },
+        sustitucion() {
+          const n = this.n;
+          if (this.familia === 'potencia') return '2^' + n + ' = ' + this.conteoFormateado;
+          if (this.familia === 'permutaciones') return n + '! = ' + this.conteoFormateado;
+          if (this.familia === 'combinaciones') return this.kValido ? `C(${n},${this.k}) = ${n}! / (${this.k}!·${n - this.k}!) = ` + this.conteoFormateado : '—';
+          if (this.familia === 'variaciones') return this.kValido ? `V(${n},${this.k}) = ${n}! / ${n - this.k}! = ` + this.conteoFormateado : '—';
+          if (this.familia === 'variaciones-rep') return this.lenValido ? `${n}^${this.len} = ` + this.conteoFormateado : '—';
+          return '';
+        },
+        avisoTamano() {
+          if (this.errorParam) return '';
+          if (this.total === Infinity) return 'Espacio gigantesco: se muestra el conteo exacto pero no se enumera.';
+          if (this.total > MAX_ENUM) return `Son ${fmtMiles(this.conteo)} objetos: demasiados para enumerar; se muestran los primeros ${MUESTRA}.`;
+          if (this.total > 1000) return `Son ${fmtMiles(this.conteo)} objetos: puede tardar un poco en listar todo.`;
+          return '';
+        },
+        objetos() {
+          if (this.errorParam || this.total === Infinity) return [];
+          const limite = this.total > MAX_ENUM ? MUESTRA : this.total;
+          const els = this.elementos;
+          if (this.familia === 'potencia') return tomar(genPotencia(els), limite).map(fmt);
+          if (this.familia === 'combinaciones') return tomar(genCombinaciones(els, this.k), limite).map(fmt);
+          if (this.familia === 'permutaciones') return tomar(genPermutaciones(els), limite).map((p, i) => `${i + 1}. {${p.join(', ')}}`);
+          if (this.familia === 'variaciones') return tomar(genVariaciones(els, this.k), limite).map(fmt);
+          if (this.familia === 'variaciones-rep') return tomar(genVariacionesRep(els, this.len), limite).map(a => '(' + a.join(', ') + ')');
+          return [];
+        },
+        objetosFiltrados() {
+          const q = this.filtro.trim().toLowerCase();
+          if (!q) return this.objetos;
+          return this.objetos.filter(s => s.toLowerCase().includes(q));
+        },
+        totalFiltrado() { return this.objetosFiltrados.length; },
+        paginas() { return Math.max(1, Math.ceil(this.objetosFiltrados.length / this.porPagina)); },
+        itemsPagina() {
+          const p = Math.min(this.pagina, this.paginas);
+          return this.objetosFiltrados.slice((p - 1) * this.porPagina, p * this.porPagina);
+        }
+      },
+      watch: {
+        familia() { this.pagina = 1; this.filtro = ''; this.persist(); this.$nextTick(() => { this.renderFormula(); this.renderChart(); }); },
+        porPagina() { this.pagina = 1; }
+      },
+      methods: {
+        showNotice(msg) {
+          clearTimeout(noticeTimeout);
+          this.notice = msg;
+          noticeTimeout = setTimeout(() => { this.notice = ''; }, 1800);
+        },
+        persist() {
+          if (this.fromUrl) return;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({ entrada: this.entrada, familia: this.familia, k: this.k, len: this.len }));
+        },
+        onConjunto() {
+          const { elementos, duplicados } = parseEntrada(this.entrada);
+          this.elementos = elementos; this.duplicados = duplicados;
+          this.pagina = 1; this.persist();
+          this.$nextTick(() => this.renderChart());
+        },
+        onParam() { this.pagina = 1; this.persist(); },
+        cargarEjemplo(ej) { this.entrada = ej.entrada; this.fromUrl = false; this.onConjunto(); },
+        renderFormula() {
+          const el = this.$refs.formula;
+          if (!el) return;
+          try {
+            el.innerHTML = window.katex
+              ? katex.renderToString(this.fam.latex, { displayMode: true, throwOnError: false })
+              : '<code>' + this.fam.latex + '</code>';
+          } catch { el.textContent = this.fam.latex; }
+        },
+        renderChart() {
+          const canvas = document.getElementById('chart-potencia');
+          if (!canvas || this.familia !== 'potencia') { if (chartPotencia) { chartPotencia.destroy(); chartPotencia = null; } return; }
+          if (typeof Chart === 'undefined' || this.n > 10) return;
+          if (chartPotencia) chartPotencia.destroy();
+          const labels = [], data = [];
+          for (let r = 0; r <= this.n; r++) { labels.push('r=' + r); data.push(Number(combBI(this.n, r))); }
+          const dark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+          chartPotencia = new Chart(canvas, {
+            type: 'bar',
+            data: { labels, datasets: [{ data, backgroundColor: dark ? '#3987e5' : '#2a78d6' }] },
+            options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+          });
+        },
+        share() {
+          const url = new URL(window.location.href);
+          url.search = '';
+          url.searchParams.set('e', this.entrada);
+          url.searchParams.set('f', this.familia);
+          url.searchParams.set('k', String(this.k));
+          url.searchParams.set('l', String(this.len));
+          const txt = url.toString();
+          const done = () => { this.shared = true; setTimeout(() => { this.shared = false; }, 1500); };
+          if (navigator.clipboard?.writeText) navigator.clipboard.writeText(txt).then(done, () => this.showNotice('No se pudo copiar.'));
+          else this.showNotice(txt);
+        },
+        reset() {
+          localStorage.removeItem(STORAGE_KEY);
+          this.entrada = DEFAULT_ENTRADA; this.familia = 'potencia';
+          this.k = 2; this.len = 2; this.filtro = ''; this.pagina = 1;
+          this.fromUrl = false;
+          const { elementos, duplicados } = parseEntrada(this.entrada);
+          this.elementos = elementos; this.duplicados = duplicados;
+          history.replaceState(null, '', window.location.pathname);
+          this.$nextTick(() => { this.renderFormula(); this.renderChart(); });
+          this.showNotice('Se restauró el ejemplo inicial.');
+        },
+        copiar() {
+          const txt = this.objetosFiltrados.join('\n');
+          if (!txt) { this.showNotice('Nada para copiar.'); return; }
+          navigator.clipboard?.writeText(txt).then(() => this.showNotice('Copiado.'), () => this.showNotice('No se pudo copiar.'));
+        },
+        exportar(formato) {
+          if (!this.objetosFiltrados.length) { this.showNotice('Nada para exportar.'); return; }
+          const cuerpo = formato === 'csv'
+            ? 'objeto\n' + this.objetosFiltrados.map(s => '"' + s.replaceAll('"', '""') + '"').join('\n')
+            : this.objetosFiltrados.join('\n');
+          const blob = new Blob([cuerpo], { type: formato === 'csv' ? 'text/csv;charset=utf-8' : 'text/plain;charset=utf-8' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = `n-factorial-${this.familia}.${formato}`;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+        }
+      },
+      mounted() {
+        this.renderFormula();
+        this.renderChart();
+      }
+    }).mount('#app');
+
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

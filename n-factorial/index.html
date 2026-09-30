@@ -22,6 +22,7 @@
     .enum-chip { font-family: var(--bs-font-monospace); font-size: .85em; }
     .katex-display { margin: .25rem 0; overflow-x: auto; }
     #chart-wrap { position: relative; height: 220px; }
+    #chart-wrap-explosion { position: relative; height: 260px; }
     p.signature { font-size: 0.8em; }
   </style>
 </head>
@@ -79,7 +80,17 @@
           <p class="mono small mb-1">{{ sustitucion }}</p>
           <p class="fs-4 mb-2">Resultado: <strong class="mono">{{ conteoFormateado }}</strong> <small class="text-body-secondary fs-6">{{ fam.unidad }}</small></p>
 
-          <div v-if="fam.params === 'k'" class="row g-2 align-items-end mb-2">
+          <div v-if="fam.id === 'comb-rep'" class="row g-2 align-items-end mb-2">
+            <div class="col-12 col-sm-6">
+              <label for="krep-input" class="form-label small mb-1">k elementos a elegir (0 a 8, admite k &gt; n)</label>
+              <input id="krep-input" class="form-control" type="number" min="0" max="8" v-model.number="k" @input="onParam">
+            </div>
+            <div class="col-12 col-sm-6">
+              <p class="small text-body-secondary mb-0">Las repeticiones se muestran como multiplicidades: {a×2, b}.</p>
+            </div>
+          </div>
+
+          <div v-if="fam.params === 'k' && fam.id !== 'comb-rep'" class="row g-2 align-items-end mb-2">
             <div class="col-12 col-sm-6">
               <label :for="'k-input'" class="form-label small mb-1">k (0 a {{ elementos.length }})</label>
               <input :id="'k-input'" class="form-control" type="number" min="0" :max="elementos.length" v-model.number="k" @input="onParam">
@@ -89,6 +100,16 @@
             </div>
             <div v-if="fam.simetria" class="col-12">
               <p class="small text-body-secondary mb-0">Simetría: C({{ elementos.length }},{{ k }}) = C({{ elementos.length }},{{ elementos.length - k }}) = <span class="mono">{{ simetria }}</span></p>
+            </div>
+          </div>
+
+          <div v-if="fam.params === 'comp'" class="row g-2 align-items-end mb-2">
+            <div class="col-12 col-sm-6">
+              <label for="partes-input" class="form-label small mb-1">Cantidad de partes (0 = todas, máx. {{ elementos.length }})</label>
+              <input id="partes-input" class="form-control" type="number" min="0" :max="elementos.length" v-model.number="partes" @input="onParam">
+            </div>
+            <div class="col-12 col-sm-6">
+              <p class="small text-body-secondary mb-0">Trabaja sobre el cardinal n = {{ elementos.length }}, no sobre los elementos. La barra muestra los cortes: ●●|● = 2 + 1.</p>
             </div>
           </div>
 
@@ -109,6 +130,26 @@
             <h3 class="h6">Distribución por cardinalidad</h3>
             <div id="chart-wrap"><canvas id="chart-potencia"></canvas></div>
             <p class="small text-body-secondary mb-0">Cada nivel r tiene C(n,r) subconjuntos.</p>
+          </div>
+
+          <div v-if="fam.id === 'derangements'" class="alert alert-info py-2 small" role="note">
+            {{ derangeComp }}. Inclusión-exclusión: se alterna sumar/restar las permutaciones que fijan 1, 2, … puntos.
+          </div>
+
+          <div v-if="(fam.id === 'particiones' || fam.id === 'stirling') && elementos.length <= 8" class="mb-3">
+            <h3 class="h6">Triángulo de Stirling S(n,k)</h3>
+            <div class="table-responsive">
+              <table class="table table-sm table-bordered mono small mb-1">
+                <thead><tr><th>n\k</th><th v-for="j in stirlingRows.length" :key="j">{{ j - 1 }}</th></tr></thead>
+                <tbody>
+                  <tr v-for="(fila, i) in stirlingRows" :key="i">
+                    <th>{{ i }}</th>
+                    <td v-for="(v, j) in fila" :key="j">{{ v }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="small text-body-secondary mb-0">Fila n: S(n,0)…S(n,n). La suma de la fila es Bₙ.</p>
           </div>
 
           <h3 class="h6">Enumeración <span class="badge text-bg-secondary fw-normal">{{ totalFiltrado }} de {{ total }} mostrables</span></h3>
@@ -149,7 +190,35 @@
         </div>
       </section>
 
-      <p class="text-body-secondary small">Entrega 1 de 2: familias 1–5. En la entrega 2 llegan combinaciones con repetición, derangements, particiones, composiciones y la sección Explosión combinatoria.</p>
+      <!-- Explosión combinatoria -->
+      <section class="card mb-3">
+        <div class="card-body">
+          <h2 class="h5 mb-1">💥 Explosión combinatoria</h2>
+          <p class="text-body-secondary small mb-2">Cómo crecen 2ⁿ, n!, n³ y Bₙ al aumentar n. Calcular el número es barato; enumerar y guardar todos los objetos, no.</p>
+          <div class="row g-2 align-items-end mb-2">
+            <div class="col-6 col-md-3">
+              <label for="nmax-input" class="form-label small mb-1">n hasta (4–15)</label>
+              <input id="nmax-input" class="form-control form-control-sm" type="number" min="4" max="15" v-model.number="nMax">
+            </div>
+            <div class="col-6 col-md-4">
+              <label for="vel-input" class="form-label small mb-1">Velocidad hipotética (obj/s)</label>
+              <input id="vel-input" class="form-control form-control-sm" type="number" min="1" step="any" v-model.number="vel">
+            </div>
+          </div>
+          <div class="table-responsive mb-2">
+            <table class="table table-sm table-striped mono small mb-0">
+              <thead><tr><th>n</th><th>2ⁿ</th><th>n!</th><th>n³</th><th>Bₙ</th></tr></thead>
+              <tbody>
+                <tr v-for="r in explosionRows" :key="r.n">
+                  <th>{{ r.n }}</th><td>{{ r.pot.toString() }}</td><td>{{ r.fact.toString() }}</td><td>{{ r.v3.toString() }}</td><td>{{ r.bell === null ? '—' : r.bell.toString() }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div id="chart-wrap-explosion" class="mb-2"><canvas id="chart-explosion"></canvas></div>
+          <p class="small mb-0">Espacio activo ({{ fam.nombre }}): enumerar todo llevaría <strong>{{ total === Infinity ? '∞' : fmtT(estimado.seg) }}</strong> a {{ vel }} obj/s y <strong>{{ total === Infinity ? '∞' : estimado.mem }}</strong> de memoria aprox. Contar es O(n) u O(n²); enumerar y almacenar son proporcionales a la cantidad.</p>
+        </div>
+      </section>
     </div>
 
     <hr>
@@ -200,6 +269,26 @@
       return r;
     }
     function powBI(n, k) { return BigInt(n) ** BigInt(k); }
+    function derangeBI(n) {
+      if (n === 0) return 1n;
+      if (n === 1) return 0n;
+      let a = 1n, b = 0n; // !0, !1
+      for (let i = 2; i <= n; i++) { const c = BigInt(i - 1) * (b + a); a = b; b = c; }
+      return b;
+    }
+    // Stirling 2ª especie por DP exacta
+    const stirlingCache = [[1n]];
+    function stirlingBI(n, k) {
+      if (k < 0 || k > n) return 0n;
+      if (n === 0) return 1n;
+      while (stirlingCache.length <= n) {
+        const i = stirlingCache.length, fila = [0n];
+        for (let j = 1; j <= i; j++) fila[j] = BigInt(j) * (stirlingCache[i - 1][j] || 0n) + (stirlingCache[i - 1][j - 1] || 0n);
+        stirlingCache.push(fila);
+      }
+      return stirlingCache[n][k] || 0n;
+    }
+    function bellBI(n) { let r = 0n; for (let k = 0; k <= n; k++) r += stirlingBI(n, k); return r; }
 
     // --- Generadores perezosos (arrays solo hasta el límite) ---
     function* genPotencia(els) {
@@ -238,6 +327,66 @@
       if (acc.length === k) { yield [...acc]; return; }
       for (const e of els) { acc.push(e); yield* genVariacionesRep(els, k, acc); acc.pop(); }
     }
+    // Multiconjuntos: índices no decrecientes + multiplicidades
+    function* genCombRep(els, k, start = 0, acc = []) {
+      if (acc.length === k) { yield [...acc]; return; }
+      for (let i = start; i < els.length; i++) {
+        acc.push(els[i]);
+        yield* genCombRep(els, k, i, acc);
+        acc.pop();
+      }
+    }
+    function fmtMulti(arr) {
+      const orden = [], cuenta = {};
+      for (const e of arr) { if (!(e in cuenta)) { orden.push(e); cuenta[e] = 0; } cuenta[e]++; }
+      return '{' + orden.map(e => (cuenta[e] > 1 ? `${e}×${cuenta[e]}` : e)).join(', ') + '}';
+    }
+    function* genDerangements(els) {
+      for (const p of genPermutaciones(els)) {
+        let ok = true;
+        for (let i = 0; i < els.length; i++) if (p[i] === els[i]) { ok = false; break; }
+        if (ok) yield p;
+      }
+    }
+    // Particiones de conjunto (orden canónico por primer aparición)
+    function* genParticiones(els) {
+      const n = els.length;
+      if (n === 0) { yield []; return; }
+      function* rec(i, bloques) {
+        if (i === n) { yield bloques.map(b => [...b]); return; }
+        for (let b = 0; b < bloques.length; b++) {
+          bloques[b].push(els[i]);
+          yield* rec(i + 1, bloques);
+          bloques[b].pop();
+        }
+        bloques.push([els[i]]);
+        yield* rec(i + 1, bloques);
+        bloques.pop();
+      }
+      yield* rec(1, [[els[0]]]);
+    }
+    function fmtPart(bloques) {
+      if (!bloques.length) return '∅ (partición vacía de ∅)';
+      return bloques.map(b => '{' + b.join(', ') + '}').join(' | ');
+    }
+    // Composiciones del entero n: cortes entre unidades
+    function* genComposiciones(n) {
+      if (n === 0) { yield []; return; }
+      for (let mask = 0; mask < 2 ** (n - 1); mask++) {
+        const partes = []; let actual = 1;
+        for (let i = 0; i < n - 1; i++) {
+          if (mask & (1 << i)) { partes.push(actual); actual = 1; }
+          else actual++;
+        }
+        partes.push(actual);
+        yield partes;
+      }
+    }
+    function fmtComp(partes) {
+      if (!partes.length) return '∅ (composición vacía de 0)';
+      const barras = partes.map(p => '●'.repeat(p)).join('|');
+      return partes.join(' + ') + '   ' + barras;
+    }
     function tomar(gen, limite) {
       const out = [];
       for (const v of gen) { out.push(v); if (out.length >= limite) break; }
@@ -248,6 +397,22 @@
       return String(obj);
     }
     function fmtMiles(bi) { return bi.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
+    function formatoBytes(b) {
+      if (!Number.isFinite(b)) return '∞';
+      const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+      let i = 0;
+      while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
+      return (b >= 100 ? Math.round(b) : b.toFixed(1)) + ' ' + u[i];
+    }
+    function formatoTiempo(seg) {
+      if (!Number.isFinite(seg)) return '∞';
+      if (seg < 1) return (seg * 1000).toFixed(0) + ' ms';
+      if (seg < 60) return seg.toFixed(1) + ' s';
+      if (seg < 3600) return (seg / 60).toFixed(1) + ' min';
+      if (seg < 86400) return (seg / 3600).toFixed(1) + ' h';
+      if (seg < 31557600) return (seg / 86400).toFixed(1) + ' días';
+      return (seg / 31557600).toExponential(1) + ' años';
+    }
 
     function parseEntrada(texto) {
       const crudos = texto.split(/[\n,]+/).map(s => s.trim()).filter(s => s.length);
@@ -279,7 +444,27 @@
       { id: 'variaciones-rep', icono: 'ⓡ', nombre: 'Variaciones c/rep.', desc: 'Secuencias de longitud k donde cada posición admite cualquiera de los n elementos.',
         latex: 'VR(n,k) = n^{k}', unidad: 'secuencias', params: 'len',
         complejidad: 'contar O(log k) · enumerar O(k·nᵏ)',
-        porque: 'k posiciones independientes con n opciones cada una: el árbol de decisiones se multiplica.' }
+        porque: 'k posiciones independientes con n opciones cada una: el árbol de decisiones se multiplica.' },
+      { id: 'comb-rep', icono: '⒭', nombre: 'Comb. c/rep.', desc: 'Elegir k elementos permitiendo repeticiones, sin importar el orden. A diferencia de las variaciones con repetición, {a,a,b} y {a,b,a} son el mismo multiconjunto.',
+        latex: 'CR(n,k) = \\binom{n+k-1}{k}', unidad: 'multiconjuntos', params: 'k',
+        complejidad: 'contar O(k) · enumerar O(k·CR(n,k))',
+        porque: 'Cada multiconjunto equivale a ubicar k estrellas y n−1 barras: combinaciones de n+k−1 posiciones.' },
+      { id: 'derangements', icono: '≠', nombre: 'Derangements', desc: 'Permutaciones donde ningún elemento queda en su posición original. Incluye el principio de inclusión-exclusión.',
+        latex: '!n = n! \\sum_{i=0}^{n} \\frac{(-1)^i}{i!}', unidad: 'derangements',
+        complejidad: 'contar O(n) · enumerar O(n·n!)',
+        porque: 'Se parte de n! y se restan las que fijan ≥1 punto (inclusión-exclusión): queda ≈ n!/e.' },
+      { id: 'particiones', icono: 'Ⓑ', nombre: 'Particiones', desc: 'Dividir S en bloques no vacíos, disjuntos, cuya unión es S. El total es el número de Bell.',
+        latex: 'B_n = \\sum_{k=0}^{n} S(n,k)', unidad: 'particiones',
+        complejidad: 'contar O(n²) · enumerar O(Bₙ)',
+        porque: 'Cada partición tiene algún k = nº de bloques; sumar los Stirling S(n,k) da el total.' },
+      { id: 'stirling', icono: 'ⓢ', nombre: 'Part. en k bloques', desc: 'Dividir S en exactamente k bloques no vacíos, sin importar el orden de los bloques.',
+        latex: 'S(n,k) = k\\cdot S(n-1,k) + S(n-1,k-1)', unidad: 'particiones', params: 'k',
+        complejidad: 'contar O(n·k) · enumerar O(S(n,k))',
+        porque: 'Recurrencia: el n-ésimo elemento entra en uno de los k bloques existentes o forma uno nuevo él solo.' },
+      { id: 'composiciones', icono: '⊞', nombre: 'Composiciones', desc: 'Escribir el entero n (cardinal de S) como suma ordenada de positivos. A diferencia de la partición entera, el orden importa: 1+2 ≠ 2+1.',
+        latex: 'C(n) = 2^{n-1} \\quad · \\quad C(n,k) = \\binom{n-1}{k-1}', unidad: 'composiciones', params: 'comp',
+        complejidad: 'contar O(1) · enumerar O(n·2ⁿ)',
+        porque: 'Entre las n unidades hay n−1 huecos; cada uno lleva corte o no: 2ⁿ⁻¹. Con k partes, elegir k−1 cortes.' }
     ];
 
     function estadoInicial() {
@@ -290,6 +475,7 @@
           entrada: q.get('e') ?? DEFAULT_ENTRADA,
           familia: q.get('f') || 'potencia',
           k: Number(q.get('k') ?? 2), len: Number(q.get('l') ?? 2),
+          partes: Number(q.get('p') ?? 0), nMax: Number(q.get('m') ?? 10),
           fromUrl: true
         };
       }
@@ -300,7 +486,7 @@
           if (typeof s?.entrada === 'string') return { ...s, fromUrl: false };
         }
       } catch { /* se usa el ejemplo */ }
-      return { entrada: DEFAULT_ENTRADA, familia: 'potencia', k: 2, len: 2, fromUrl: false };
+      return { entrada: DEFAULT_ENTRADA, familia: 'potencia', k: 2, len: 2, partes: 0, nMax: 10, fromUrl: false };
     }
 
     const init = estadoInicial();
@@ -308,6 +494,7 @@
 
     let noticeTimeout;
     let chartPotencia = null;
+    let chartExplosion = null;
 
     Vue.createApp({
       data() {
@@ -320,6 +507,9 @@
           familia: FAMILIAS.some(f => f.id === init.familia) ? init.familia : 'potencia',
           k: Number.isFinite(init.k) ? init.k : 2,
           len: Number.isFinite(init.len) ? init.len : 2,
+          partes: Number.isFinite(init.partes) ? init.partes : 0,
+          nMax: Number.isFinite(init.nMax) ? Math.min(Math.max(init.nMax, 4), 15) : 10,
+          vel: 1000000,
           filtro: '',
           pagina: 1,
           porPagina: 50,
@@ -338,15 +528,28 @@
           if (this.familia === 'permutaciones') return factBI(n);
           if (this.familia === 'variaciones') return varBI(n, this.kValido ? this.k : -1);
           if (this.familia === 'variaciones-rep') return powBI(Math.max(n, 0), this.lenValido ? this.len : 0);
+          if (this.familia === 'comb-rep') return this.kRepValido ? combBI(n + this.k - 1, this.k) : 0n;
+          if (this.familia === 'derangements') return derangeBI(n);
+          if (this.familia === 'particiones') return bellBI(n);
+          if (this.familia === 'stirling') return stirlingBI(n, this.kValido ? this.k : -1);
+          if (this.familia === 'composiciones') {
+            if (n === 0) return 1n;
+            if (this.partes === 0) return 2n ** BigInt(n - 1);
+            return this.partesValido ? combBI(n - 1, this.partes - 1) : 0n;
+          }
           return 0n;
         },
         conteoFormateado() { return fmtMiles(this.conteo); },
         total() { return this.conteo <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(this.conteo) : Infinity; },
         kValido() { return Number.isInteger(this.k) && this.k >= 0 && this.k <= this.n; },
         lenValido() { return Number.isInteger(this.len) && this.len >= 0 && this.len <= 6; },
+        kRepValido() { return Number.isInteger(this.k) && this.k >= 0 && this.k <= 8; },
+        partesValido() { return Number.isInteger(this.partes) && this.partes >= 0 && this.partes <= this.n; },
         errorParam() {
+          if (this.familia === 'comb-rep' && !this.kRepValido) return 'k debe ser un entero entre 0 y 8 (límite anti-explosión).';
           if (this.fam.params === 'k' && !this.kValido) return 'k debe ser un entero entre 0 y ' + this.n + '.';
           if (this.fam.params === 'len' && !this.lenValido) return 'La longitud debe ser un entero entre 0 y 6 (límite anti-explosión).';
+          if (this.fam.params === 'comp' && !this.partesValido) return 'Las partes deben ser 0 (todas) o un entero entre 1 y ' + this.n + '.';
           return '';
         },
         simetria() { return fmtMiles(combBI(this.n, this.n - this.k)); },
@@ -357,7 +560,32 @@
           if (this.familia === 'combinaciones') return this.kValido ? `C(${n},${this.k}) = ${n}! / (${this.k}!·${n - this.k}!) = ` + this.conteoFormateado : '—';
           if (this.familia === 'variaciones') return this.kValido ? `V(${n},${this.k}) = ${n}! / ${n - this.k}! = ` + this.conteoFormateado : '—';
           if (this.familia === 'variaciones-rep') return this.lenValido ? `${n}^${this.len} = ` + this.conteoFormateado : '—';
+          if (this.familia === 'comb-rep') return this.kRepValido ? `CR(${n},${this.k}) = C(${n + this.k - 1},${this.k}) = ` + this.conteoFormateado : '—';
+          if (this.familia === 'derangements') return `!${n} ≈ ${n}!/e = ` + this.conteoFormateado;
+          if (this.familia === 'particiones') return `B${n} = Σ S(${n},k) = ` + this.conteoFormateado;
+          if (this.familia === 'stirling') return this.kValido ? `S(${n},${this.k}) = ${this.k}·S(${n - 1},${this.k}) + S(${n - 1},${this.k - 1}) = ` + this.conteoFormateado : '—';
+          if (this.familia === 'composiciones') {
+            if (n === 0) return 'C(0) = 1 (vacía)';
+            if (this.partes === 0) return `C(${n}) = 2^${n - 1} = ` + this.conteoFormateado;
+            return this.partesValido ? `C(${n},${this.partes}) = C(${n - 1},${this.partes - 1}) = ` + this.conteoFormateado : '—';
+          }
           return '';
+        },
+        derangeComp() {
+          if (this.familia !== 'derangements') return '';
+          const base = `${fmtMiles(this.conteo)} de ${fmtMiles(factBI(this.n))} permutaciones`;
+          if (this.n > 18) return base;
+          const pct = (Number(this.conteo) / Math.max(Number(factBI(this.n)), 1) * 100).toFixed(1);
+          return `${base} (≈ ${pct} % sobreviven)`;
+        },
+        stirlingRows() {
+          const rows = [];
+          for (let i = 0; i <= Math.min(this.n, 8); i++) {
+            const fila = [];
+            for (let j = 0; j <= i; j++) fila.push(stirlingBI(i, j).toString());
+            rows.push(fila);
+          }
+          return rows;
         },
         avisoTamano() {
           if (this.errorParam) return '';
@@ -375,7 +603,44 @@
           if (this.familia === 'permutaciones') return tomar(genPermutaciones(els), limite).map((p, i) => `${i + 1}. {${p.join(', ')}}`);
           if (this.familia === 'variaciones') return tomar(genVariaciones(els, this.k), limite).map(fmt);
           if (this.familia === 'variaciones-rep') return tomar(genVariacionesRep(els, this.len), limite).map(a => '(' + a.join(', ') + ')');
+          if (this.familia === 'comb-rep') return tomar(genCombRep(els, this.k), limite).map(fmtMulti);
+          if (this.familia === 'derangements') return tomar(genDerangements(els), limite).map((p, i) => `${i + 1}. (${p.join(', ')})`);
+          if (this.familia === 'particiones') return tomar(genParticiones(els), limite).map(fmtPart);
+          if (this.familia === 'stirling') {
+            const todas = [];
+            let vistas = 0;
+            for (const part of genParticiones(els)) {
+              if (++vistas > 50000) break; // seguridad anti-explosión
+              if (part.length === this.k) { todas.push(fmtPart(part)); if (todas.length >= limite) break; }
+            }
+            return todas;
+          }
+          if (this.familia === 'composiciones') {
+            let comps = tomar(genComposiciones(this.n), this.n === 0 ? 1 : 2 ** (this.n - 1));
+            if (this.partes > 0) comps = comps.filter(c => c.length === this.partes);
+            return comps.slice(0, limite).map(fmtComp);
+          }
           return [];
+        },
+        explosionRows() {
+          const rows = [];
+          for (let n = 1; n <= this.nMax; n++) {
+            rows.push({
+              n,
+              pot: 2n ** BigInt(n),
+              fact: factBI(n),
+              v3: powBI(n, 3),
+              bell: n <= 15 ? bellBI(n) : null
+            });
+          }
+          return rows;
+        },
+        estimado() {
+          // Tiempo de enumerar el espacio activo a `vel` obj/s + memoria estimada
+          if (this.total === Infinity) return 'inenumerable';
+          const seg = this.total / this.vel;
+          const memBytes = this.total * Math.max(this.n * 4, 8);
+          return { seg, mem: formatoBytes(memBytes) };
         },
         objetosFiltrados() {
           const q = this.filtro.trim().toLowerCase();
@@ -391,7 +656,8 @@
       },
       watch: {
         familia() { this.pagina = 1; this.filtro = ''; this.persist(); this.$nextTick(() => { this.renderFormula(); this.renderChart(); }); },
-        porPagina() { this.pagina = 1; }
+        porPagina() { this.pagina = 1; },
+        nMax() { this.persist(); this.$nextTick(() => this.renderExplosion()); }
       },
       methods: {
         showNotice(msg) {
@@ -401,7 +667,7 @@
         },
         persist() {
           if (this.fromUrl) return;
-          localStorage.setItem(STORAGE_KEY, JSON.stringify({ entrada: this.entrada, familia: this.familia, k: this.k, len: this.len }));
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({ entrada: this.entrada, familia: this.familia, k: this.k, len: this.len, partes: this.partes, nMax: this.nMax }));
         },
         onConjunto() {
           const { elementos, duplicados } = parseEntrada(this.entrada);
@@ -410,6 +676,7 @@
           this.$nextTick(() => this.renderChart());
         },
         onParam() { this.pagina = 1; this.persist(); },
+        fmtT(seg) { return formatoTiempo(seg); },
         cargarEjemplo(ej) { this.entrada = ej.entrada; this.fromUrl = false; this.onConjunto(); },
         renderFormula() {
           const el = this.$refs.formula;
@@ -434,6 +701,28 @@
             options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
           });
         },
+        renderExplosion() {
+          const canvas = document.getElementById('chart-explosion');
+          if (!canvas || typeof Chart === 'undefined') return;
+          if (chartExplosion) chartExplosion.destroy();
+          const labels = this.explosionRows.map(r => r.n);
+          const log = arr => arr.map(v => Math.log10(Number(v) || 1));
+          const dark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+          const grid = dark ? '#444' : '#ddd';
+          chartExplosion = new Chart(canvas, {
+            type: 'line',
+            data: { labels,
+              datasets: [
+                { label: '2ⁿ', data: log(this.explosionRows.map(r => r.pot)), borderColor: '#2a78d6' },
+                { label: 'n!', data: log(this.explosionRows.map(r => r.fact)), borderColor: '#e34948' },
+                { label: 'n³', data: log(this.explosionRows.map(r => r.v3)), borderColor: '#1baf7a' },
+                { label: 'Bₙ', data: log(this.explosionRows.map(r => r.bell || 1n)), borderColor: '#eda100' }
+              ] },
+            options: { plugins: { legend: { position: 'bottom' } },
+              scales: { y: { title: { display: true, text: 'log₁₀(cantidad)' }, grid: { color: grid } },
+                        x: { title: { display: true, text: 'n' }, grid: { color: grid } } } }
+          });
+        },
         share() {
           const url = new URL(window.location.href);
           url.search = '';
@@ -441,6 +730,8 @@
           url.searchParams.set('f', this.familia);
           url.searchParams.set('k', String(this.k));
           url.searchParams.set('l', String(this.len));
+          url.searchParams.set('p', String(this.partes));
+          url.searchParams.set('m', String(this.nMax));
           const txt = url.toString();
           const done = () => { this.shared = true; setTimeout(() => { this.shared = false; }, 1500); };
           if (navigator.clipboard?.writeText) navigator.clipboard.writeText(txt).then(done, () => this.showNotice('No se pudo copiar.'));
@@ -449,12 +740,13 @@
         reset() {
           localStorage.removeItem(STORAGE_KEY);
           this.entrada = DEFAULT_ENTRADA; this.familia = 'potencia';
-          this.k = 2; this.len = 2; this.filtro = ''; this.pagina = 1;
+          this.k = 2; this.len = 2; this.partes = 0; this.nMax = 10;
+          this.filtro = ''; this.pagina = 1;
           this.fromUrl = false;
           const { elementos, duplicados } = parseEntrada(this.entrada);
           this.elementos = elementos; this.duplicados = duplicados;
           history.replaceState(null, '', window.location.pathname);
-          this.$nextTick(() => { this.renderFormula(); this.renderChart(); });
+          this.$nextTick(() => { this.renderFormula(); this.renderChart(); this.renderExplosion(); });
           this.showNotice('Se restauró el ejemplo inicial.');
         },
         copiar() {
@@ -478,6 +770,7 @@
       mounted() {
         this.renderFormula();
         this.renderChart();
+        this.renderExplosion();
       }
     }).mount('#app');
 

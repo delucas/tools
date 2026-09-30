@@ -718,7 +718,7 @@
         },
         hexDe(p) { return p.colores.map(c => c.hex).join('\n'); },
         analizarEnChromatic(p) {
-          // Se envía la paleta completa: Chromatic la recibe en bandeja y analiza de a 4.
+          // Se envía la paleta completa: Chromatic la recibe en la reserva y analiza de a 4.
           const hexes = p.colores.map(c => c.hex).filter((h, i, arr) => h && arr.indexOf(h) === i);
           if (!hexes.length) { this.showNotice('La paleta no tiene colores.'); return; }
           const url = new URL('../chromatic/', window.location.href);

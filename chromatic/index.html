@@ -123,7 +123,7 @@
       <div class="card mb-4" v-if="tray.length">
         <div class="card-body">
           <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-            <h2 class="h6 mb-0">Paleta recibida <span class="badge text-bg-secondary">{{ tray.length }}</span></h2>
+            <h2 class="h6 mb-0">Reserva <span class="badge text-bg-secondary">{{ tray.length }}</span></h2>
             <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTray">Descartar</button>
           </div>
           <p class="text-body-secondary small mb-2">Tocá un color para llevarlo a los slots de análisis (de a 4 por vez).</p>
@@ -269,7 +269,7 @@
         try {
           const arr = JSON.parse(raw);
           if (Array.isArray(arr)) {
-            // Acepta paletas completas: los primeros 4 van a slots, el resto a la bandeja.
+            // Acepta paletas completas: los primeros 4 van a slots, el resto a la reserva.
             const norm = arr.map(normalizeInput).filter(Boolean).slice(0, 24);
             const out = [null, null, null, null];
             for (let i = 0; i < 4 && i < norm.length; i++) out[i] = norm[i];
@@ -574,7 +574,7 @@
           if (hex && !this.tray.includes(hex) && this.tray.length < 20) this.tray.push(hex);
         },
         clearSlot(i) {
-          // Quitar no elimina: el color vuelve a la bandeja; solo se va del todo con Descartar.
+          // Quitar no elimina: el color vuelve a la reserva; solo se va del todo con Descartar.
           this.devolverABandeja(this.colors[i]);
           this.setSlot(i, null);
         },

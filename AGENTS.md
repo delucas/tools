@@ -20,6 +20,7 @@ Este repositorio reúne herramientas web autocontenidas. Cada herramienta vive e
 - Cargar `bootstrap.bundle.min.js` únicamente si se usan componentes que lo requieren. Usar Font Awesome por CDN solo si un ícono aporta funcionalidad.
 - Todas las herramientas incluyen modo claro/oscuro mediante `data-bs-theme` de Bootstrap 5.3+. Guardar la elección en `localStorage`; si no existe, respetar `prefers-color-scheme`. El control de tema debe ser simple y no requerir íconos externos.
 - Para acciones habituales en la cabecera, seguir el patrón `🔗 Compartir`, `🗑️ Reiniciar` y el control de tema `🌙`/`☀️`. No usar Font Awesome solo para estos íconos.
+- Los avisos (`notice`/`error`) no deben mover el contenido al aparecer y desaparecer: mostrarlos flotantes con `position: fixed` (fuera del flujo), nunca como bloques que empujan lo de abajo.
 - Antes del `h1`, agregar el enlace relativo al índice:
 
 ```html

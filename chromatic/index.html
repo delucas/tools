@@ -570,14 +570,19 @@
           }
           this.setSlot(i, hex);
         },
+        devolverABandeja(hex) {
+          if (hex && !this.tray.includes(hex) && this.tray.length < 20) this.tray.push(hex);
+        },
         clearSlot(i) {
+          // Quitar no elimina: el color vuelve a la bandeja; solo se va del todo con Descartar.
+          this.devolverABandeja(this.colors[i]);
           this.setSlot(i, null);
         },
         clearAll() {
+          this.colors.forEach(c => this.devolverABandeja(c));
           this.colors = [null, null, null, null];
           this.drafts = ['', '', '', ''];
           this.errors = [null, null, null, null];
-          this.tray = [];
           this.trayMsg = '';
           this.persist();
         },

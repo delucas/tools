@@ -216,7 +216,7 @@
             </table>
           </div>
           <div id="chart-wrap-explosion" class="mb-2"><canvas id="chart-explosion"></canvas></div>
-          <p class="small mb-0">Espacio activo ({{ fam.nombre }}): enumerar todo llevaría <strong>{{ total === Infinity ? '∞' : fmtT(estimado.seg) }}</strong> a {{ vel }} obj/s y <strong>{{ total === Infinity ? '∞' : estimado.mem }}</strong> de memoria aprox. Contar es O(n) u O(n²); enumerar y almacenar son proporcionales a la cantidad.</p>
+          <p class="small mb-0">Espacio activo ({{ fam.nombre }}): enumerar todo llevaría <strong>{{ total === Infinity ? '∞' : fmtT(estimado.seg) }}</strong> a {{ vel }} obj/s y <strong>{{ total === Infinity ? '∞' : estimado.mem }}</strong> de memoria aprox. Contar es barato (O(log n) a O(n²) según la familia); enumerar y almacenar son proporcionales a la cantidad.</p>
         </div>
       </section>
     </div>
@@ -447,7 +447,7 @@
         porque: 'k posiciones independientes con n opciones cada una: el árbol de decisiones se multiplica.' },
       { id: 'comb-rep', icono: '⒭', nombre: 'Comb. c/rep.', desc: 'Elegir k elementos permitiendo repeticiones, sin importar el orden. A diferencia de las variaciones con repetición, {a,a,b} y {a,b,a} son el mismo multiconjunto.',
         latex: 'CR(n,k) = \\binom{n+k-1}{k}', unidad: 'multiconjuntos', params: 'k',
-        complejidad: 'contar O(k) · enumerar O(k·CR(n,k))',
+        complejidad: 'contar O(min(k,n)) · enumerar O(k·CR(n,k))',
         porque: 'Cada multiconjunto equivale a ubicar k estrellas y n−1 barras: combinaciones de n+k−1 posiciones.' },
       { id: 'derangements', icono: '≠', nombre: 'Derangements', desc: 'Permutaciones donde ningún elemento queda en su posición original. Incluye el principio de inclusión-exclusión.',
         latex: '!n = n! \\sum_{i=0}^{n} \\frac{(-1)^i}{i!}', unidad: 'derangements',
@@ -455,15 +455,15 @@
         porque: 'Se parte de n! y se restan las que fijan ≥1 punto (inclusión-exclusión): queda ≈ n!/e.' },
       { id: 'particiones', icono: 'Ⓑ', nombre: 'Particiones', desc: 'Dividir S en bloques no vacíos, disjuntos, cuya unión es S. El total es el número de Bell.',
         latex: 'B_n = \\sum_{k=0}^{n} S(n,k)', unidad: 'particiones',
-        complejidad: 'contar O(n²) · enumerar O(Bₙ)',
+        complejidad: 'contar O(n²) · enumerar O(n·Bₙ)',
         porque: 'Cada partición tiene algún k = nº de bloques; sumar los Stirling S(n,k) da el total.' },
       { id: 'stirling', icono: 'ⓢ', nombre: 'Part. en k bloques', desc: 'Dividir S en exactamente k bloques no vacíos, sin importar el orden de los bloques.',
         latex: 'S(n,k) = k\\cdot S(n-1,k) + S(n-1,k-1)', unidad: 'particiones', params: 'k',
-        complejidad: 'contar O(n·k) · enumerar O(S(n,k))',
+        complejidad: 'contar O(n·k) · enumerar O(n·S(n,k))',
         porque: 'Recurrencia: el n-ésimo elemento entra en uno de los k bloques existentes o forma uno nuevo él solo.' },
       { id: 'composiciones', icono: '⊞', nombre: 'Composiciones', desc: 'Escribir el entero n (cardinal de S) como suma ordenada de positivos. A diferencia de la partición entera, el orden importa: 1+2 ≠ 2+1.',
         latex: 'C(n) = 2^{n-1} \\quad · \\quad C(n,k) = \\binom{n-1}{k-1}', unidad: 'composiciones', params: 'comp',
-        complejidad: 'contar O(1) · enumerar O(n·2ⁿ)',
+        complejidad: 'contar O(log n) · enumerar O(n·2ⁿ)',
         porque: 'Entre las n unidades hay n−1 huecos; cada uno lleva corte o no: 2ⁿ⁻¹. Con k partes, elegir k−1 cortes.' }
     ];
 

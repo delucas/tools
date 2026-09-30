@@ -182,6 +182,7 @@
           </nav>
 
           <h3 class="h6 mt-3">Pseudocódigo</h3>
+          <p class="text-body-secondary small mb-2">Indentación de 2 espacios (ver convención en el README).</p>
           <pre class="mono p-2 border rounded bg-body-tertiary pseudo-pre mb-2">{{ fam.pseudo }}</pre>
           <div class="d-flex flex-wrap gap-2 mb-2">
             <button class="btn btn-outline-secondary btn-sm" type="button" @click="copiarPseudo">📋 Copiar</button>
@@ -438,181 +439,181 @@
         complejidad: 'contar O(n) · enumerar O(n·2ⁿ)',
         porque: 'Cada elemento puede estar o no en el subconjunto: 2 opciones por elemento.',
         pseudo: `ALGORITMO Subconjuntos(conjunto S)
-    n ← |S|
-    PARA mascara = 0 HASTA 2 ^ n - 1 HACER
-        sub ← arreglo vacío
-        i ← 0
-        MIENTRAS i ≤ n - 1 HACER
-            SI el bit i DE mascara = 1 ENTONCES
-                agregar S[i] AL FINAL DE sub
-            i ← i + 1
-        MOSTRAR sub` },
+  n ← |S|
+  PARA mascara = 0 HASTA 2 ^ n - 1 HACER
+    sub ← arreglo vacío
+    i ← 0
+    MIENTRAS i ≤ n - 1 HACER
+      SI el bit i DE mascara = 1 ENTONCES
+        agregar S[i] AL FINAL DE sub
+      i ← i + 1
+    MOSTRAR sub` },
       { id: 'combinaciones', icono: 'Ⓒ', nombre: 'Combinaciones', desc: 'Elegir exactamente k elementos, sin orden y sin repetición.',
         latex: 'C(n,k) = \\frac{n!}{k!(n-k)!}', unidad: 'combinaciones', params: 'k', simetria: true,
         complejidad: 'contar O(k) · enumerar O(k·C(n,k))',
         porque: 'Se eligen k de n sin importar el orden; por eso se divide por k!.',
         pseudo: `ALGORITMO Combinaciones(conjunto S, entero k)
-    SI k > |S| ENTONCES
-        RETORNAR   // imposible: no hay nada que mostrar
-    actual ← arreglo vacío
-    generarDesde(0)
+  SI k > |S| ENTONCES
+    RETORNAR   // imposible: no hay nada que mostrar
+  actual ← arreglo vacío
+  generarDesde(0)
 
 FUNCION generarDesde(entero inicio)
-    SI |actual| = k ENTONCES
-        MOSTRAR actual
-        RETORNAR
-    SI inicio > |S| - 1 ENTONCES
-        RETORNAR
-    PARA i = inicio HASTA |S| - 1 HACER
-        agregar S[i] AL FINAL DE actual
-        generarDesde(i + 1)
-        quitar EL ÚLTIMO DE actual` },
+  SI |actual| = k ENTONCES
+    MOSTRAR actual
+    RETORNAR
+  SI inicio > |S| - 1 ENTONCES
+    RETORNAR
+  PARA i = inicio HASTA |S| - 1 HACER
+    agregar S[i] AL FINAL DE actual
+    generarDesde(i + 1)
+    quitar EL ÚLTIMO DE actual` },
       { id: 'permutaciones', icono: 'ⓟ', nombre: 'Permutaciones', desc: 'Todos los ordenamientos posibles de los n elementos.',
         latex: 'P(n) = n!', unidad: 'permutaciones',
         complejidad: 'contar O(n) · enumerar O(n·n!)',
         porque: 'n opciones para el 1.º, n−1 para el 2.º, y así: crece factorial. ¡Cuidado con n grande!',
         pseudo: `ALGORITMO Permutaciones(conjunto S)
-    completar(arreglo vacío, S)
+  completar(arreglo vacío, S)
 
 FUNCION completar(arreglo fijos, arreglo libres)
-    SI |libres| = 0 ENTONCES
-        MOSTRAR fijos
-        RETORNAR
-    PARA i = 0 HASTA |libres| - 1 HACER
-        nuevos ← fijos CON libres[i] AL FINAL
-        resto ← libres SIN LA POSICIÓN i
-        completar(nuevos, resto)` },
+  SI |libres| = 0 ENTONCES
+    MOSTRAR fijos
+    RETORNAR
+  PARA i = 0 HASTA |libres| - 1 HACER
+    nuevos ← fijos CON libres[i] AL FINAL
+    resto ← libres SIN LA POSICIÓN i
+    completar(nuevos, resto)` },
       { id: 'variaciones', icono: 'ⓥ', nombre: 'Variaciones', desc: 'Elegir y ordenar k elementos distintos. A diferencia de las combinaciones, el orden importa.',
         latex: 'V(n,k) = \\frac{n!}{(n-k)!}', unidad: 'secuencias', params: 'k',
         complejidad: 'contar O(k) · enumerar O(k·V(n,k))',
         porque: 'Como permutar pero frenando en k: n·(n−1)…(n−k+1). Son k! veces las combinaciones.',
         pseudo: `ALGORITMO Variaciones(conjunto S, entero k)
-    SI k > |S| ENTONCES
-        RETORNAR   // imposible: no hay nada que mostrar
-    usadas ← arreglo DE |S| EN FALSO
-    actual ← arreglo vacío
-    elegir()
+  SI k > |S| ENTONCES
+    RETORNAR   // imposible: no hay nada que mostrar
+  usadas ← arreglo DE |S| EN FALSO
+  actual ← arreglo vacío
+  elegir()
 
 FUNCION elegir()
-    SI |actual| = k ENTONCES
-        MOSTRAR actual
-        RETORNAR
-    SI |S| = 0 ENTONCES
-        RETORNAR
-    PARA i = 0 HASTA |S| - 1 HACER
-        SI NO usadas[i] ENTONCES
-            usadas[i] ← VERDADERO
-            agregar S[i] AL FINAL DE actual
-            elegir()
-            quitar EL ÚLTIMO DE actual
-            usadas[i] ← FALSO` },
+  SI |actual| = k ENTONCES
+    MOSTRAR actual
+    RETORNAR
+  SI |S| = 0 ENTONCES
+    RETORNAR
+  PARA i = 0 HASTA |S| - 1 HACER
+    SI NO usadas[i] ENTONCES
+      usadas[i] ← VERDADERO
+      agregar S[i] AL FINAL DE actual
+      elegir()
+      quitar EL ÚLTIMO DE actual
+      usadas[i] ← FALSO` },
       { id: 'variaciones-rep', icono: 'ⓡ', nombre: 'Variaciones c/rep.', desc: 'Secuencias de longitud k donde cada posición admite cualquiera de los n elementos.',
         latex: 'VR(n,k) = n^{k}', unidad: 'secuencias', params: 'len',
         complejidad: 'contar O(log k) · enumerar O(k·nᵏ)',
         porque: 'k posiciones independientes con n opciones cada una: el árbol de decisiones se multiplica.',
         pseudo: `ALGORITMO VariacionesConRepeticion(conjunto S, entero k)
-    actual ← arreglo vacío
-    extender()
+  actual ← arreglo vacío
+  extender()
 
 FUNCION extender()
-    SI |actual| = k ENTONCES
-        MOSTRAR actual
-        RETORNAR
-    PARA CADA elem EN S HACER
-        agregar elem AL FINAL DE actual
-        extender()
-        quitar EL ÚLTIMO DE actual` },
+  SI |actual| = k ENTONCES
+    MOSTRAR actual
+    RETORNAR
+  PARA CADA elem EN S HACER
+    agregar elem AL FINAL DE actual
+    extender()
+    quitar EL ÚLTIMO DE actual` },
       { id: 'comb-rep', icono: '⒭', nombre: 'Comb. c/rep.', desc: 'Elegir k elementos permitiendo repeticiones, sin importar el orden. A diferencia de las variaciones con repetición, {a,a,b} y {a,b,a} son el mismo multiconjunto.',
         latex: 'CR(n,k) = \\binom{n+k-1}{k}', unidad: 'multiconjuntos', params: 'k',
         complejidad: 'contar O(min(k,n)) · enumerar O(k·CR(n,k))',
         porque: 'Cada multiconjunto equivale a ubicar k estrellas y n−1 barras: combinaciones de n+k−1 posiciones.',
         pseudo: `ALGORITMO CombinacionesConRepeticion(conjunto S, entero k)
-    SI k = 0 ENTONCES
-        MOSTRAR multiconjunto vacío
-        RETORNAR
-    SI |S| = 0 ENTONCES
-        RETORNAR   // sin elementos no hay qué repetir
-    actual ← arreglo vacío
-    elegirDesde(0)
+  SI k = 0 ENTONCES
+    MOSTRAR multiconjunto vacío
+    RETORNAR
+  SI |S| = 0 ENTONCES
+    RETORNAR   // sin elementos no hay qué repetir
+  actual ← arreglo vacío
+  elegirDesde(0)
 
 FUNCION elegirDesde(entero inicio)
-    SI |actual| = k ENTONCES
-        MOSTRAR actual CON SUS MULTIPLICIDADES
-        RETORNAR
-    SI inicio > |S| - 1 ENTONCES
-        RETORNAR
-    PARA i = inicio HASTA |S| - 1 HACER
-        agregar S[i] AL FINAL DE actual
-        elegirDesde(i)   // se admite repetir: es i, no i + 1
-        quitar EL ÚLTIMO DE actual` },
+  SI |actual| = k ENTONCES
+    MOSTRAR actual CON SUS MULTIPLICIDADES
+    RETORNAR
+  SI inicio > |S| - 1 ENTONCES
+    RETORNAR
+  PARA i = inicio HASTA |S| - 1 HACER
+    agregar S[i] AL FINAL DE actual
+    elegirDesde(i)   // se admite repetir: es i, no i + 1
+    quitar EL ÚLTIMO DE actual` },
       { id: 'derangements', icono: '≠', nombre: 'Derangements', desc: 'Permutaciones donde ningún elemento queda en su posición original. Incluye el principio de inclusión-exclusión.',
         latex: '!n = n! \\sum_{i=0}^{n} \\frac{(-1)^i}{i!}', unidad: 'derangements',
         complejidad: 'contar O(n) · enumerar O(n·n!)',
         porque: 'Se parte de n! y se restan las que fijan ≥1 punto (inclusión-exclusión): queda ≈ n!/e.',
         pseudo: `ALGORITMO Derangements(conjunto S)
-    PARA CADA perm EN Permutaciones(S) HACER
-        fija ← FALSO
-        i ← 0
-        MIENTRAS i ≤ |S| - 1 HACER
-            SI perm[i] = S[i] ENTONCES
-                fija ← VERDADERO
-            i ← i + 1
-        SI NO fija ENTONCES
-            MOSTRAR perm
-    // Para n grande conviene un algoritmo directo,
-    // pero filtrar es O(n·n!) y lo más claro de leer` },
+  PARA CADA perm EN Permutaciones(S) HACER
+    fija ← FALSO
+    i ← 0
+    MIENTRAS i ≤ |S| - 1 HACER
+      SI perm[i] = S[i] ENTONCES
+        fija ← VERDADERO
+      i ← i + 1
+    SI NO fija ENTONCES
+      MOSTRAR perm
+  // Para n grande conviene un algoritmo directo,
+  // pero filtrar es O(n·n!) y lo más claro de leer` },
       { id: 'particiones', icono: 'Ⓑ', nombre: 'Particiones', desc: 'Dividir S en bloques no vacíos, disjuntos, cuya unión es S. El total es el número de Bell.',
         latex: 'B_n = \\sum_{k=0}^{n} S(n,k)', unidad: 'particiones',
         complejidad: 'contar O(n²) · enumerar O(n·Bₙ)',
         porque: 'Cada partición tiene algún k = nº de bloques; sumar los Stirling S(n,k) da el total.',
         pseudo: `ALGORITMO Particiones(conjunto S)
-    SI |S| = 0 ENTONCES
-        MOSTRAR partición vacía
-        RETORNAR
-    ubicar(1, [[S[0]]])
+  SI |S| = 0 ENTONCES
+    MOSTRAR partición vacía
+    RETORNAR
+  ubicar(1, [[S[0]]])
 
 FUNCION ubicar(entero i, arreglo bloques)
-    SI i = |S| ENTONCES
-        MOSTRAR bloques
-        RETORNAR
-    PARA b = 0 HASTA |bloques| - 1 HACER
-        agregar S[i] AL bloque bloques[b]
-        ubicar(i + 1, bloques)
-        quitar S[i] DEL bloque bloques[b]
-    agregar [S[i]] COMO UN bloque NUEVO
+  SI i = |S| ENTONCES
+    MOSTRAR bloques
+    RETORNAR
+  PARA b = 0 HASTA |bloques| - 1 HACER
+    agregar S[i] AL bloque bloques[b]
     ubicar(i + 1, bloques)
-    quitar EL ÚLTIMO bloque` },
+    quitar S[i] DEL bloque bloques[b]
+  agregar [S[i]] COMO UN bloque NUEVO
+  ubicar(i + 1, bloques)
+  quitar EL ÚLTIMO bloque` },
       { id: 'stirling', icono: 'ⓢ', nombre: 'Part. en k bloques', desc: 'Dividir S en exactamente k bloques no vacíos, sin importar el orden de los bloques.',
         latex: 'S(n,k) = k\\cdot S(n-1,k) + S(n-1,k-1)', unidad: 'particiones', params: 'k',
         complejidad: 'contar O(n·k) · enumerar O(n·S(n,k))',
         porque: 'Recurrencia: el n-ésimo elemento entra en uno de los k bloques existentes o forma uno nuevo él solo.',
         pseudo: `ALGORITMO ParticionesEnKBloques(conjunto S, entero k)
-    PARA CADA part EN Particiones(S) HACER
-        SI |part| = k ENTONCES
-            MOSTRAR part
-    // Equivale a S(n,k) = k·S(n-1,k) + S(n-1,k-1):
-    // S[i] entra en un bloque existente o crea uno nuevo` },
+  PARA CADA part EN Particiones(S) HACER
+    SI |part| = k ENTONCES
+      MOSTRAR part
+  // Equivale a S(n,k) = k·S(n-1,k) + S(n-1,k-1):
+  // S[i] entra en un bloque existente o crea uno nuevo` },
       { id: 'composiciones', icono: '⊞', nombre: 'Composiciones', desc: 'Escribir el entero n (cardinal de S) como suma ordenada de positivos. A diferencia de la partición entera, el orden importa: 1+2 ≠ 2+1.',
         latex: 'C(n) = 2^{n-1} \\quad · \\quad C(n,k) = \\binom{n-1}{k-1}', unidad: 'composiciones', params: 'comp',
         complejidad: 'contar O(log n) · enumerar O(n·2ⁿ)',
         porque: 'Entre las n unidades hay n−1 huecos; cada uno lleva corte o no: 2ⁿ⁻¹. Con k partes, elegir k−1 cortes.',
         pseudo: `ALGORITMO Composiciones(entero n)
-    SI n = 0 ENTONCES
-        MOSTRAR composición vacía
-        RETORNAR
-    PARA mascara = 0 HASTA 2 ^ (n - 1) - 1 HACER
-        partes ← arreglo vacío
-        actual ← 1
-        i ← 0
-        MIENTRAS i ≤ n - 2 HACER
-            SI el bit i DE mascara = 1 ENTONCES
-                agregar actual AL FINAL DE partes
-                actual ← 1
-            SINO
-                actual ← actual + 1
-            i ← i + 1
+  SI n = 0 ENTONCES
+    MOSTRAR composición vacía
+    RETORNAR
+  PARA mascara = 0 HASTA 2 ^ (n - 1) - 1 HACER
+    partes ← arreglo vacío
+    actual ← 1
+    i ← 0
+    MIENTRAS i ≤ n - 2 HACER
+      SI el bit i DE mascara = 1 ENTONCES
         agregar actual AL FINAL DE partes
-        MOSTRAR partes` }
+        actual ← 1
+      SINO
+        actual ← actual + 1
+      i ← i + 1
+    agregar actual AL FINAL DE partes
+    MOSTRAR partes` }
     ];
 
     function estadoInicial() {

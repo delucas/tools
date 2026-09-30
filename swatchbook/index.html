@@ -15,6 +15,8 @@
     #app input[type="text"], #app input[type="search"], #app input[type="number"],
     #app textarea, #app select { font-size: 16px; }
     .mono { font-family: var(--bs-font-monospace); }
+    .copia { cursor: pointer; }
+    .copia:hover { text-decoration: underline; }
     .tira { display: flex; height: 2.5rem; border-radius: var(--bs-border-radius) var(--bs-border-radius) 0 0; overflow: hidden; }
     .tira > span { flex: 1 1 0; }
     .tira-lg { height: 3.5rem; }
@@ -121,15 +123,14 @@
         </div>
         <div class="table-responsive mb-3">
           <table class="table table-sm align-middle mono">
-            <thead><tr><th></th><th>Nombre</th><th>HEX</th><th>RGB</th><th>HSL</th><th></th></tr></thead>
+            <thead><tr><th></th><th>Nombre</th><th>HEX</th><th>RGB</th><th>HSL</th></tr></thead>
             <tbody>
               <tr v-for="c in paleta.colores" :key="c.nombre">
                 <td><span class="sw d-inline-block" :style="{background: c.hex}" style="width:1.75rem;height:1.75rem;"></span></td>
                 <td>{{ c.nombre }}</td>
-                <td>{{ c.hex }}</td>
-                <td class="small">{{ rgbDe(c.hex) }}</td>
-                <td class="small">{{ hslDe(c.hex) }}</td>
-                <td><button class="btn btn-outline-secondary btn-sm" type="button" @click="copiar(c.hex, c.nombre + ' copiado.')">📋</button></td>
+                <td><button type="button" class="bg-transparent border-0 p-0 mono copia text-body" @click="copiar(c.hex, 'HEX copiado: ' + c.hex)" :title="'Copiar ' + c.hex">{{ c.hex }}</button></td>
+                <td class="small"><button type="button" class="bg-transparent border-0 p-0 mono copia text-body small" @click="copiar(rgbDe(c.hex), 'RGB copiado.')" :title="'Copiar ' + rgbDe(c.hex)">{{ rgbDe(c.hex) }}</button></td>
+                <td class="small"><button type="button" class="bg-transparent border-0 p-0 mono copia text-body small" @click="copiar(hslDe(c.hex), 'HSL copiado.')" :title="'Copiar ' + hslDe(c.hex)">{{ hslDe(c.hex) }}</button></td>
               </tr>
             </tbody>
           </table>

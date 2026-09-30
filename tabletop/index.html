@@ -36,7 +36,7 @@
     <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
       <div>
         <h1 class="h3 mb-1">🗂️ Tabletop</h1>
-        <p class="text-body-secondary mb-0">Convertí tablas entre Markdown, CSV, HTML y ASCII.</p>
+        <p class="text-body-secondary mb-0">Convertí tablas entre Markdown, CSV, HTML, ASCII y LaTeX.</p>
       </div>
       <div class="d-flex flex-wrap gap-2">
         <button id="share" class="btn btn-outline-secondary btn-sm" type="button">🔗 Compartir</button>
@@ -49,7 +49,7 @@
     <h2 class="h5">1. Pegar tabla</h2>
     <div class="mb-2">
       <label for="import-text" class="form-label visually-hidden">Tabla a importar</label>
-      <textarea id="import-text" class="form-control font-monospace" rows="6" autocomplete="off" spellcheck="false" placeholder="Pegá un CSV, Markdown, HTML o ASCII…"></textarea>
+      <textarea id="import-text" class="form-control font-monospace" rows="6" autocomplete="off" spellcheck="false" placeholder="Pegá un CSV, Markdown, HTML, ASCII o LaTeX…"></textarea>
     </div>
     <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
       <button id="import-load" class="btn btn-primary btn-sm" type="button">📥 Cargar a la grilla</button>
@@ -110,6 +110,7 @@
       { id: 'html', label: 'HTML', ext: 'html', mime: 'text/html;charset=utf-8' },
       { id: 'rich', label: 'Enriquecido', ext: 'html', mime: 'text/html;charset=utf-8' },
       { id: 'ascii', label: 'ASCII', ext: 'txt', mime: 'text/plain;charset=utf-8' },
+      { id: 'latex', label: 'LaTeX', ext: 'tex', mime: 'text/x-latex;charset=utf-8' },
     ];
 
     function normalize(rows) {
@@ -178,6 +179,57 @@
       return { rows: normalize(rows), hasHeader };
     }
 
+    function unescapeLatexCell(s) {
+      return String(s ?? '')
+        .replace(/\\textbackslash\{\}/g, '\\')
+        .replace(/\\textasciitilde\{\}/g, '~')
+        .replace(/\\textasciicircum\{\}/g, '^')
+        .replace(/\\([&%$#_{}])/g, '$1');
+    }
+
+    function parseLatex(text) {
+      const m = text.match(/\\begin\{tabular\}[\s\S]*?\\end\{tabular\}/i);
+      if (!m) return null;
+      let body = m[0]
+        .replace(/\\begin\{tabular\}(\{[^{}]*\})?/i, '')
+        .replace(/\\end\{tabular\}/i, '');
+      body = body.split('\n').map(l => {
+        let cut = -1;
+        for (let i = 0; i < l.length; i++) {
+          if (l[i] === '%' && (i === 0 || l[i - 1] !== '\\')) { cut = i; break; }
+        }
+        return cut === -1 ? l : l.slice(0, cut);
+      }).join('\n');
+      const rawRows = body.split(/\\\\\s*(?:\[[^\]]*\])?/);
+      const rows = [];
+      for (let chunk of rawRows) {
+        chunk = chunk.replace(/\\hline/g, '').replace(/\\cline\{[^}]*\}/g, '').trim();
+        if (!chunk) continue;
+        const cells = [];
+        let cur = '';
+        for (let i = 0; i < chunk.length; i++) {
+          const ch = chunk[i];
+          if (ch === '\\' && i + 1 < chunk.length && '&%$#_{}'.includes(chunk[i + 1])) {
+            cur += '\\' + chunk[i + 1];
+            i++;
+            continue;
+          }
+          if (ch === '\\' && chunk.slice(i, i + 17) === '\\textbackslash{}') { cur += '\\textbackslash{}'; i += 16; continue; }
+          if (ch === '\\' && chunk.slice(i, i + 19) === '\\textasciitilde{}') { cur += '\\textasciitilde{}'; i += 18; continue; }
+          if (ch === '\\' && chunk.slice(i, i + 19) === '\\textasciicircum{}') { cur += '\\textasciicircum{}'; i += 18; continue; }
+          if (ch === '&') { cells.push(cur); cur = ''; continue; }
+          if (ch === '\\') { cur += ch; continue; }
+          cur += ch;
+        }
+        cells.push(cur);
+        const cleaned = cells.map(c => unescapeLatexCell(c.trim().replace(/\s+/g, ' ')));
+        if (cleaned.length === 1 && cleaned[0] === '') continue;
+        rows.push(cleaned);
+      }
+      if (!rows.length) return null;
+      return { rows: normalize(rows), hasHeader: false };
+    }
+
     // texto pegado → { rows, hasHeader, format }
     function detectAndParse(text, doc) {
       const clean = text.trim();
@@ -185,6 +237,10 @@
       if (/<\s*table[\s>]/i.test(clean) && doc) {
         const parsed = parseHtmlTable(clean, doc);
         if (parsed) return { ...parsed, format: 'HTML' };
+      }
+      if (/\\begin\{tabular\}/i.test(clean)) {
+        const latex = parseLatex(clean);
+        if (latex) return { ...latex, format: 'LaTeX' };
       }
       const md = parseMarkdown(clean);
       if (md) return { ...md, format: 'Markdown' };
@@ -278,6 +334,26 @@
       return lines.length ? lines : [''];
     }
 
+    function escapeLatexCell(cell) {
+      return flat(cell).replace(/[&%$#_{}~^\\]/g, c => ({
+        '&': '\\&', '%': '\\%', '$': '\\$', '#': '\\#',
+        '_': '\\_', '{': '\\{', '}': '\\}',
+        '~': '\\textasciitilde{}', '^': '\\textasciicircum{}', '\\': '\\textbackslash{}'
+      })[c]);
+    }
+
+    function toLatex(rows) {
+      const n = Math.max(0, ...rows.map(r => r.length));
+      const spec = `|${Array(n).fill('l').join('|')}|`;
+      const out = [`\\begin{tabular}{${spec}}`, '\\hline'];
+      rows.forEach(r => {
+        const cells = Array.from({ length: n }, (_, i) => escapeLatexCell(r[i] ?? ''));
+        out.push(`${cells.join(' & ')} \\\\ \\hline`);
+      });
+      out.push('\\end{tabular}');
+      return out.join('\n');
+    }
+
     // tabla con estilos en línea: Word/Docs/Outlook la pegan como tabla real
     function toRichTable(rows, hasHeader) {
       const [head, ...body] = rows;
@@ -298,6 +374,7 @@
         case 'html': return toHtml(rows, hasHeader);
         case 'rich': return toRichTable(rows, hasHeader);
         case 'ascii': return toAscii(rows, hasHeader, asciiWrap);
+        case 'latex': return toLatex(rows);
         default: return '';
       }
     }

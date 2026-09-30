@@ -41,6 +41,11 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`conversor`](./conversor) | Conversor mínimo de unidades, con dos casillas mutuas e historial manual. |
 | [`tabletop`](./tabletop) | Convertí tablas entre Markdown, CSV, HTML y ASCII, con grilla editable. |
 | [`swatchbook`](./swatchbook) | Biblioteca de paletas: explorá, compará y reutilizá, con ida y vuelta a Chromatic. |
+| [`n-muestra`](./n-muestra) | n?: calculá cuántas observaciones necesita tu estudio, para proporciones y medias. |
+| [`p-value`](./p-value) | Inferencia rápida: p-value, valores críticos y decisión sobre H₀. |
+| [`test-ab`](./test-ab) | A/B: compará dos grupos con diferencia, intervalo, efecto y prueba t. |
+| [`azar`](./azar) | ¿azar?: frecuencias, rachas y χ² para secuencias, con puente a Roller. |
+| [`dataset`](./dataset) | Datos artificiales reproducibles con distribución, parámetros y semilla. |
 | [`n-factorial`](./n-factorial) | n! Explorador de conjuntos finitos: estructuras combinatorias con fórmulas y conteos exactos. |
 
 Cada carpeta tiene su propio `README.md` con el detalle de uso.

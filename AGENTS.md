@@ -21,6 +21,7 @@ Este repositorio reúne herramientas web autocontenidas. Cada herramienta vive e
 - Todas las herramientas incluyen modo claro/oscuro mediante `data-bs-theme` de Bootstrap 5.3+. Guardar la elección en `localStorage`; si no existe, respetar `prefers-color-scheme`. El control de tema debe ser simple y no requerir íconos externos.
 - Para acciones habituales en la cabecera, seguir el patrón `🔗 Compartir`, `🗑️ Reiniciar` y el control de tema `🌙`/`☀️`. No usar Font Awesome solo para estos íconos.
 - Los avisos (`notice`/`error`) no deben mover el contenido al aparecer y desaparecer: mostrarlos flotantes con `position: fixed` (fuera del flujo), nunca como bloques que empujan lo de abajo.
+- Toda herramienta numérica debe incluir al menos un gráfico que muestre lo calculado (curva, distribución o evolución), no solo el número: ayuda a entender el resultado.
 - Antes del `h1`, agregar el enlace relativo al índice:
 
 ```html

@@ -117,6 +117,7 @@
               <div class="d-flex flex-wrap gap-2">
                 <button id="copy-csv" class="btn btn-outline-secondary btn-sm" type="button">📋 Copiar CSV</button>
                 <button id="download-csv" class="btn btn-outline-secondary btn-sm" type="button">⬇️ Descargar CSV</button>
+                <button id="to-azar" class="btn btn-outline-secondary btn-sm" type="button">🎲 Analizar en ¿azar?</button>
                 <button id="clear-hist" class="btn btn-outline-danger btn-sm" type="button">🗑️ Borrar</button>
               </div>
             </div>
@@ -387,6 +388,16 @@
         a.remove();
         setTimeout(() => URL.revokeObjectURL(a.href), 5000);
         showNotice('Se descargó el historial en CSV.');
+      });
+
+      document.getElementById('to-azar').addEventListener('click', () => {
+        // Últimas 500 del dado actual: ¿azar? las contrasta contra 1/caras.
+        const vals = state.historial.filter(e => e.caras === state.caras).slice(0, 500).map(e => e.valor);
+        if (vals.length < 2) { showNotice('Tirá al menos 2 veces con este dado.'); return; }
+        const url = new URL('../azar/', window.location.href);
+        url.searchParams.set('seq', vals.join(','));
+        url.searchParams.set('caras', String(state.caras));
+        window.open(url.toString(), '_blank', 'noopener');
       });
 
       document.getElementById('clear-hist').addEventListener('click', event => {

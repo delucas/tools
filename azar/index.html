@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f3b2%3B%3C/text%3E%3C/svg%3E">
+  <title>¿azar? — ¿Se parece a lo esperado?</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    #app textarea, #app input, #app select { font-size: 16px; }
+    .mono { font-family: var(--bs-font-monospace); }
+    textarea#seq { font-family: var(--bs-font-monospace); min-height: 120px; }
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
+    .chart-box { position: relative; height: 240px; }
+    p.signature { font-size: 0.8em; }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4" style="max-width: 960px;">
+    <div id="app">
+      <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+      <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+        <div>
+          <h1 class="h3 mb-1">🎲 ¿azar?</h1>
+          <p class="text-body-secondary mb-0">¿Tu secuencia se parece al modelo esperado? Frecuencias, rachas y χ².</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ shared ? '¡Copiado!' : '🔗 Compartir' }}</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset">🗑️ Reiniciar</button>
+          <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+        </div>
+      </div>
+
+      <div v-if="notice" class="alert alert-success py-2 alert-flotante" role="status">{{ notice }}</div>
+      <div class="alert alert-danger py-2" v-if="!hasJstat" role="alert">
+        No se pudo cargar el motor estadístico (jStat). Las cuentas básicas andan, pero χ² y rachas necesitan conexión.
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-body">
+          <h2 class="h6">Secuencia observada</h2>
+          <textarea id="seq" class="form-control" v-model="seq" @input="onParam" spellcheck="false"
+            placeholder="1 4 4 6 2 5… o cara ceca cara… o el CSV de Roller"></textarea>
+          <div class="form-text">Números o categorías, separados por espacios, comas o saltos. Decimales con punto. Acepta el CSV de Roller (lee <code class="mono">resultado</code>).</div>
+          <div class="row g-2 mt-1">
+            <div class="col-12 col-md-4">
+              <label class="form-label small mb-1" for="caras">Caras o categorías <span class="text-body-secondary">(vacío = auto)</span></label>
+              <input id="caras" class="form-control" type="number" min="2" max="30" step="1" v-model="carasStr" @input="onParam" placeholder="p. ej. 6">
+              <div class="form-text">Con N fijo las categorías son 1…N.</div>
+            </div>
+            <div class="col-12 col-md-8 d-flex flex-wrap gap-2 align-items-end">
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="cargarEjemplo('dado')">Ejemplo: dado (60)</button>
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="cargarEjemplo('moneda')">Ejemplo: moneda (100)</button>
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="cargarEjemplo('cargada')">Ejemplo: moneda cargada</button>
+            </div>
+          </div>
+          <p class="small mt-2 mb-0"><span class="badge text-bg-secondary">{{ n }} valores</span>
+            <span class="badge text-bg-secondary">{{ k }} categorías</span>
+            <span v-if="fueraRango" class="badge text-bg-warning">{{ fueraRango }} fuera de rango</span></p>
+        </div>
+      </div>
+
+      <div class="alert alert-warning py-2 small" role="alert" v-if="aviso">{{ aviso }}</div>
+
+      <div class="card mb-3" v-if="tabla.length">
+        <div class="card-body">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+            <h2 class="h6 mb-0">Frecuencias y χ² de bondad de ajuste</h2>
+            <button class="btn btn-outline-secondary btn-sm" type="button" @click="uniformar">Uniformar esperadas</button>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm mono small mb-2">
+              <thead><tr><th>Valor</th><th>Obs.</th><th>Esp.</th><th>Prop. obs.</th><th>Esperada %</th></tr></thead>
+              <tbody>
+                <tr v-for="f in tabla" :key="f.valor">
+                  <td>{{ f.valor }}</td><td>{{ f.obs }}</td><td>{{ fmt(f.esp, 1) }}</td><td>{{ fmt(f.obs / n, 3) }}</td>
+                  <td><input class="form-control form-control-sm mono" style="width:5.5rem;" type="number" min="0" max="100" step="any"
+                    :value="esp[f.valor] === undefined ? '' : esp[f.valor]" :placeholder="fmt(espPct[f.valor], 2)" @change="setEsperada(f.valor, $event.target.value)" aria-label="Esperada de {{ f.valor }}"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="mono small mb-1">χ² (gl = {{ gl }}) = {{ fmt(chi2) }} · p = {{ fmtP(pchi) }}</p>
+          <p class="mb-0">{{ fraseChi }}</p>
+          <p class="small text-body-secondary mb-0">Compatible con el modelo ≠ aleatorio probado. Si alguna esperada &lt; 5, el p no es confiable.</p>
+        </div>
+      </div>
+
+      <div class="card mb-3" v-if="rachas">
+        <div class="card-body">
+          <h2 class="h6">Prueba de rachas <small class="text-body-secondary fw-normal">(secuencia binaria)</small></h2>
+          <p class="mono small mb-1">R = {{ rachas.R }} rachas (esperadas {{ fmt(rachas.mu, 1) }}) · Z = {{ fmt(rachas.z) }} · p = {{ fmtP(rachas.p) }}</p>
+          <p class="mb-1">Racha más larga: {{ rachas.maxRacha }} ({{ rachas.maxValor }}).</p>
+          <p class="mb-0">{{ fraseRachas }}</p>
+          <p class="small text-body-secondary mb-0" v-if="rachas.aproxMala">Con menos de 10 de algún valor, la aproximación normal no es confiable.</p>
+        </div>
+      </div>
+
+      <div class="card mb-3" v-if="tabla.length">
+        <div class="card-body">
+          <h2 class="h6">Observadas vs esperadas</h2>
+          <div class="chart-box"><canvas id="chart-frec"></canvas></div>
+        </div>
+      </div>
+
+      <div class="card mb-3" v-if="n >= 2">
+        <div class="card-body">
+          <h2 class="h6">Secuencia en orden</h2>
+          <div class="chart-box"><canvas id="chart-seq"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <hr>
+
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jstat/1.9.6/jstat.min.js"
+    integrity="sha512-UK8MjH09aePxFAd8OwI5P4oP462OBBNGVh3OtnuHjybd0T3ArUbAseIuHpS1XfinmMXcCZG5barC+7SNPjuQtg=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.5.42/vue.global.prod.min.js"
+    integrity="sha512-PREsKi18CyKMgwXMJWtvkzinqjiN0znVfDovmVadp7pKiUpyNGtq7bD2fKElDBmdfH4DGJz8pmAdgihN8NZ8TQ=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"
+    integrity="sha512-WoViKhKD4qI2WruSZqv9+kvM4WfFhUMQCLN4QlDTt5aU56fLQy2gYoxWIqlEnXqJy/+Ac5q/hk1oWfqnMDhwMA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script>
+    const STORAGE_KEY = 'azar';
+    const HAS_JSTAT = typeof jStat !== 'undefined';
+    const EJ_DADO = '4 1 5 3 6 2 2 5 1 4 3 6 6 2 4 1 5 3 3 5 2 6 4 1 6 3 5 2 4 6 1 3 2 5 4 6 3 1 5 2 6 4 3 5 1 2 6 3 4 5 2 1 6 4 3 5 2 6 1 4';
+    const EJ_MONEDA = ('cara ceca '.repeat(50)).trim();
+    const EJ_CARGADA = (('cara '.repeat(8) + 'ceca '.repeat(2)).repeat(10)).trim();
+
+    function fmt(x, dec = 2) {
+      if (!Number.isFinite(x)) return '—';
+      return Number(x).toLocaleString('es', { maximumFractionDigits: dec });
+    }
+    function fmtP(p) {
+      if (!Number.isFinite(p)) return '—';
+      return p < 0.0001 ? '< 0.0001' : p.toPrecision(4);
+    }
+
+    // Acepta lista libre o CSV de Roller (columna "resultado").
+    function extraerValores(texto) {
+      const lineas = String(texto || '').split(/\r?\n/);
+      if (lineas.length > 1 && /resultado/i.test(lineas[0])) {
+        const cols = lineas[0].split(',').map(c => c.trim().toLowerCase());
+        const idx = cols.indexOf('resultado');
+        if (idx >= 0) {
+          return lineas.slice(1).map(l => (l.split(',')[idx] || '').trim()).filter(Boolean);
+        }
+      }
+      return String(texto || '').split(/[\s,;]+/).map(s => s.trim()).filter(Boolean);
+    }
+
+    function estadoInicial() {
+      const q = new URLSearchParams(window.location.search);
+      const fromUrl = q.get('seq') !== null || q.get('caras') !== null;
+      if (fromUrl) {
+        return { seq: q.get('seq') ?? '', carasStr: q.get('caras') ?? '', esp: {}, fromUrl: true };
+      }
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const s = JSON.parse(raw);
+          if (s && typeof s === 'object') return { ...s, fromUrl: false };
+        }
+      } catch { /* se usa el ejemplo */ }
+      return { seq: EJ_DADO, carasStr: '6', esp: {}, fromUrl: false };
+    }
+
+    const init = estadoInicial();
+    let noticeTimeout;
+    let chartFrec = null, chartSeq = null;
+
+    Vue.createApp({
+      data() {
+        return {
+          hasJstat: HAS_JSTAT,
+          seq: init.seq ?? '',
+          carasStr: init.carasStr ?? '',
+          esp: init.esp || {},
+          notice: '', shared: false, fromUrl: init.fromUrl, sinGuardar: false
+        };
+      },
+      computed: {
+        valores() { return extraerValores(this.seq); },
+        n() { return this.valores.length; },
+        numerica() {
+          return this.n > 0 && this.valores.every(v => v !== '' && Number.isFinite(Number(v)));
+        },
+        caras() {
+          const c = Number(this.carasStr);
+          return this.carasStr !== '' && Number.isInteger(c) && c >= 2 && c <= 30 ? c : null;
+        },
+        categorias() {
+          if (this.caras !== null) {
+            const cats = [];
+            for (let i = 1; i <= this.caras; i++) cats.push(String(i));
+            return cats;
+          }
+          const vistas = [];
+          for (const v of this.valores) if (!vistas.includes(v)) vistas.push(v);
+          if (this.numerica) vistas.sort((a, b) => Number(a) - Number(b));
+          return vistas.slice(0, 30);
+        },
+        k() { return this.categorias.length; },
+        kCrudo() {
+          if (this.caras !== null) return this.caras;
+          return new Set(this.valores).size;
+        },
+        fueraRango() {
+          if (this.caras === null) return 0;
+          return this.valores.filter(v => !this.categorias.includes(v)).length;
+        },
+        conteos() {
+          const c = {};
+          for (const cat of this.categorias) c[cat] = 0;
+          for (const v of this.valores) if (v in c) c[v]++;
+          return c;
+        },
+        espPct() {
+          // Esperadas en %: custom válidas o uniforme. Se normalizan a suma 100.
+          const customs = {};
+          let suma = 0, todas = true;
+          for (const cat of this.categorias) {
+            const v = Number(this.esp[cat]);
+            if (!(v >= 0)) { todas = false; break; }
+            customs[cat] = v; suma += v;
+          }
+          if (todas && suma > 0) {
+            const out = {};
+            for (const cat of this.categorias) out[cat] = customs[cat] / suma * 100;
+            return out;
+          }
+          const out = {};
+          for (const cat of this.categorias) out[cat] = 100 / this.k;
+          return out;
+        },
+        tabla() {
+          if (!this.n || !this.k || this.kCrudo > 30) return [];
+          return this.categorias.map(cat => ({
+            valor: cat, obs: this.conteos[cat] || 0,
+            esp: this.n * this.espPct[cat] / 100
+          }));
+        },
+        gl() { return this.k - 1; },
+        chi2() {
+          if (!this.tabla.length || !HAS_JSTAT) return NaN;
+          let s = 0;
+          for (const f of this.tabla) {
+            if (!(f.esp > 0)) return NaN;
+            s += (f.obs - f.esp) ** 2 / f.esp;
+          }
+          return s;
+        },
+        pchi() {
+          if (!Number.isFinite(this.chi2) || this.gl < 1) return NaN;
+          try { return 1 - jStat.chisquare.cdf(this.chi2, this.gl); } catch { return NaN; }
+        },
+        aviso() {
+          if (!this.n) return 'Pegá una secuencia para empezar (o traela de Roller).';
+          if (this.kCrudo > 30) return 'Demasiadas categorías (> 30): agrupá valores o fijá caras.';
+          if (this.k < 2) return 'Con una sola categoría no hay nada que contrastar.';
+          if (this.tabla.some(f => f.esp < 5)) return 'Alguna frecuencia esperada es < 5: el p de χ² no es confiable (juntá más datos).';
+          if (this.n < 30) return 'Muestra chica (n < 30): tomá el resultado como orientativo.';
+          return '';
+        },
+        fraseChi() {
+          if (!Number.isFinite(this.pchi)) return 'Faltan condiciones para el χ² (revisá el aviso).';
+          return this.pchi <= 0.05
+            ? `p = ${fmtP(this.pchi)} ≤ 0.05: la secuencia se desvía del modelo esperado.`
+            : `p = ${fmtP(this.pchi)} > 0.05: compatible con el modelo (no prueba azar).`;
+        },
+        rachas() {
+          if (this.k !== 2 || this.kCrudo > 30 || !HAS_JSTAT || !this.n) return null;
+          try {
+            const [v0, v1] = this.categorias;
+            const n1 = this.conteos[v0], n2 = this.conteos[v1];
+            let R = 1, maxRacha = 1, racha = 1, maxValor = this.valores[0];
+            for (let i = 1; i < this.n; i++) {
+              if (this.valores[i] === this.valores[i - 1]) {
+                racha++;
+                if (racha > maxRacha) { maxRacha = racha; maxValor = this.valores[i]; }
+              } else { R++; racha = 1; }
+            }
+            const mu = 2 * n1 * n2 / this.n + 1;
+            const va = (mu - 1) * (mu - 2) / (this.n - 1);
+            if (!(va > 0)) return null;
+            const zz = (Math.abs(R - mu) - 0.5) / Math.sqrt(va);
+            const p = 2 * (1 - jStat.normal.cdf(Math.abs(zz), 0, 1));
+            return { R, mu, z: zz, p, maxRacha, maxValor, aproxMala: Math.min(n1, n2) < 10, v0, v1, n1, n2 };
+          } catch { return null; }
+        },
+        fraseRachas() {
+          const r = this.rachas;
+          if (!r) return '';
+          const juicio = r.p <= 0.05
+            ? `pocas o demasiadas rachas para ser mezcla al azar (${r.v0}: ${r.n1}, ${r.v1}: ${r.n2}).`
+            : `cantidad de rachas normal para esa mezcla.`;
+          return `R = ${r.R} frente a ${fmt(r.mu, 1)} esperadas: ${juicio}`;
+        }
+      },
+      methods: {
+        fmt(x, dec) { return fmt(x, dec); },
+        fmtP(p) { return fmtP(p); },
+        showNotice(msg) {
+          clearTimeout(noticeTimeout);
+          this.notice = msg;
+          noticeTimeout = setTimeout(() => { this.notice = ''; }, 2200);
+        },
+        persist() {
+          if (this.fromUrl) return;
+          const payload = { seq: this.seq, carasStr: this.carasStr, esp: this.esp };
+          if (JSON.stringify(payload).length > 100000) {
+            if (!this.sinGuardar) { this.sinGuardar = true; this.showNotice('Secuencia muy larga: no se guarda localmente.'); }
+            return;
+          }
+          this.sinGuardar = false;
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); } catch {}
+        },
+        onParam() { this.persist(); this.$nextTick(() => this.renderCharts()); },
+        setEsperada(cat, valor) {
+          const v = Number(valor);
+          this.fromUrl = false;
+          if (!(v >= 0)) {
+            const e = { ...this.esp };
+            delete e[cat];
+            this.esp = e;
+          } else {
+            this.esp = { ...this.esp, [cat]: v };
+          }
+          this.persist();
+          this.$nextTick(() => this.renderCharts());
+        },
+        uniformar() {
+          this.esp = {};
+          this.persist();
+          this.$nextTick(() => this.renderCharts());
+        },
+        cargarEjemplo(cual) {
+          this.fromUrl = false;
+          this.esp = {};
+          if (cual === 'dado') { this.seq = EJ_DADO; this.carasStr = '6'; }
+          if (cual === 'moneda') { this.seq = EJ_MONEDA; this.carasStr = ''; }
+          if (cual === 'cargada') { this.seq = EJ_CARGADA; this.carasStr = ''; }
+          this.onParam();
+        },
+        paleta() {
+          const dark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+          return dark
+            ? { obs: '#3987e5', esp: '#d95926', grid: '#444' }
+            : { obs: '#2a78d6', esp: '#eb6834', grid: '#ddd' };
+        },
+        destruirCharts() {
+          if (typeof Chart !== 'undefined') {
+            for (const id of ['chart-frec', 'chart-seq']) {
+              const cv = document.getElementById(id);
+              if (cv) { const viejo = Chart.getChart(cv); if (viejo) viejo.destroy(); }
+            }
+          }
+          chartFrec = null; chartSeq = null;
+        },
+        renderCharts() {
+          this.destruirCharts();
+          if (typeof Chart === 'undefined' || !this.tabla.length) return;
+          const P = this.paleta();
+          const labels = this.tabla.map(f => f.valor);
+          chartFrec = new Chart(document.getElementById('chart-frec'), {
+            type: 'bar',
+            data: { labels, datasets: [
+              { label: 'Observadas', data: this.tabla.map(f => f.obs), backgroundColor: P.obs + '66', borderColor: P.obs, borderWidth: 1 },
+              { label: 'Esperadas', data: this.tabla.map(f => Math.round(f.esp * 10) / 10), backgroundColor: P.esp + '66', borderColor: P.esp, borderWidth: 1 }
+            ] },
+            options: { maintainAspectRatio: false, animation: false,
+              plugins: { legend: { position: 'bottom' } },
+              scales: { x: { grid: { color: P.grid } },
+                        y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: P.grid } } } }
+          });
+          if (this.n >= 2) {
+            // El eje de categorías quiere etiquetas, no índices.
+            const ys = this.numerica ? this.valores.map(Number) : this.valores;
+            const esCat = !this.numerica;
+            chartSeq = new Chart(document.getElementById('chart-seq'), {
+              type: 'line',
+              data: { datasets: [{ label: 'secuencia',
+                data: ys.map((y, i) => ({ x: i + 1, y })),
+                borderColor: P.obs, borderWidth: 1.5, fill: false, pointRadius: 0, tension: 0 }] },
+              options: { maintainAspectRatio: false, animation: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                  x: { type: 'linear', title: { display: true, text: 'posición' }, grid: { color: P.grid } },
+                  y: esCat
+                    ? { type: 'category', labels: this.categorias, grid: { color: P.grid } }
+                    : { grid: { color: P.grid } } } }
+            });
+          }
+        },
+        share() {
+          const url = new URL(window.location.href);
+          url.search = '';
+          let conDatos = false;
+          if (this.seq.length < 3000) {
+            url.searchParams.set('seq', this.seq);
+            conDatos = true;
+          }
+          if (String(this.carasStr).trim() !== '') url.searchParams.set('caras', String(this.carasStr).trim());
+          const done = ok => {
+            if (ok) {
+              this.shared = true;
+              setTimeout(() => { this.shared = false; }, 1500);
+              if (!conDatos) this.showNotice('Link copiado sin la secuencia (muy larga).');
+            } else this.showNotice('No se pudo copiar el enlace.');
+          };
+          if (navigator.clipboard?.writeText) navigator.clipboard.writeText(url.toString()).then(() => done(true), () => done(false));
+          else done(false);
+        },
+        reset() {
+          try { localStorage.removeItem(STORAGE_KEY); } catch {}
+          this.seq = EJ_DADO; this.carasStr = '6'; this.esp = {};
+          this.fromUrl = false; this.sinGuardar = false;
+          history.replaceState(null, '', window.location.pathname);
+          this.$nextTick(() => this.renderCharts());
+          this.showNotice('Ejemplo restaurado: 60 de dado.');
+        }
+      },
+      mounted() {
+        this.renderCharts();
+      }
+    }).mount('#app');
+
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

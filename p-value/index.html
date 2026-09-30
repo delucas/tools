@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f4ca%3B%3C/text%3E%3C/svg%3E">
+  <title>p-value — Inferencia rápida</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    #app input, #app select { font-size: 16px; }
+    .mono { font-family: var(--bs-font-monospace); }
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
+    .chart-box { position: relative; height: 240px; }
+    .decision { font-size: 1.5rem; font-weight: 700; }
+    p.signature { font-size: 0.8em; }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4" style="max-width: 960px;">
+    <div id="app">
+      <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+      <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+        <div>
+          <h1 class="h3 mb-1">📊 p-value</h1>
+          <p class="text-body-secondary mb-0">Inferencia rápida: p-value, valores críticos y decisión sobre H₀.</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ shared ? '¡Copiado!' : '🔗 Compartir' }}</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset">🗑️ Reiniciar</button>
+          <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+        </div>
+      </div>
+
+      <div v-if="notice" class="alert alert-success py-2 alert-flotante" role="status">{{ notice }}</div>
+      <div class="alert alert-danger py-2" v-if="!hasJstat" role="alert">
+        No se pudo cargar el motor estadístico (jStat). Revisá tu conexión y recargá la página.
+      </div>
+
+      <div class="row g-3">
+        <section class="col-12 col-md-5">
+          <div class="card">
+            <div class="card-body">
+              <h2 class="h6">Prueba</h2>
+              <label class="form-label small mb-1" for="dist">Distribución</label>
+              <select id="dist" class="form-select" v-model="dist" @change="onParam">
+                <option value="z">Normal estándar (Z)</option>
+                <option value="t">t de Student</option>
+                <option value="chi2">Chi-cuadrado (χ²)</option>
+                <option value="f">F de Fisher</option>
+              </select>
+              <div class="form-text mb-3">Modelo teórico del estadístico bajo H₀.</div>
+              <div class="row g-2 mb-3" v-if="dist==='t' || dist==='chi2'">
+                <div class="col-6">
+                  <label class="form-label small mb-1" for="df1">Grados de libertad</label>
+                  <input id="df1" class="form-control" type="number" min="1" step="1" v-model="df1" @input="onParam">
+                  <div class="form-text">Ajustan la forma de la distribución.</div>
+                </div>
+              </div>
+              <div class="row g-2 mb-3" v-if="dist==='f'">
+                <div class="col-6">
+                  <label class="form-label small mb-1" for="df1b">gl numerador</label>
+                  <input id="df1b" class="form-control" type="number" min="1" step="1" v-model="df1" @input="onParam">
+                  <div class="form-text">Variabilidad entre grupos.</div>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small mb-1" for="df2">gl denominador</label>
+                  <input id="df2" class="form-control" type="number" min="1" step="1" v-model="df2" @input="onParam">
+                  <div class="form-text">Variabilidad dentro de grupos.</div>
+                </div>
+              </div>
+              <p v-if="dist==='t' && df1 >= 100" class="small text-body-secondary mb-3">Con tantos gl, t ≈ Z: podés usar la normal sin culpa.</p>
+              <label class="form-label small mb-1">Tipo de cola</label>
+              <div class="btn-group w-100" role="group" aria-label="Tipo de cola">
+                <button type="button" :class="['btn btn-sm', cola==='izq' ? 'btn-primary' : 'btn-outline-primary']" @click="cola='izq'; onParam()">Izquierda</button>
+                <button type="button" :class="['btn btn-sm', cola==='der' ? 'btn-primary' : 'btn-outline-primary']" @click="cola='der'; onParam()">Derecha</button>
+                <button type="button" :class="['btn btn-sm', cola==='bil' ? 'btn-primary' : 'btn-outline-primary']" @click="cola='bil'; onParam()">Bilateral</button>
+              </div>
+              <div class="form-text mb-3">Zona donde la evidencia rechaza H₀.</div>
+              <label class="form-label small mb-1" for="alfa">Nivel de significación α</label>
+              <input id="alfa" class="form-control" type="number" min="0.001" max="0.5" step="0.01" v-model.number="alfa" @input="onParam">
+              <div class="form-text mb-3">Error tipo I máximo tolerado.</div>
+              <label class="form-label small mb-1">Modo</label>
+              <div class="btn-group w-100" role="group" aria-label="Modo">
+                <button type="button" :class="['btn btn-sm', modo==='directo' ? 'btn-primary' : 'btn-outline-primary']" @click="modo='directo'; onParam()">Directo: x → p</button>
+                <button type="button" :class="['btn btn-sm', modo==='inverso' ? 'btn-primary' : 'btn-outline-primary']" @click="modo='inverso'; onParam()">Inverso: α → crítico</button>
+              </div>
+              <div class="form-text mb-3">Elegí qué calcular: p o crítico.</div>
+              <div v-if="modo==='directo'">
+                <label class="form-label small mb-1" for="xobs">Estadístico observado</label>
+                <input id="xobs" class="form-control" type="number" step="any" v-model.number="x" @input="onParam">
+                <div class="form-text">Valor que obtuviste con tu muestra.</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="col-12 col-md-7">
+          <div class="card mb-3">
+            <div class="card-body">
+              <h2 class="h6">Resultado</h2>
+              <div v-if="errorParam" class="alert alert-danger py-2 small" role="alert">{{ errorParam }}</div>
+              <div v-else-if="res">
+                <div class="row g-2 mb-2">
+                  <div class="col-6">
+                    <div class="text-body-secondary small">p-value</div>
+                    <div class="mono fs-3">{{ res.pTxt }}</div>
+                  </div>
+                  <div class="col-6">
+                    <div class="text-body-secondary small">Valor crítico</div>
+                    <div class="mono fs-3">{{ res.critTxt }}</div>
+                  </div>
+                </div>
+                <p class="mono small mb-2">Región de rechazo: {{ res.region }}</p>
+                <p v-if="modo==='directo'" class="mb-1">
+                  <span class="decision" :class="res.rechaza ? 'text-danger' : 'text-success'">{{ res.rechaza ? 'Se rechaza H₀' : 'No se rechaza H₀' }}</span>
+                </p>
+                <p class="small text-body-secondary mb-0">Significación estadística ≠ importancia práctica: un p chico no dice cuán grande es el efecto.</p>
+              </div>
+            </div>
+          </div>
+          <div class="card mb-3">
+            <div class="card-body">
+              <h2 class="h6">Densidad y región de rechazo</h2>
+              <div class="chart-box"><canvas id="chart-dist"></canvas></div>
+            </div>
+          </div>
+          <div class="card" v-if="modo==='directo'">
+            <div class="card-body">
+              <h2 class="h6">El p-value como área</h2>
+              <div class="chart-box"><canvas id="chart-p"></canvas></div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <hr>
+
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jstat/1.9.6/jstat.min.js"
+    integrity="sha512-UK8MjH09aePxFAd8OwI5P4oP462OBBNGVh3OtnuHjybd0T3ArUbAseIuHpS1XfinmMXcCZG5barC+7SNPjuQtg=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.5.42/vue.global.prod.min.js"
+    integrity="sha512-PREsKi18CyKMgwXMJWtvkzinqjiN0znVfDovmVadp7pKiUpyNGtq7bD2fKElDBmdfH4DGJz8pmAdgihN8NZ8TQ=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"
+    integrity="sha512-WoViKhKD4qI2WruSZqv9+kvM4WfFhUMQCLN4QlDTt5aU56fLQy2gYoxWIqlEnXqJy/+Ac5q/hk1oWfqnMDhwMA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script>
+    const STORAGE_KEY = 'p-value';
+    const HAS_JSTAT = typeof jStat !== 'undefined';
+    const NPTS = 200;
+
+    function fmt(x, dec = 3) {
+      if (!Number.isFinite(x)) return '—';
+      return Number(x).toLocaleString('es', { maximumFractionDigits: dec });
+    }
+    function fmtP(p) {
+      if (!Number.isFinite(p)) return '—';
+      if (p < 0.0001) return '< 0.0001';
+      return p.toPrecision(4);
+    }
+
+    // Envoltorios por distribución sobre jStat.
+    function lib(dist, df1, df2) {
+      if (dist === 'z') return {
+        cdf: x => jStat.normal.cdf(x, 0, 1),
+        inv: p => jStat.normal.inv(p, 0, 1),
+        pdf: x => jStat.normal.pdf(x, 0, 1),
+        rango: () => [-4, 4], simetrica: true
+      };
+      if (dist === 't') return {
+        cdf: x => jStat.studentt.cdf(x, df1),
+        inv: p => jStat.studentt.inv(p, df1),
+        pdf: x => jStat.studentt.pdf(x, df1),
+        rango: () => [-5, 5], simetrica: true
+      };
+      if (dist === 'chi2') return {
+        cdf: x => jStat.chisquare.cdf(x, df1),
+        inv: p => jStat.chisquare.inv(p, df1),
+        pdf: x => jStat.chisquare.pdf(x, df1),
+        rango: () => [0, Math.min(60, Math.max(15, invSeguro(p => jStat.chisquare.inv(p, df1), df1 + 6 * Math.sqrt(2 * df1) + 5)))],
+        simetrica: false
+      };
+      return {
+        cdf: x => jStat.centralF.cdf(x, df1, df2),
+        inv: p => jStat.centralF.inv(p, df1, df2),
+        pdf: x => jStat.centralF.pdf(x, df1, df2),
+        rango: () => [0, Math.min(30, Math.max(8, invSeguro(p => jStat.centralF.inv(p, df1, df2), 10)))],
+        simetrica: false
+      };
+    }
+    function invSeguro(fn, alternativa) {
+      try {
+        const v = fn(0.9995);
+        return Number.isFinite(v) && v > 0 ? v : alternativa;
+      } catch { return alternativa; }
+    }
+
+    function estadoInicial() {
+      const q = new URLSearchParams(window.location.search);
+      const fromUrl = ['dist', 'df1', 'df2', 'cola', 'alfa', 'modo', 'x'].some(k => q.get(k) !== null);
+      if (fromUrl) {
+        const dist = q.get('dist');
+        return {
+          dist: ['z', 't', 'chi2', 'f'].includes(dist) ? dist : 'z',
+          df1: Number(q.get('df1') ?? 10), df2: Number(q.get('df2') ?? 10),
+          cola: ['izq', 'der', 'bil'].includes(q.get('cola')) ? q.get('cola') : 'der',
+          alfa: Number(q.get('alfa') ?? 0.05),
+          modo: q.get('modo') === 'inverso' ? 'inverso' : 'directo',
+          x: Number(q.get('x') ?? 1.96),
+          fromUrl: true
+        };
+      }
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const s = JSON.parse(raw);
+          if (s && typeof s === 'object') return { ...s, fromUrl: false };
+        }
+      } catch { /* se usa el ejemplo */ }
+      return { dist: 'z', df1: 10, df2: 10, cola: 'der', alfa: 0.05, modo: 'directo', x: 1.96, fromUrl: false };
+    }
+
+    const init = estadoInicial();
+    let noticeTimeout;
+    let chartDist = null, chartP = null;
+
+    Vue.createApp({
+      data() {
+        return {
+          hasJstat: HAS_JSTAT,
+          dist: init.dist, df1: init.df1, df2: init.df2,
+          cola: init.cola, alfa: Number.isFinite(init.alfa) ? init.alfa : 0.05,
+          modo: init.modo, x: Number.isFinite(init.x) ? init.x : 1.96,
+          notice: '', shared: false, fromUrl: init.fromUrl
+        };
+      },
+      computed: {
+        errorParam() {
+          if (!HAS_JSTAT) return '';
+          if (!(this.alfa > 0 && this.alfa < 1)) return 'α debe estar entre 0 y 1 (exclusivo).';
+          if ((this.dist === 't' || this.dist === 'chi2') && !(Number.isInteger(this.df1) && this.df1 >= 1)) return 'Los grados de libertad deben ser enteros ≥ 1.';
+          if (this.dist === 't' || this.dist === 'chi2') return '';
+          if (this.dist === 'f') {
+            if (!(Number.isInteger(this.df1) && this.df1 >= 1 && Number.isInteger(this.df2) && this.df2 >= 1)) return 'Los gl deben ser enteros ≥ 1.';
+            return '';
+          }
+          return '';
+        },
+        res() {
+          if (!HAS_JSTAT || this.errorParam) return null;
+          try {
+            const L = lib(this.dist, this.df1, this.df2);
+            const crit = this.cola === 'izq' ? [L.inv(this.alfa), null]
+              : this.cola === 'der' ? [null, L.inv(1 - this.alfa)]
+              : [L.inv(this.alfa / 2), L.inv(1 - this.alfa / 2)];
+            const critTxt = this.cola === 'bil' ? `${fmt(crit[0])} y ${fmt(crit[1])}` : fmt(crit[0] ?? crit[1]);
+            const region = this.cola === 'izq' ? `x ≤ ${fmt(crit[0])}`
+              : this.cola === 'der' ? `x ≥ ${fmt(crit[1])}`
+              : `x ≤ ${fmt(crit[0])} o x ≥ ${fmt(crit[1])}`;
+            if (this.modo === 'inverso') return { pTxt: '—', critTxt, region, rechaza: false, p: NaN, crit };
+            const p = this.cola === 'izq' ? L.cdf(this.x)
+              : this.cola === 'der' ? 1 - L.cdf(this.x)
+              : L.simetrica ? 2 * (1 - L.cdf(Math.abs(this.x))) : Math.min(1, 2 * Math.min(L.cdf(this.x), 1 - L.cdf(this.x)));
+            return { pTxt: fmtP(p), critTxt, region, rechaza: p <= this.alfa, p, crit };
+          } catch { return null; }
+        }
+      },
+      methods: {
+        showNotice(msg) {
+          clearTimeout(noticeTimeout);
+          this.notice = msg;
+          noticeTimeout = setTimeout(() => { this.notice = ''; }, 1800);
+        },
+        persist() {
+          if (this.fromUrl) return;
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({
+              dist: this.dist, df1: this.df1, df2: this.df2,
+              cola: this.cola, alfa: this.alfa, modo: this.modo, x: this.x
+            }));
+          } catch {}
+        },
+        onParam() { this.persist(); this.$nextTick(() => this.renderCharts()); },
+        enRechazo(x) {
+          const r = this.res;
+          if (!r) return false;
+          const [ci, cd] = r.crit;
+          if (this.cola === 'izq') return x <= ci;
+          if (this.cola === 'der') return x >= cd;
+          return x <= ci || x >= cd;
+        },
+        enAreaP(x) {
+          const r = this.res;
+          if (!r || this.modo !== 'directo' || !Number.isFinite(r.p)) return false;
+          const L = lib(this.dist, this.df1, this.df2);
+          try {
+            if (this.cola === 'izq') return x <= this.x;
+            if (this.cola === 'der') return x >= this.x;
+            const qL = L.inv(r.p / 2), qR = L.inv(1 - r.p / 2);
+            return x <= qL || x >= qR;
+          } catch { return false; }
+        },
+        baseChart(canvas, sombrear, lineaX) {
+          if (!canvas || typeof Chart === 'undefined' || !HAS_JSTAT || this.errorParam) return null;
+          const L = lib(this.dist, this.df1, this.df2);
+          const [a, b] = L.rango();
+          const dark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+          const grid = dark ? '#444' : '#ddd';
+          const azul = dark ? '#3987e5' : '#2a78d6';
+          const dens = [], segmentos = [];
+          let ymax = 0, actual = null;
+          for (let i = 0; i <= NPTS; i++) {
+            const x = a + (b - a) * i / NPTS;
+            let y = 0;
+            try { y = L.pdf(x); } catch { y = 0; }
+            if (!Number.isFinite(y)) y = 0;
+            ymax = Math.max(ymax, y);
+            dens.push({ x, y });
+            // Un dataset por tramo contiguo: Chart.js no tolera null
+            // intercalados en datos {x,y} y revienta al parsear.
+            if (sombrear(x)) {
+              if (!actual) { actual = []; segmentos.push(actual); }
+              actual.push({ x, y });
+            } else {
+              actual = null;
+            }
+          }
+          const datasets = [
+            { label: 'densidad', data: dens, borderColor: azul, borderWidth: 2, fill: false, pointRadius: 0, tension: 0.2 },
+            ...segmentos.map(seg => ({ label: 'área', data: seg, borderColor: 'transparent',
+              backgroundColor: 'rgba(227,73,72,.35)', fill: 'origin', pointRadius: 0, borderWidth: 0 }))
+          ];
+          if (lineaX !== null && lineaX >= a && lineaX <= b) {
+            datasets.push({ label: 'x', data: [{ x: lineaX, y: 0 }, { x: lineaX, y: ymax * 1.05 }],
+              borderColor: dark ? '#fff' : '#000', borderDash: [5, 4], borderWidth: 2, fill: false, pointRadius: 0 });
+          }
+          return new Chart(canvas, {
+            type: 'line',
+            data: { datasets },
+            options: { maintainAspectRatio: false, animation: false,
+              plugins: { legend: { display: false } },
+              scales: {
+                x: { type: 'linear', grid: { color: grid } },
+                y: { beginAtZero: true, grid: { color: grid } } } }
+          });
+        },
+        renderCharts() {
+          // Limpieza por canvas (no solo por variable): si una creación anterior
+          // falló a mitad de camino, su instancia zombie bloquea el canvas.
+          if (typeof Chart !== 'undefined') {
+            const previo1 = document.getElementById('chart-dist');
+            if (previo1) { const viejo = Chart.getChart(previo1); if (viejo) viejo.destroy(); }
+            const previo2 = document.getElementById('chart-p');
+            if (previo2) { const viejo = Chart.getChart(previo2); if (viejo) viejo.destroy(); }
+          }
+          chartDist = null; chartP = null;
+          if (!HAS_JSTAT || this.errorParam || typeof Chart === 'undefined') return;
+          chartDist = this.baseChart(document.getElementById('chart-dist'), x => this.enRechazo(x),
+            this.modo === 'directo' && Number.isFinite(this.x) ? this.x : null);
+          if (this.modo === 'directo') {
+            chartP = this.baseChart(document.getElementById('chart-p'), x => this.enAreaP(x),
+              Number.isFinite(this.x) ? this.x : null);
+          }
+        },
+        share() {
+          const url = new URL(window.location.href);
+          url.search = '';
+          url.searchParams.set('dist', this.dist);
+          if (this.dist !== 'z') url.searchParams.set('df1', String(this.df1));
+          if (this.dist === 'f') url.searchParams.set('df2', String(this.df2));
+          url.searchParams.set('cola', this.cola);
+          url.searchParams.set('alfa', String(this.alfa));
+          url.searchParams.set('modo', this.modo);
+          if (this.modo === 'directo') url.searchParams.set('x', String(this.x));
+          const txt = url.toString();
+          const done = ok => {
+            if (ok) { this.shared = true; setTimeout(() => { this.shared = false; }, 1500); }
+            else this.showNotice('No se pudo copiar el enlace.');
+          };
+          if (navigator.clipboard?.writeText) navigator.clipboard.writeText(txt).then(() => done(true), () => done(false));
+          else done(false);
+        },
+        reset() {
+          try { localStorage.removeItem(STORAGE_KEY); } catch {}
+          this.dist = 'z'; this.df1 = 10; this.df2 = 10;
+          this.cola = 'der'; this.alfa = 0.05; this.modo = 'directo'; this.x = 1.96;
+          this.fromUrl = false;
+          history.replaceState(null, '', window.location.pathname);
+          this.$nextTick(() => this.renderCharts());
+          this.showNotice('Ejemplo restaurado: Z = 1.96, cola derecha.');
+        }
+      },
+      mounted() {
+        this.renderCharts();
+      }
+    }).mount('#app');
+
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

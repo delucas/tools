@@ -23,6 +23,7 @@
     .card-paleta:hover { border-color: var(--bs-primary); }
     .code-prev { font-family: var(--bs-font-monospace); font-size: .85em; line-height: 1.6; padding: 1rem; border-radius: var(--bs-border-radius); overflow-x: auto; white-space: pre; }
     textarea#import-text { font-family: var(--bs-font-monospace); min-height: 140px; }
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
     p.signature { font-size: 0.8em; }
   </style>
 </head>
@@ -44,8 +45,8 @@
         </div>
       </div>
 
-      <div v-if="notice" class="alert alert-success py-2" role="status">{{ notice }}</div>
-      <div v-if="error" class="alert alert-danger py-2" role="alert">{{ error }}</div>
+      <div v-if="notice" class="alert alert-success py-2 alert-flotante" role="status">{{ notice }}</div>
+      <div v-if="error" class="alert alert-danger py-2 alert-flotante" role="alert">{{ error }}</div>
 
       <ul class="nav nav-pills flex-wrap gap-1 mb-3">
         <li class="nav-item"><button class="nav-link btn-sm" :class="{active: vista==='lib'}" @click="vista='lib'">Biblioteca</button></li>

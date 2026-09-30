@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x2696%3B%3C/text%3E%3C/svg%3E">
+  <title>A/B — Comparar dos grupos</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    #app textarea, #app input, #app select { font-size: 16px; }
+    .mono { font-family: var(--bs-font-monospace); }
+    textarea.datos { font-family: var(--bs-font-monospace); min-height: 140px; }
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
+    .chart-box { position: relative; height: 260px; }
+    p.signature { font-size: 0.8em; }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4" style="max-width: 960px;">
+    <div id="app">
+      <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+      <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+        <div>
+          <h1 class="h3 mb-1">⚖️ A/B</h1>
+          <p class="text-body-secondary mb-0">Compará dos grupos: diferencia, incertidumbre y magnitud del efecto.</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ shared ? '¡Copiado!' : '🔗 Compartir' }}</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset">🗑️ Reiniciar</button>
+          <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+        </div>
+      </div>
+
+      <div v-if="notice" class="alert alert-success py-2 alert-flotante" role="status">{{ notice }}</div>
+      <div class="alert alert-danger py-2" v-if="!hasJstat" role="alert">
+        No se pudo cargar el motor estadístico (jStat). Los descriptivos andan igual, pero p-value e IC necesitan conexión.
+      </div>
+
+      <div class="row g-3">
+        <div class="col-12 col-md-6" v-for="g in ['a','b']" :key="g">
+          <div class="card h-100">
+            <div class="card-body">
+              <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                <h2 class="h6 mb-0">Grupo {{ g.toUpperCase() }}</h2>
+                <span class="badge text-bg-secondary">{{ datos[g].length }} obs.</span>
+              </div>
+              <textarea class="form-control form-control-sm datos" v-model="texto[g]" @input="onDatos"
+                :placeholder="g === 'a' ? 'Un valor por línea, coma o espacio…' : 'Grupo B…'" :aria-label="'Datos del grupo ' + g"></textarea>
+              <div class="form-text">Un valor por línea, coma o espacio.</div>
+              <div class="form-text" v-if="descartados[g]">Se ignoraron {{ descartados[g] }} valores no numéricos.</div>
+              <dl class="row small mb-0 mt-2" v-if="desc[g]">
+                <div class="col-6"><dt class="fw-normal text-body-secondary">Media</dt><dd class="mono">{{ fmt(desc[g].media) }}</dd></div>
+                <div class="col-6"><dt class="fw-normal text-body-secondary">Mediana</dt><dd class="mono">{{ fmt(desc[g].mediana) }}</dd></div>
+                <div class="col-6"><dt class="fw-normal text-body-secondary">Desvío (n−1)</dt><dd class="mono">{{ fmt(desc[g].ds) }}</dd></div>
+                <div class="col-6"><dt class="fw-normal text-body-secondary">Mín – máx</dt><dd class="mono">{{ fmt(desc[g].min) }} – {{ fmt(desc[g].max) }}</dd></div>
+              </dl>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mt-3">
+        <div class="card-body">
+          <div class="row g-2 align-items-end">
+            <div class="col-6 col-md-3">
+              <label class="form-label small mb-1" for="prueba">Prueba</label>
+              <select id="prueba" class="form-select form-select-sm" v-model="prueba" @change="onParam">
+                <option value="clasica">t clásica</option>
+                <option value="welch">t de Welch</option>
+              </select>
+              <div class="form-text">Welch no asume varianzas iguales.</div>
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label small mb-1" for="confab">Confianza del IC</label>
+              <select id="confab" class="form-select form-select-sm" v-model="conf" @change="onParam">
+                <option value="90">90%</option>
+                <option value="95">95%</option>
+                <option value="99">99%</option>
+              </select>
+              <div class="form-text">Para el intervalo de la diferencia.</div>
+            </div>
+            <div class="col-12 col-md-6 d-flex flex-wrap gap-2">
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="cargarEjemplo">Cargar ejemplo: dos cursos</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mt-3" v-if="errorDatos">
+        <div class="card-body"><div class="alert alert-warning py-2 mb-0 small" role="alert">{{ errorDatos }}</div></div>
+      </div>
+
+      <div class="card mt-3" v-if="comp">
+        <div class="card-body">
+          <h2 class="h6">Comparación <small class="text-body-secondary fw-normal">({{ prueba === 'welch' ? 'Welch' : 't clásica' }}, IC {{ conf }}%)</small></h2>
+          <div class="table-responsive">
+            <table class="table table-sm mono small mb-2">
+              <tbody>
+                <tr><th scope="row" class="fw-normal text-body-secondary">Diferencia (A−B)</th><td>{{ fmt(comp.dif) }}</td></tr>
+                <tr><th scope="row" class="fw-normal text-body-secondary">IC {{ conf }}%</th><td>[{{ fmt(comp.ic[0]) }} ; {{ fmt(comp.ic[1]) }}]{{ comp.icCruza0 ? ' (incluye al 0)' : '' }}</td></tr>
+                <tr><th scope="row" class="fw-normal text-body-secondary">t (gl = {{ fmt(comp.gl, 1) }})</th><td>{{ fmt(comp.t) }}</td></tr>
+                <tr><th scope="row" class="fw-normal text-body-secondary">p bilateral</th><td>{{ fmtP(comp.p) }}</td></tr>
+                <tr><th scope="row" class="fw-normal text-body-secondary">d de Cohen</th><td>{{ fmt(comp.d) }} ({{ comp.dTxt }})</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="mb-0">{{ frase }}</p>
+          <p class="small text-body-secondary">d ≈ 0.2 chico · 0.5 mediano · 0.8 grande. Un p chico con d chico pide agrandar la muestra, no festejar.</p>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="verEnPvalue">📊 Ver esta t en p-value</button>
+        </div>
+      </div>
+
+      <div class="card mt-3" v-if="comp">
+        <div class="card-body">
+          <h2 class="h6">Distribuciones y medias</h2>
+          <div class="chart-box"><canvas id="chart-hist"></canvas></div>
+        </div>
+      </div>
+
+      <div class="card mt-3" v-if="comp">
+        <div class="card-body">
+          <h2 class="h6">Diferencia e intervalo</h2>
+          <div class="chart-box" style="height:160px;"><canvas id="chart-dif"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <hr>
+
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jstat/1.9.6/jstat.min.js"
+    integrity="sha512-UK8MjH09aePxFAd8OwI5P4oP462OBBNGVh3OtnuHjybd0T3ArUbAseIuHpS1XfinmMXcCZG5barC+7SNPjuQtg=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.5.42/vue.global.prod.min.js"
+    integrity="sha512-PREsKi18CyKMgwXMJWtvkzinqjiN0znVfDovmVadp7pKiUpyNGtq7bD2fKElDBmdfH4DGJz8pmAdgihN8NZ8TQ=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"
+    integrity="sha512-WoViKhKD4qI2WruSZqv9+kvM4WfFhUMQCLN4QlDTt5aU56fLQy2gYoxWIqlEnXqJy/+Ac5q/hk1oWfqnMDhwMA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script>
+    const STORAGE_KEY = 'test-ab';
+    const HAS_JSTAT = typeof jStat !== 'undefined';
+    const EJ_A = '27.5 21 19 23.5 17 17 27 20 22 22';
+    const EJ_B = '29 27 26 26 25 23 21 21 20 19';
+
+    function parsear(texto) {
+      const partes = String(texto || '').split(/[\s,;]+/).map(s => s.trim()).filter(Boolean);
+      const datos = [];
+      let descartados = 0;
+      for (const p of partes) {
+        const v = Number(p.replace(',', '.'));
+        if (Number.isFinite(v)) datos.push(v);
+        else descartados++;
+      }
+      return { datos, descartados };
+    }
+
+    function descrip(xs) {
+      const n = xs.length;
+      if (n < 2) return null;
+      const media = xs.reduce((a, b) => a + b, 0) / n;
+      const ord = [...xs].sort((a, b) => a - b);
+      const mediana = n % 2 ? ord[(n - 1) / 2] : (ord[n / 2 - 1] + ord[n / 2]) / 2;
+      const ds = Math.sqrt(xs.reduce((a, x) => a + (x - media) ** 2, 0) / (n - 1));
+      return { n, media, mediana, ds, min: ord[0], max: ord[n - 1] };
+    }
+
+    function fmt(x, dec = 2) {
+      if (!Number.isFinite(x)) return '—';
+      return Number(x).toLocaleString('es', { maximumFractionDigits: dec });
+    }
+
+    function estadoInicial() {
+      const q = new URLSearchParams(window.location.search);
+      const fromUrl = q.get('a') !== null || q.get('b') !== null;
+      if (fromUrl) {
+        return { ta: q.get('a') ?? '', tb: q.get('b') ?? '', prueba: 'clasica', conf: '95', fromUrl: true };
+      }
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const s = JSON.parse(raw);
+          if (s && typeof s === 'object') return { ...s, fromUrl: false };
+        }
+      } catch { /* se usa el ejemplo */ }
+      return { ta: EJ_A, tb: EJ_B, prueba: 'clasica', conf: '95', fromUrl: false };
+    }
+
+    const init = estadoInicial();
+    let noticeTimeout;
+    let chartHist = null, chartDif = null;
+
+    Vue.createApp({
+      data() {
+        return {
+          hasJstat: HAS_JSTAT,
+          texto: { a: init.ta ?? '', b: init.tb ?? '' },
+          prueba: init.prueba === 'welch' ? 'welch' : 'clasica',
+          conf: ['90', '95', '99'].includes(init.conf) ? init.conf : '95',
+          notice: '', shared: false, fromUrl: init.fromUrl, sinGuardar: false
+        };
+      },
+      computed: {
+        datos() {
+          return { a: parsear(this.texto.a).datos, b: parsear(this.texto.b).datos };
+        },
+        descartados() {
+          return { a: parsear(this.texto.a).descartados, b: parsear(this.texto.b).descartados };
+        },
+        desc() {
+          return { a: descrip(this.datos.a), b: descrip(this.datos.b) };
+        },
+        errorDatos() {
+          if (this.datos.a.length < 2 || this.datos.b.length < 2) return 'Cada grupo necesita al menos 2 observaciones numéricas.';
+          if (this.desc.a.ds === 0 || this.desc.b.ds === 0) return 'Un grupo sin variabilidad (todos iguales) no admite prueba t: compará a ojo.';
+          return '';
+        },
+        comp() {
+          if (this.errorDatos || !HAS_JSTAT) return null;
+          try {
+            const A = this.desc.a, B = this.desc.b;
+            const dif = A.media - B.media;
+            const alfa = 1 - Number(this.conf) / 100;
+            let t, gl, se;
+            if (this.prueba === 'welch') {
+              se = Math.sqrt(A.ds ** 2 / A.n + B.ds ** 2 / B.n);
+              t = dif / se;
+              gl = (A.ds ** 2 / A.n + B.ds ** 2 / B.n) ** 2 /
+                ((A.ds ** 2 / A.n) ** 2 / (A.n - 1) + (B.ds ** 2 / B.n) ** 2 / (B.n - 1));
+            } else {
+              const sp = Math.sqrt(((A.n - 1) * A.ds ** 2 + (B.n - 1) * B.ds ** 2) / (A.n + B.n - 2));
+              se = sp * Math.sqrt(1 / A.n + 1 / B.n);
+              t = dif / se;
+              gl = A.n + B.n - 2;
+            }
+            const p = 2 * (1 - jStat.studentt.cdf(Math.abs(t), gl));
+            const crit = jStat.studentt.inv(1 - alfa / 2, gl);
+            const ic = [dif - crit * se, dif + crit * se];
+            const sp2 = Math.sqrt(((A.n - 1) * A.ds ** 2 + (B.n - 1) * B.ds ** 2) / (A.n + B.n - 2));
+            const d = dif / sp2;
+            const ad = Math.abs(d);
+            return { dif, t, gl, p, ic, icCruza0: ic[0] <= 0 && ic[1] >= 0, d,
+              dTxt: ad < 0.2 ? 'despreciable' : ad < 0.5 ? 'pequeño' : ad < 0.8 ? 'mediano' : 'grande' };
+          } catch { return null; }
+        },
+        frase() {
+          const c = this.comp;
+          if (!c) return '';
+          const dir = c.dif > 0 ? 'A está por encima de B' : c.dif < 0 ? 'A está por debajo de B' : 'A y B empatan';
+          const cer = c.icCruza0
+            ? `el IC incluye al 0: la diferencia observada (${fmt(c.dif)}) podría ser ruido`
+            : `el IC no incluye al 0: hay señal más allá del ruido`;
+          const pra = Math.abs(c.d) < 0.2 ? 'pero el efecto es despreciable en la práctica'
+            : `y el efecto es ${c.dTxt} (d = ${fmt(c.d)})`;
+          return `${dir} por ${fmt(Math.abs(c.dif))}; ${cer}, ${pra}.`;
+        },
+        bins() {
+          if (this.errorDatos) return null;
+          const todos = [...this.datos.a, ...this.datos.b];
+          const min = Math.min(...todos), max = Math.max(...todos);
+          if (!(max > min)) return null;
+          const k = Math.min(30, Math.max(3, Math.ceil(Math.log2(todos.length) + 1)));
+          const w = (max - min) / k;
+          const edges = [];
+          for (let i = 0; i <= k; i++) edges.push(min + w * i);
+          const contar = xs => {
+            const c = new Array(k).fill(0);
+            for (const x of xs) c[Math.min(k - 1, Math.floor((x - min) / w))]++;
+            return c;
+          };
+          return { edges, a: contar(this.datos.a), b: contar(this.datos.b),
+            etiquetas: edges.slice(0, k).map(e => fmt(e, 1)) };
+        }
+      },
+      methods: {
+        fmt(x, dec) { return fmt(x, dec); },
+        fmtP(p) {
+          if (!Number.isFinite(p)) return '—';
+          return p < 0.0001 ? '< 0.0001' : p.toPrecision(4);
+        },
+        showNotice(msg) {
+          clearTimeout(noticeTimeout);
+          this.notice = msg;
+          noticeTimeout = setTimeout(() => { this.notice = ''; }, 2200);
+        },
+        persist() {
+          if (this.fromUrl) return;
+          const payload = { ta: this.texto.a, tb: this.texto.b, prueba: this.prueba, conf: this.conf };
+          if (JSON.stringify(payload).length > 100000) {
+            if (!this.sinGuardar) { this.sinGuardar = true; this.showNotice('Datos muy grandes: no se guardan localmente.'); }
+            return;
+          }
+          this.sinGuardar = false;
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); } catch {}
+        },
+        onDatos() { this.persist(); this.$nextTick(() => this.renderCharts()); },
+        onParam() { this.persist(); this.$nextTick(() => this.renderCharts()); },
+        cargarEjemplo() {
+          this.texto.a = EJ_A; this.texto.b = EJ_B; this.fromUrl = false;
+          this.onDatos();
+          this.showNotice('Ejemplo cargado: dos cursos.');
+        },
+        verEnPvalue() {
+          // p-value ya entiende ?dist=t&df1=&x=&cola=: sinergia sin tocarlo.
+          if (!this.comp) return;
+          const url = new URL('../p-value/', window.location.href);
+          url.searchParams.set('dist', 't');
+          url.searchParams.set('df1', String(Math.max(1, Math.round(this.comp.gl))));
+          url.searchParams.set('x', String(Number(this.comp.t.toFixed(4))));
+          url.searchParams.set('cola', 'bil');
+          url.searchParams.set('alfa', String(1 - Number(this.conf) / 100));
+          url.searchParams.set('modo', 'directo');
+          window.open(url.toString(), '_blank', 'noopener');
+        },
+        paleta() {
+          const dark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+          return dark
+            ? { a: '#3987e5', b: '#d95926', grid: '#444' }
+            : { a: '#2a78d6', b: '#eb6834', grid: '#ddd' };
+        },
+        destruirCharts() {
+          if (typeof Chart !== 'undefined') {
+            for (const id of ['chart-hist', 'chart-dif']) {
+              const cv = document.getElementById(id);
+              if (cv) { const viejo = Chart.getChart(cv); if (viejo) viejo.destroy(); }
+            }
+          }
+          chartHist = null; chartDif = null;
+        },
+        renderCharts() {
+          this.destruirCharts();
+          if (typeof Chart === 'undefined' || !this.comp || !this.bins) return;
+          const P = this.paleta(), B = this.bins;
+          const maxC = Math.max(...B.a, ...B.b);
+          const centros = B.edges.slice(0, -1).map((e, i) => (e + B.edges[i + 1]) / 2);
+          const barras = (arr, color, nombre) => ({ label: nombre,
+            data: arr.map((c, i) => ({ x: centros[i], y: c })),
+            backgroundColor: color + '66', borderColor: color, borderWidth: 1,
+            categoryPercentage: 1, barPercentage: 0.9 });
+          const lineaMedia = (media, color, nombre) => ({ label: nombre, type: 'line',
+            data: [{ x: media, y: 0 }, { x: media, y: maxC }],
+            borderColor: color, borderDash: [5, 4], borderWidth: 2, fill: false, pointRadius: 0 });
+          chartHist = new Chart(document.getElementById('chart-hist'), {
+            type: 'bar',
+            data: { datasets: [
+              barras(B.a, P.a, 'A'), barras(B.b, P.b, 'B'),
+              lineaMedia(this.desc.a.media, P.a, 'media A'),
+              lineaMedia(this.desc.b.media, P.b, 'media B')
+            ] },
+            options: { maintainAspectRatio: false, animation: false,
+              plugins: { legend: { position: 'bottom' } },
+              scales: { x: { type: 'linear', title: { display: true, text: 'valor' }, grid: { color: P.grid } },
+                        y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: P.grid } } } }
+          });
+          const c = this.comp;
+          const pad = Math.max((c.ic[1] - c.ic[0]) / 2, Math.abs(c.dif), 0.5) * 1.4;
+          const lo = Math.min(0, c.ic[0]) - pad * 0.3, hi = Math.max(0, c.ic[1]) + pad * 0.3;
+          chartDif = new Chart(document.getElementById('chart-dif'), {
+            type: 'scatter',
+            data: { datasets: [
+              { label: 'IC', data: [{ x: c.ic[0], y: 0 }, { x: c.ic[1], y: 0 }],
+                borderColor: P.a, borderWidth: 4, pointRadius: 0, showLine: true },
+              { label: 'diferencia', data: [{ x: c.dif, y: 0 }],
+                backgroundColor: '#e34948', pointRadius: 7 },
+              { label: 'cero', data: [{ x: 0, y: -0.4 }, { x: 0, y: 0.4 }],
+                borderColor: P.grid, borderDash: [5, 4], borderWidth: 2, pointRadius: 0, showLine: true }
+            ] },
+            options: { maintainAspectRatio: false, animation: false,
+              plugins: { legend: { display: false } },
+              scales: { x: { type: 'linear', min: lo, max: hi, grid: { color: P.grid } },
+                        y: { min: -0.5, max: 0.5, ticks: { display: false }, grid: { display: false } } } }
+          });
+        },
+        share() {
+          const datos = JSON.stringify({ a: this.texto.a, b: this.texto.b });
+          const url = new URL(window.location.href);
+          url.search = '';
+          url.searchParams.set('prueba', this.prueba);
+          url.searchParams.set('conf', this.conf);
+          let conDatos = false;
+          if (datos.length < 3000) {
+            url.searchParams.set('a', this.texto.a);
+            url.searchParams.set('b', this.texto.b);
+            conDatos = true;
+          }
+          const done = ok => {
+            if (ok) {
+              this.shared = true;
+              setTimeout(() => { this.shared = false; }, 1500);
+              if (!conDatos) this.showNotice('Link copiado sin los datos (muy largos).');
+            } else this.showNotice('No se pudo copiar el enlace.');
+          };
+          if (navigator.clipboard?.writeText) navigator.clipboard.writeText(url.toString()).then(() => done(true), () => done(false));
+          else done(false);
+        },
+        reset() {
+          try { localStorage.removeItem(STORAGE_KEY); } catch {}
+          this.texto.a = EJ_A; this.texto.b = EJ_B;
+          this.prueba = 'clasica'; this.conf = '95';
+          this.fromUrl = false; this.sinGuardar = false;
+          history.replaceState(null, '', window.location.pathname);
+          this.$nextTick(() => this.renderCharts());
+          this.showNotice('Ejemplo restaurado.');
+        }
+      },
+      mounted() {
+        this.renderCharts();
+      }
+    }).mount('#app');
+
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -120,6 +120,23 @@
         </div>
       </div>
 
+      <div class="card mb-4" v-if="tray.length">
+        <div class="card-body">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+            <h2 class="h6 mb-0">Paleta recibida <span class="badge text-bg-secondary">{{ tray.length }}</span></h2>
+            <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTray">Descartar</button>
+          </div>
+          <p class="text-body-secondary small mb-2">Tocá un color para llevarlo a los slots de análisis (de a 4 por vez).</p>
+          <div class="d-flex flex-wrap gap-2">
+            <button v-for="(t, i) in tray" :key="t + '-' + i" class="variant" type="button"
+              :style="{ backgroundColor: t }" @click="adoptTray(i)" :title="'Analizar ' + t">
+              <span class="d-block fw-semibold" :style="{ color: ink(t) }">{{ t.toUpperCase() }}</span>
+            </button>
+          </div>
+          <div class="text-danger small mt-1" v-if="trayMsg">{{ trayMsg }}</div>
+        </div>
+      </div>
+
       <div class="alert alert-secondary" v-if="activeCount === 0">
         Agregá un color para empezar: Chromatic lo analiza. Con 2 explica contraste y relación.
         <div class="d-flex flex-wrap gap-2 mt-2">
@@ -252,12 +269,14 @@
         try {
           const arr = JSON.parse(raw);
           if (Array.isArray(arr)) {
+            // Acepta paletas completas: los primeros 4 van a slots, el resto a la bandeja.
+            const norm = arr.map(normalizeInput).filter(Boolean).slice(0, 24);
             const out = [null, null, null, null];
-            for (let i = 0; i < 4; i++) out[i] = arr[i] ? normalizeInput(arr[i]) : null;
-            return { colors: out, fromURL: true };
+            for (let i = 0; i < 4 && i < norm.length; i++) out[i] = norm[i];
+            return { colors: out, tray: norm.slice(4), fromURL: true };
           }
         } catch { /* cae a defaults */ }
-        return { colors: DEFAULTS.slice(), fromURL: true };
+        return { colors: DEFAULTS.slice(), tray: [], fromURL: true };
       }
       let any = false;
       const out = [null, null, null, null];
@@ -265,7 +284,7 @@
         const v = q.get('c' + (i + 1));
         if (v !== null) { any = true; out[i] = normalizeInput(v); }
       }
-      if (any) return { colors: out, fromURL: true };
+      if (any) return { colors: out, tray: [], fromURL: true };
       return null;
     }
 
@@ -275,17 +294,22 @@
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw !== null) {
-          const arr = JSON.parse(raw);
+          const parsed = JSON.parse(raw);
+          // Migración: antes se guardaba el arreglo pelado; ahora { colors, tray }.
+          const arr = Array.isArray(parsed) ? parsed : parsed.colors;
           if (Array.isArray(arr)) {
             const out = [null, null, null, null];
             for (let i = 0; i < 4; i++) out[i] = arr[i] ? normalizeInput(arr[i]) : null;
-            return { colors: out, fromURL: false };
+            const tray = (!Array.isArray(parsed) && Array.isArray(parsed.tray))
+              ? parsed.tray.map(normalizeInput).filter(Boolean).slice(0, 20)
+              : [];
+            return { colors: out, tray, fromURL: false };
           }
         }
       } catch {
         try { localStorage.removeItem(STORAGE_KEY); } catch {}
       }
-      return { colors: DEFAULTS.slice(), fromURL: false };
+      return { colors: DEFAULTS.slice(), tray: [], fromURL: false };
     }
 
     async function copyText(text) {
@@ -418,6 +442,8 @@
           colors: state.colors,
           drafts: state.colors.map(c => c || ''),
           errors: [null, null, null, null],
+          tray: state.tray || [],
+          trayMsg: '',
           fromURL: state.fromURL,
           bulk: '',
           shareLabel: '🔗 Compartir',
@@ -522,7 +548,7 @@
           if (this.fromURL) {
             this.fromURL = false;
           } else {
-            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.colors)); } catch {}
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ colors: this.colors, tray: this.tray })); } catch {}
           }
         },
         setSlot(i, hex) {
@@ -551,19 +577,41 @@
           this.colors = [null, null, null, null];
           this.drafts = ['', '', '', ''];
           this.errors = [null, null, null, null];
+          this.tray = [];
+          this.trayMsg = '';
+          this.persist();
+        },
+        adoptTray(i) {
+          const hex = this.tray[i];
+          if (!hex) return;
+          const slot = this.colors.findIndex(c => !c);
+          if (slot < 0) {
+            this.trayMsg = 'Liberá un slot (✕) para agregar este color.';
+            setTimeout(() => { this.trayMsg = ''; }, 2500);
+            return;
+          }
+          this.tray.splice(i, 1);
+          this.setSlot(slot, hex);
+        },
+        clearTray() {
+          this.tray = [];
+          this.trayMsg = '';
           this.persist();
         },
         pasteMany() {
           const parts = this.bulk.split(/[\s,;]+/).map(s => s.trim()).filter(Boolean);
           let changed = false;
-          let slot = 0;
           for (const p of parts) {
             const hex = normalizeInput(p);
-            if (!hex) continue;
+            if (!hex || this.colors.includes(hex) || this.tray.includes(hex)) continue;
+            let slot = 0;
             while (slot < 4 && this.colors[slot]) slot++;
-            if (slot >= 4) break;
-            this.setSlot(slot, hex);
-            slot++;
+            if (slot < 4) {
+              this.setSlot(slot, hex);
+            } else if (this.tray.length < 20) {
+              this.tray.push(hex);
+              this.persist();
+            }
             changed = true;
           }
           if (changed) this.bulk = '';
@@ -595,10 +643,12 @@
           this.colors = out;
           this.drafts = out.map(c => c || '');
           this.errors = [null, null, null, null];
+          this.tray = [];
+          this.trayMsg = '';
           this.persist();
         },
         async copyPalette() {
-          const list = this.colors.filter(Boolean);
+          const list = this.colors.filter(Boolean).concat(this.tray);
           if (!list.length) {
             this.paletteMsg = 'No hay colores para copiar.';
             return;
@@ -609,7 +659,8 @@
         },
         share() {
           const base = window.location.href.split('?')[0];
-          const url = `${base}?c=${encodeURIComponent(JSON.stringify(this.colors))}`;
+          const all = this.colors.filter(Boolean).concat(this.tray);
+          const url = `${base}?c=${encodeURIComponent(JSON.stringify(all))}`;
           copyText(url).then(ok => {
             this.shareLabel = ok ? '¡Copiado!' : 'No se pudo copiar';
             setTimeout(() => { this.shareLabel = '🔗 Compartir'; }, 2000);
@@ -621,6 +672,8 @@
           this.colors = DEFAULTS.slice();
           this.drafts = this.colors.map(c => c || '');
           this.errors = [null, null, null, null];
+          this.tray = [];
+          this.trayMsg = '';
           this.bulk = '';
           history.replaceState(null, '', window.location.pathname);
         }

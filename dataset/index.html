@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f9f9%3B%3C/text%3E%3C/svg%3E">
+  <title>Dataset — Datos artificiales reproducibles</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    #app input, #app select { font-size: 16px; }
+    .mono { font-family: var(--bs-font-monospace); }
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
+    .chart-box { position: relative; height: 260px; }
+    p.signature { font-size: 0.8em; }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4" style="max-width: 960px;">
+    <div id="app">
+      <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+      <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+        <div>
+          <h1 class="h3 mb-1">🧺 Dataset</h1>
+          <p class="text-body-secondary mb-0">Datos artificiales con semilla: mismos parámetros, mismos datos.</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ shared ? '¡Copiado!' : '🔗 Compartir' }}</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset">🗑️ Reiniciar</button>
+          <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+        </div>
+      </div>
+
+      <div v-if="notice" class="alert alert-success py-2 alert-flotante" role="status">{{ notice }}</div>
+
+      <div class="row g-3">
+        <section class="col-12 col-md-5">
+          <div class="card">
+            <div class="card-body">
+              <h2 class="h6">Generador</h2>
+              <label class="form-label small mb-1" for="dist">Distribución</label>
+              <select id="dist" class="form-select mb-1" v-model="dist" @change="onParam">
+                <option value="uniforme">Uniforme</option>
+                <option value="normal">Normal</option>
+                <option value="binomial">Binomial</option>
+                <option value="poisson">Poisson</option>
+                <option value="exponencial">Exponencial</option>
+              </select>
+              <div class="form-text mb-3">{{ descDist }}</div>
+              <div class="row g-2 mb-3" v-if="dist==='uniforme'">
+                <div class="col-6">
+                  <label class="form-label small mb-1" for="pa">Mínimo a</label>
+                  <input id="pa" class="form-control" type="number" step="any" v-model.number="pa" @input="onParam">
+                  <div class="form-text">{{ ayudaPa }}</div>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small mb-1" for="pb">Máximo b</label>
+                  <input id="pb" class="form-control" type="number" step="any" v-model.number="pb" @input="onParam">
+                  <div class="form-text">{{ ayudaPb }}</div>
+                </div>
+                <div class="col-12">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="pint" v-model="pint" @change="onParam">
+                    <label class="form-check-label small" for="pint">Solo enteros (dado de a…b)</label>
+                  </div>
+                </div>
+              </div>
+              <div class="row g-2 mb-3" v-if="dist==='normal'">
+                <div class="col-6">
+                  <label class="form-label small mb-1" for="pa">Media μ</label>
+                  <input id="pa" class="form-control" type="number" step="any" v-model.number="pa" @input="onParam">
+                  <div class="form-text">{{ ayudaPa }}</div>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small mb-1" for="pb">Desvío σ</label>
+                  <input id="pb" class="form-control" type="number" min="0.0001" step="any" v-model.number="pb" @input="onParam">
+                  <div class="form-text">{{ ayudaPb }}</div>
+                </div>
+              </div>
+              <div class="row g-2 mb-3" v-if="dist==='binomial'">
+                <div class="col-6">
+                  <label class="form-label small mb-1" for="pa">Ensayos n</label>
+                  <input id="pa" class="form-control" type="number" min="1" max="200" step="1" v-model.number="pa" @input="onParam">
+                  <div class="form-text">{{ ayudaPa }}</div>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small mb-1" for="pb">Prob. p</label>
+                  <input id="pb" class="form-control" type="number" min="0.01" max="0.99" step="0.01" v-model.number="pb" @input="onParam">
+                  <div class="form-text">{{ ayudaPb }}</div>
+                </div>
+              </div>
+              <div class="mb-3" v-if="dist==='poisson'">
+                <label class="form-label small mb-1" for="pa">Tasa λ (media)</label>
+                <input id="pa" class="form-control" type="number" min="0.1" max="50" step="any" v-model.number="pa" @input="onParam">
+                <div class="form-text">{{ ayudaPa }}</div>
+              </div>
+              <div class="mb-3" v-if="dist==='exponencial'">
+                <label class="form-label small mb-1" for="pa">Tasa λ (media = 1/λ)</label>
+                <input id="pa" class="form-control" type="number" min="0.0001" step="any" v-model.number="pa" @input="onParam">
+                <div class="form-text">{{ ayudaPa }}</div>
+              </div>
+              <div class="row g-2">
+                <div class="col-6">
+                  <label class="form-label small mb-1" for="nobs">Observaciones</label>
+                  <input id="nobs" class="form-control" type="number" min="2" max="50000" step="1" v-model.number="nobs" @input="onParam">
+                  <div class="form-text">Entre 2 y 50.000.</div>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small mb-1" for="sem">Semilla</label>
+                  <div class="input-group">
+                    <input id="sem" class="form-control" type="number" min="0" step="1" v-model.number="semilla" @input="onParam">
+                    <button class="btn btn-outline-secondary" type="button" @click="semillaAzar" title="Semilla al azar">🎲</button>
+                  </div>
+                  <div class="form-text">Igual semilla, mismos datos.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="col-12 col-md-7">
+          <div class="card mb-3">
+            <div class="card-body">
+              <h2 class="h6">Resumen <small class="text-body-secondary fw-normal" v-if="datos">({{ datos.length }} valores)</small></h2>
+              <div v-if="errorParam" class="alert alert-danger py-2 small" role="alert">{{ errorParam }}</div>
+              <div v-else-if="resumen">
+                <dl class="row small mb-2">
+                  <div class="col-4" v-for="it in resumen" :key="it[0]">
+                    <dt class="fw-normal text-body-secondary">{{ it[0] }}</dt>
+                    <dd class="mono">{{ it[1] }}</dd>
+                  </div>
+                </dl>
+                <h3 class="h6">Empírico vs teórico</h3>
+                <div class="table-responsive">
+                  <table class="table table-sm mono small mb-0">
+                    <thead><tr><th></th><th>Media</th><th>Varianza</th><th>Desvío</th></tr></thead>
+                    <tbody>
+                      <tr><th scope="row" class="fw-normal text-body-secondary">Empírico</th>
+                        <td>{{ fmt(teorico.emp.media) }}</td><td>{{ fmt(teorico.emp.var) }}</td><td>{{ fmt(teorico.emp.ds) }}</td></tr>
+                      <tr><th scope="row" class="fw-normal text-body-secondary">Teórico</th>
+                        <td>{{ fmt(teorico.teo.media) }}</td><td>{{ fmt(teorico.teo.var) }}</td><td>{{ fmt(teorico.teo.ds) }}</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="d-flex flex-wrap gap-2">
+            <button class="btn btn-outline-secondary btn-sm" type="button" @click="copiarCSV" :disabled="!datos">📋 Copiar CSV</button>
+            <button class="btn btn-outline-secondary btn-sm" type="button" @click="descargarCSV" :disabled="!datos">⬇️ Descargar CSV</button>
+            <span class="small text-body-secondary align-self-center">Pegalo en A/B o ¿azar? para analizarlo.</span>
+          </div>
+        </section>
+      </div>
+
+      <section class="card mt-3" v-if="datos">
+        <div class="card-body">
+          <h2 class="h6">Histograma</h2>
+          <div class="chart-box"><canvas id="chart-hist"></canvas></div>
+        </div>
+      </section>
+    </div>
+
+    <hr>
+
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.5.42/vue.global.prod.min.js"
+    integrity="sha512-PREsKi18CyKMgwXMJWtvkzinqjiN0znVfDovmVadp7pKiUpyNGtq7bD2fKElDBmdfH4DGJz8pmAdgihN8NZ8TQ=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"
+    integrity="sha512-WoViKhKD4qI2WruSZqv9+kvM4WfFhUMQCLN4QlDTt5aU56fLQy2gYoxWIqlEnXqJy/+Ac5q/hk1oWfqnMDhwMA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script>
+    const STORAGE_KEY = 'dataset';
+
+    // PRNG sembrado (mulberry32): misma semilla, misma secuencia.
+    function mulberry32(a) {
+      return function () {
+        a |= 0; a = a + 0x6D2B79F5 | 0;
+        let t = Math.imul(a ^ a >>> 15, 1 | a);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+      };
+    }
+
+    function fmt(x, dec = 3) {
+      if (!Number.isFinite(x)) return '—';
+      return Number(x).toLocaleString('es', { maximumFractionDigits: dec });
+    }
+
+    const DIST_INFO = {
+      uniforme: 'Valores equiprobables entre a y b.',
+      normal: 'Campana simétrica (Box-Muller).',
+      binomial: 'Éxitos en n ensayos de prob. p.',
+      poisson: 'Conteos con media λ (Knuth).',
+      exponencial: 'Tiempos entre eventos, tasa λ.'
+    };
+
+    function estadoInicial() {
+      const q = new URLSearchParams(window.location.search);
+      const fromUrl = ['dist', 'n', 'seed', 'pa', 'pb'].some(k => q.get(k) !== null);
+      if (fromUrl) {
+        return {
+          dist: ['uniforme', 'normal', 'binomial', 'poisson', 'exponencial'].includes(q.get('dist')) ? q.get('dist') : 'uniforme',
+          nobs: Number(q.get('n') ?? 1000), semilla: Number(q.get('seed') ?? 1),
+          pa: Number(q.get('pa') ?? NaN), pb: Number(q.get('pb') ?? NaN),
+          pint: q.get('int') === '1',
+          fromUrl: true
+        };
+      }
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const s = JSON.parse(raw);
+          if (s && typeof s === 'object') return { ...s, fromUrl: false };
+        }
+      } catch { /* se usa el ejemplo */ }
+      return { dist: 'normal', nobs: 1000, semilla: 42, pa: 100, pb: 15, pint: false, fromUrl: false };
+    }
+
+    const init = estadoInicial();
+    let noticeTimeout;
+    let chartHist = null;
+
+    Vue.createApp({
+      data() {
+        return {
+          dist: init.dist, nobs: init.nobs, semilla: init.semilla,
+          pa: init.pa, pb: init.pb, pint: !!init.pint,
+          notice: '', shared: false, fromUrl: init.fromUrl
+        };
+      },
+      computed: {
+        descDist() { return DIST_INFO[this.dist]; },
+        ayudaPa() {
+          return { uniforme: 'Extremo inferior del intervalo.',
+            normal: 'Centro de la campana.',
+            binomial: 'Ensayos por observación.',
+            poisson: 'Promedio de eventos.',
+            exponencial: 'Tasa de eventos.' }[this.dist];
+        },
+        ayudaPb() {
+          return { uniforme: 'Extremo superior del intervalo.',
+            normal: 'Ancho de la campana.',
+            binomial: 'Probabilidad de éxito.' }[this.dist] || '';
+        },
+        errorParam() {
+          if (!(Number.isInteger(this.nobs) && this.nobs >= 2 && this.nobs <= 50000)) return 'Observaciones: entero entre 2 y 50.000.';
+          if (!(Number.isInteger(this.semilla) && this.semilla >= 0)) return 'La semilla debe ser un entero ≥ 0.';
+          const ok = (v) => typeof v === 'number' && Number.isFinite(v);
+          if (this.dist === 'uniforme') {
+            if (!ok(this.pa) || !ok(this.pb) || !(this.pb > this.pa)) return 'Necesitás a < b finitos.';
+            if (this.pint && (!Number.isInteger(this.pa) || !Number.isInteger(this.pb))) return 'Para enteros, a y b deben ser enteros.';
+          }
+          if (this.dist === 'normal' && (!ok(this.pa) || !ok(this.pb) || !(this.pb > 0))) return 'μ finito y σ > 0.';
+          if (this.dist === 'binomial' && (!(Number.isInteger(this.pa) && this.pa >= 1 && this.pa <= 200) || !(ok(this.pb) && this.pb > 0 && this.pb < 1))) return 'n entero 1–200 y p entre 0 y 1.';
+          if (this.dist === 'poisson' && (!ok(this.pa) || !(this.pa >= 0.1 && this.pa <= 50))) return 'λ entre 0.1 y 50.';
+          if (this.dist === 'exponencial' && (!ok(this.pa) || !(this.pa > 0))) return 'λ > 0.';
+          return '';
+        },
+        datos() {
+          if (this.errorParam) return null;
+          const rnd = mulberry32(this.semilla);
+          const out = new Array(this.nobs);
+          if (this.dist === 'uniforme') {
+            if (this.pint) {
+              const a = this.pa, n = this.pb - this.pa + 1;
+              for (let i = 0; i < this.nobs; i++) out[i] = a + Math.floor(rnd() * n);
+            } else {
+              for (let i = 0; i < this.nobs; i++) out[i] = this.pa + rnd() * (this.pb - this.pa);
+            }
+          } else if (this.dist === 'normal') {
+            for (let i = 0; i < this.nobs; i += 2) {
+              const u1 = Math.max(rnd(), 1e-12), u2 = rnd();
+              const r = Math.sqrt(-2 * Math.log(u1)), t = 2 * Math.PI * u2;
+              out[i] = this.pa + this.pb * r * Math.cos(t);
+              if (i + 1 < this.nobs) out[i + 1] = this.pa + this.pb * r * Math.sin(t);
+            }
+          } else if (this.dist === 'binomial') {
+            for (let i = 0; i < this.nobs; i++) {
+              let k = 0;
+              for (let j = 0; j < this.pa; j++) if (rnd() < this.pb) k++;
+              out[i] = k;
+            }
+          } else if (this.dist === 'poisson') {
+            const L = Math.exp(-this.pa);
+            for (let i = 0; i < this.nobs; i++) {
+              let k = 0, p = 1;
+              do { k++; p *= rnd(); } while (p > L);
+              out[i] = k - 1;
+            }
+          } else {
+            for (let i = 0; i < this.nobs; i++) out[i] = -Math.log(1 - rnd()) / this.pa;
+          }
+          return out;
+        },
+        resumen() {
+          if (!this.datos) return null;
+          const xs = this.datos, n = xs.length;
+          const media = xs.reduce((a, b) => a + b, 0) / n;
+          const ord = [...xs].sort((a, b) => a - b);
+          const mediana = n % 2 ? ord[(n - 1) / 2] : (ord[n / 2 - 1] + ord[n / 2]) / 2;
+          const varianza = xs.reduce((a, x) => a + (x - media) ** 2, 0) / (n - 1);
+          return [
+            ['Media', fmt(media)], ['Mediana', fmt(mediana)],
+            ['Varianza (n−1)', fmt(varianza)], ['Desvío', fmt(Math.sqrt(varianza))],
+            ['Mín', fmt(ord[0])], ['Máx', fmt(ord[n - 1])]
+          ];
+        },
+        teorico() {
+          if (!this.datos) return null;
+          const xs = this.datos, n = xs.length;
+          const media = xs.reduce((a, b) => a + b, 0) / n;
+          const varianza = xs.reduce((a, x) => a + (x - media) ** 2, 0) / (n - 1);
+          let tm, tv;
+          if (this.dist === 'uniforme') {
+            tm = (this.pa + this.pb) / 2;
+            tv = this.pint
+              ? ((this.pb - this.pa + 1) ** 2 - 1) / 12
+              : (this.pb - this.pa) ** 2 / 12;
+          } else if (this.dist === 'normal') { tm = this.pa; tv = this.pb ** 2; }
+          else if (this.dist === 'binomial') { tm = this.pa * this.pb; tv = this.pa * this.pb * (1 - this.pb); }
+          else if (this.dist === 'poisson') { tm = this.pa; tv = this.pa; }
+          else { tm = 1 / this.pa; tv = 1 / this.pa ** 2; }
+          return {
+            emp: { media, var: varianza, ds: Math.sqrt(varianza) },
+            teo: { media: tm, var: tv, ds: Math.sqrt(tv) }
+          };
+        },
+        histo() {
+          if (!this.datos) return null;
+          const xs = this.datos;
+          const min = Math.min(...xs), max = Math.max(...xs);
+          if (!(max > min)) return { etiquetas: [fmt(min)], a: [xs.length] };
+          const discreta = this.dist === 'binomial' || this.dist === 'poisson' ||
+            (this.dist === 'uniforme' && this.pint);
+          let edges;
+          if (discreta && max - min + 1 <= 40) {
+            edges = [];
+            for (let v = Math.ceil(min); v <= Math.floor(max) + 1; v++) edges.push(v - 0.5);
+          } else {
+            const k = Math.min(40, Math.max(5, Math.ceil(Math.log2(xs.length) + 1)));
+            edges = [];
+            for (let i = 0; i <= k; i++) edges.push(min + (max - min) * i / k);
+          }
+          const counts = new Array(edges.length - 1).fill(0);
+          for (const x of xs) {
+            let idx = edges.findIndex(e => x < e) - 1;
+            if (idx < 0) idx = x >= edges[edges.length - 1] ? counts.length - 1 : 0;
+            counts[idx]++;
+          }
+          return {
+            etiquetas: edges.slice(0, -1).map((e, i) => fmt((e + edges[i + 1]) / 2, 1)),
+            a: counts
+          };
+        }
+      },
+      methods: {
+        fmt(x, dec) { return fmt(x, dec); },
+        showNotice(msg) {
+          clearTimeout(noticeTimeout);
+          this.notice = msg;
+          noticeTimeout = setTimeout(() => { this.notice = ''; }, 2200);
+        },
+        persist() {
+          if (this.fromUrl) return;
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({
+              dist: this.dist, nobs: this.nobs, semilla: this.semilla,
+              pa: this.pa, pb: this.pb, pint: this.pint
+            }));
+          } catch {}
+        },
+        onParam() { this.persist(); this.$nextTick(() => this.renderChart()); },
+        semillaAzar() {
+          this.semilla = Math.floor(Math.random() * 100000);
+          this.onParam();
+        },
+        csvTexto() {
+          return 'valor\n' + this.datos.map(String).join('\n');
+        },
+        copiarCSV() {
+          if (!this.datos) return;
+          const done = ok => this.showNotice(ok
+            ? `${this.datos.length} valores copiados.`
+            : 'No se pudo copiar.');
+          if (navigator.clipboard?.writeText) navigator.clipboard.writeText(this.csvTexto()).then(() => done(true), () => done(false));
+          else done(false);
+        },
+        descargarCSV() {
+          if (!this.datos) return;
+          const blob = new Blob([this.csvTexto()], { type: 'text/csv;charset=utf-8' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = `dataset-${this.dist}-${this.nobs}-s${this.semilla}.csv`;
+          document.body.append(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+          this.showNotice('CSV descargado.');
+        },
+        renderChart() {
+          if (typeof Chart !== 'undefined') {
+            const cv = document.getElementById('chart-hist');
+            if (cv) { const viejo = Chart.getChart(cv); if (viejo) viejo.destroy(); }
+          }
+          if (typeof Chart === 'undefined' || !this.histo) return;
+          const dark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+          new Chart(document.getElementById('chart-hist'), {
+            type: 'bar',
+            data: { labels: this.histo.etiquetas, datasets: [{
+              label: 'frecuencia', data: this.histo.a,
+              backgroundColor: (dark ? '#3987e5' : '#2a78d6') + '66',
+              borderColor: dark ? '#3987e5' : '#2a78d6', borderWidth: 1
+            }] },
+            options: { maintainAspectRatio: false, animation: false,
+              plugins: { legend: { display: false } },
+              scales: { x: { title: { display: true, text: 'valor' }, grid: { color: dark ? '#444' : '#ddd' } },
+                        y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: dark ? '#444' : '#ddd' } } } }
+          });
+        },
+        share() {
+          const url = new URL(window.location.href);
+          url.search = '';
+          url.searchParams.set('dist', this.dist);
+          url.searchParams.set('n', String(this.nobs));
+          url.searchParams.set('seed', String(this.semilla));
+          // Los datos se regeneran idénticos: viajan los parámetros, no los valores.
+          url.searchParams.set('pa', String(this.pa));
+          url.searchParams.set('pb', String(this.pb));
+          if (this.dist === 'uniforme' && this.pint) url.searchParams.set('int', '1');
+          const done = ok => {
+            if (ok) { this.shared = true; setTimeout(() => { this.shared = false; }, 1500); }
+            else this.showNotice('No se pudo copiar el enlace.');
+          };
+          if (navigator.clipboard?.writeText) navigator.clipboard.writeText(url.toString()).then(() => done(true), () => done(false));
+          else done(false);
+        },
+        reset() {
+          try { localStorage.removeItem(STORAGE_KEY); } catch {}
+          this.dist = 'normal'; this.nobs = 1000; this.semilla = 42;
+          this.pa = 100; this.pb = 15; this.pint = false;
+          this.fromUrl = false;
+          history.replaceState(null, '', window.location.pathname);
+          this.$nextTick(() => this.renderChart());
+          this.showNotice('Ejemplo restaurado: normal(100, 15).');
+        }
+      },
+      mounted() {
+        this.renderChart();
+      }
+    }).mount('#app');
+
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

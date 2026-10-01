@@ -28,6 +28,28 @@
       touch-action: auto;
     }
 
+    #mesa:fullscreen {
+      height: 100%;
+      border-radius: 0;
+    }
+
+    #zoom-viewport {
+      position: absolute;
+      inset: 0;
+      overflow: auto;
+    }
+
+    #zoom-sizer {
+      position: relative;
+    }
+
+    #zoom-layer {
+      position: absolute;
+      left: 0;
+      top: 0;
+      transform-origin: 0 0;
+    }
+
     #empty-hint {
       position: absolute;
       inset: 0;
@@ -259,13 +281,27 @@
 
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
       <h2 class="h5 mb-0">Mesa</h2>
-      <span id="obj-count" class="badge text-bg-secondary" role="status">Mesa vacía</span>
+      <div class="d-flex flex-wrap align-items-center gap-2">
+        <span id="obj-count" class="badge text-bg-secondary" role="status">Mesa vacía</span>
+        <div class="btn-group btn-group-sm" role="group" aria-label="Zoom de la mesa">
+          <button id="zoom-out" class="btn btn-outline-secondary" type="button" aria-label="Alejar">−</button>
+          <button id="zoom-reset" class="btn btn-outline-secondary" type="button" aria-label="Zoom al 100%">100%</button>
+          <button id="zoom-in" class="btn btn-outline-secondary" type="button" aria-label="Acercar">+</button>
+        </div>
+        <button id="mesa-full" class="btn btn-outline-secondary btn-sm" type="button">⛶ Mesa</button>
+      </div>
     </div>
     <div id="mesa" aria-label="Mesa de trabajo">
-      <div id="empty-hint">La mesa está vacía.<br>Agregá cartas, fichas o fibrones desde el panel.</div>
+      <div id="zoom-viewport">
+        <div id="zoom-sizer">
+          <div id="zoom-layer">
+            <div id="empty-hint">La mesa está vacía.<br>Agregá cartas, fichas o fibrones desde el panel.</div>
+          </div>
+        </div>
+      </div>
       <div id="discard" role="note" aria-label="Zona de descarte: arrastrá objetos aquí para quitarlos de la mesa.">🗑️<br>Descarte</div>
     </div>
-    <p class="text-body-secondary small mt-2 mb-0">Arrastrá con el dedo o el mouse para mover. Lo que movés pasa al frente. Doble clic en una carta (o Enter con el teclado) la voltea; doble clic en el paño voltea todas; doble clic en un fibrón lo rota 90°. Arrastrá al 🗑️ Descarte para quitar objetos (o Supr con el teclado).</p>
+    <p class="text-body-secondary small mt-2 mb-0">Arrastrá con el dedo o el mouse para mover. Lo que movés pasa al frente. Con ⛶ la mesa ocupa toda la pantalla (F11 es del navegador y no se puede usar para esto). Acercá con + o Ctrl+rueda y recorré la mesa arrastrando el paño vacío o con la ruedita apretada. Doble clic en una carta (o Enter con el teclado) la voltea; doble clic en el paño voltea todas; doble clic en un fibrón lo rota 90°. Arrastrá al 🗑️ Descarte para quitar objetos (o Supr con el teclado).</p>
 
     <div id="notice" class="alert alert-success py-2 d-none" role="status"></div>
 
@@ -360,6 +396,31 @@
 
     function clamp(n, lo, hi) {
       return Math.min(hi, Math.max(lo, n));
+    }
+
+    const ZOOM_MIN = 0.5, ZOOM_MAX = 2;
+
+    // Delta de pantalla a coordenada local: con zoom hay que dividir,
+    // si no el objeto se mueve más (o menos) que el dedo.
+    function moverConZoom(base, inicio, actual, zoom) {
+      return base + (actual - inicio) / zoom;
+    }
+
+    function clampZoom(z) {
+      const n = Number(z);
+      if (!Number.isFinite(n)) return 1;
+      return clamp(n, ZOOM_MIN, ZOOM_MAX);
+    }
+
+    // Zona del viewport (coords de mesa) a coordenadas locales de la capa:
+    // se suma el scroll del pan y se divide por el zoom.
+    function zonaLocal(zone, zoom, panX, panY) {
+      return {
+        x: (zone.x + panX) / zoom,
+        y: (zone.y + panY) / zoom,
+        w: zone.w / zoom,
+        h: zone.h / zoom,
+      };
     }
 
     function rectsOverlap(a, b) {
@@ -554,6 +615,9 @@
     // __PURE_END__
 
     const $mesa = document.getElementById('mesa');
+    const $viewport = document.getElementById('zoom-viewport');
+    const $sizer = document.getElementById('zoom-sizer');
+    const $zoom = document.getElementById('zoom-layer');
     const $hint = document.getElementById('empty-hint');
     const $discard = document.getElementById('discard');
     const $count = document.getElementById('obj-count');
@@ -567,6 +631,8 @@
     let noticeTimer;
     let fromUrl = false;
     let drag = null;
+    let pan = null; // paneo con la ruedita: mueve el scroll, no toca objetos
+    let zoom = 1; // solo vista: no se guarda ni se comparte
 
     function showNotice(text) {
       $notice.textContent = text;
@@ -677,8 +743,8 @@
     }
 
     function renderAll() {
-      $mesa.querySelectorAll('.al-obj').forEach(el => el.remove());
-      [...state.objects].sort((a, b) => a.z - b.z).forEach(obj => $mesa.append(makeEl(obj)));
+      $zoom.querySelectorAll('.al-obj').forEach(el => el.remove());
+      [...state.objects].sort((a, b) => a.z - b.z).forEach(obj => $zoom.append(makeEl(obj)));
       updateCount();
     }
 
@@ -705,6 +771,15 @@
     }
 
     $mesa.addEventListener('pointerdown', e => {
+      if (e.button === 1) {
+        // Pan con la ruedita: apretarla y arrastrar mueve el canvas.
+        // Frena el autoscroll nativo y el pegado con el botón medio.
+        e.preventDefault();
+        pan = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, baseL: $viewport.scrollLeft, baseT: $viewport.scrollTop };
+        try { $viewport.setPointerCapture(e.pointerId); } catch {}
+        $viewport.style.cursor = 'grabbing';
+        return;
+      }
       if (e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return;
       const el = e.target.closest('.al-obj');
       if (!el || !$mesa.contains(el)) return;
@@ -727,14 +802,20 @@
     });
 
     document.addEventListener('pointermove', e => {
+      if (pan) {
+        if (e.pointerId !== undefined && pan.pointerId !== undefined && e.pointerId !== pan.pointerId) return;
+        $viewport.scrollLeft = pan.baseL - (e.clientX - pan.startX);
+        $viewport.scrollTop = pan.baseT - (e.clientY - pan.startY);
+        return;
+      }
       if (!drag) return;
       if (e.pointerId !== undefined && drag.pointerId !== undefined && e.pointerId !== drag.pointerId) return;
       const dx = e.clientX - drag.startX, dy = e.clientY - drag.startY;
       if (!drag.moved && Math.hypot(dx, dy) > 4) drag.moved = true;
       if (!drag.moved) return;
       const s = objSize(drag.obj);
-      drag.obj.x = clamp(Math.round(drag.baseX + dx), 0, Math.max(0, $mesa.clientWidth - s.w));
-      drag.obj.y = clamp(Math.round(drag.baseY + dy), 0, Math.max(0, $mesa.clientHeight - s.h));
+      drag.obj.x = clamp(Math.round(moverConZoom(drag.baseX, drag.startX, e.clientX, zoom)), 0, Math.max(0, $mesa.clientWidth - s.w));
+      drag.obj.y = clamp(Math.round(moverConZoom(drag.baseY, drag.startY, e.clientY, zoom)), 0, Math.max(0, $mesa.clientHeight - s.h));
       drag.el.style.left = `${drag.obj.x}px`;
       drag.el.style.top = `${drag.obj.y}px`;
       const r = $discard.getBoundingClientRect();
@@ -751,7 +832,8 @@
       $discard.classList.remove('over');
       if (d.moved) {
         const s = objSize(d.obj);
-        if (centerInZone(d.obj.x, d.obj.y, s.w, s.h, discardZone())) {
+        const zona = zonaLocal(discardZone(), zoom, $viewport.scrollLeft, $viewport.scrollTop);
+        if (centerInZone(d.obj.x, d.obj.y, s.w, s.h, zona)) {
           discardObj(d.obj, d.el);
           return;
         }
@@ -777,6 +859,58 @@
     }
     document.addEventListener('pointerup', endDrag);
     document.addEventListener('pointercancel', endDrag);
+
+    function endPan(e) {
+      if (!pan) return;
+      if (e && e.pointerId !== undefined && pan.pointerId !== undefined && e.pointerId !== pan.pointerId) return;
+      pan = null;
+      $viewport.style.cursor = '';
+    }
+    document.addEventListener('pointerup', endPan);
+    document.addEventListener('pointercancel', endPan);
+
+    // Zoom (vista): el sizer mide lo lógico × zoom para que el viewport
+    // tenga scroll (pan nativo); la capa escala el dibujo exacto.
+    const $zoomLabel = document.getElementById('zoom-reset');
+    function layoutZoom() {
+      const bw = Math.max(1, $mesa.clientWidth), bh = Math.max(1, $mesa.clientHeight);
+      $sizer.style.width = `${Math.round(bw * zoom)}px`;
+      $sizer.style.height = `${Math.round(bh * zoom)}px`;
+      $zoom.style.width = `${bw}px`;
+      $zoom.style.height = `${bh}px`;
+      $zoom.style.transform = zoom === 1 ? '' : `scale(${zoom})`;
+    }
+    function setZoom(z) {
+      z = clampZoom(z);
+      if (z === zoom) return;
+      // Conserva el centro visible al cambiar de zoom.
+      const bw = Math.max(1, $mesa.clientWidth), bh = Math.max(1, $mesa.clientHeight);
+      const fx = ($viewport.scrollLeft + $viewport.clientWidth / 2) / (bw * zoom);
+      const fy = ($viewport.scrollTop + $viewport.clientHeight / 2) / (bh * zoom);
+      zoom = z;
+      layoutZoom();
+      $viewport.scrollLeft = fx * bw * zoom - $viewport.clientWidth / 2;
+      $viewport.scrollTop = fy * bh * zoom - $viewport.clientHeight / 2;
+      $zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
+    }
+    document.getElementById('zoom-in').addEventListener('click', () => setZoom(zoom + 0.25));
+    document.getElementById('zoom-out').addEventListener('click', () => setZoom(zoom - 0.25));
+    $zoomLabel.addEventListener('click', () => setZoom(1));
+    $mesa.addEventListener('wheel', e => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      setZoom(zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1));
+    }, { passive: false });
+
+    // Fullscreen de la mesa (F11 es del navegador y no se puede interceptar).
+    document.getElementById('mesa-full').addEventListener('click', async () => {
+      try {
+        if (document.fullscreenElement) await document.exitFullscreen();
+        else await $mesa.requestFullscreen();
+      } catch {
+        showNotice('No se pudo activar la pantalla completa.');
+      }
+    });
 
     $mesa.addEventListener('dblclick', e => {
       fromUrl = false;
@@ -926,7 +1060,11 @@
         if (stored) Object.assign(state, stored);
       }
       renderAll();
+      layoutZoom();
     })();
+
+    window.addEventListener('resize', layoutZoom);
+    document.addEventListener('fullscreenchange', layoutZoom);
 
     // theme toggle: Bootstrap's native data-bs-theme, remembered per browser
     (() => {

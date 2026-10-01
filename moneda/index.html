@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1fa99%3B%3C/text%3E%3C/svg%3E">
+  <title>Moneda — sí o no</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    #resultado {
+      min-height: 5rem;
+    }
+
+    #resultado.revelar {
+      animation: pop 0.18s ease-out;
+    }
+
+    @keyframes pop {
+      from { opacity: 0.2; transform: scale(0.92); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #resultado.revelar {
+        animation: none;
+      }
+    }
+
+    p.signature {
+      font-size: 0.8em;
+    }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4" style="max-width: 720px;">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">🪙 Moneda</h1>
+        <p class="text-body-secondary mb-0">Tirá la moneda: responde sí o no, mitad y mitad.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-body text-center">
+        <div id="resultado" class="d-flex align-items-center justify-content-center display-4 fw-bold" role="status" aria-live="polite">–</div>
+        <p id="tiro-caption" class="text-body-secondary small mb-3">Todavía no tiraste.</p>
+        <button id="tirar" class="btn btn-primary btn-lg w-100" type="button">🪙 Tirar</button>
+      </div>
+    </div>
+
+    <div class="alert alert-info mb-0 small" role="note">
+      🪙 <strong>Mitad y mitad:</strong> la tirada usa la misma técnica que Roller
+      (<code>crypto.getRandomValues</code> con muestreo por rechazo), así el sí y el no
+      salen con probabilidad exactamente 1/2.
+    </div>
+
+    <hr>
+
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script>
+    // __PURE_START__ (lógica sin DOM: se testea con node)
+    // Tirada equiprobable en 1..n con muestreo por rechazo (sin sesgo de módulo).
+    // Misma técnica que Roller.
+    function randInt(n) {
+      if (crypto?.getRandomValues) {
+        const range = Math.floor(4294967296 / n) * n;
+        const buf = new Uint32Array(1);
+        do { crypto.getRandomValues(buf); } while (buf[0] >= range);
+        return (buf[0] % n) + 1;
+      }
+      return Math.floor(Math.random() * n) + 1;
+    }
+
+    function resultadoMoneda(valor) {
+      return valor === 1 ? 'Sí' : 'No';
+    }
+    // __PURE_END__
+
+    const $resultado = document.getElementById('resultado');
+    const $tirar = document.getElementById('tirar');
+    const $caption = document.getElementById('tiro-caption');
+    const PARPADEO_MS = 150;
+    let tiroTimer = 0;
+
+    $tirar.addEventListener('click', () => {
+      // Parpadeo breve en cada tiro: aunque salga lo mismo que antes,
+      // siempre se nota que el botón respondió.
+      clearTimeout(tiroTimer);
+      $resultado.textContent = '…';
+      $resultado.classList.remove('revelar');
+      void $resultado.offsetWidth;
+      tiroTimer = setTimeout(() => {
+        const texto = resultadoMoneda(randInt(2));
+        $resultado.textContent = texto === 'Sí' ? '✅ Sí' : '❌ No';
+        $caption.textContent = `Tirada · ${new Date().toLocaleTimeString()}`;
+        $resultado.classList.add('revelar');
+      }, PARPADEO_MS);
+    });
+
+    // theme toggle: Bootstrap's native data-bs-theme, remembered per browser
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

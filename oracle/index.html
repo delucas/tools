@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f52e%3B%3C/text%3E%3C/svg%3E">
+  <title>Oracle — bola 8 mágica</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    input.form-control {
+      font-size: 16px;
+    }
+
+    #respuesta {
+      min-height: 5rem;
+    }
+
+    #notice {
+      position: fixed;
+      bottom: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1050;
+      max-width: min(92vw, 560px);
+      margin-bottom: 0;
+      box-shadow: var(--bs-box-shadow);
+    }
+
+    p.signature {
+      font-size: 0.8em;
+    }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4" style="max-width: 720px;">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">🔮 Oracle</h1>
+        <p class="text-body-secondary mb-0">La clásica bola 8 mágica: hacé tu pregunta y agitá.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="share" class="btn btn-outline-secondary btn-sm" type="button">🔗 Compartir</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-body">
+        <form id="ask-form">
+          <label for="pregunta" class="form-label">Tu pregunta</label>
+          <input id="pregunta" class="form-control mb-2" type="text" maxlength="200" autocomplete="off"
+            placeholder="¿Me conviene…?">
+          <button id="agitar" class="btn btn-primary w-100" type="submit">🎱 Agitar</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-body text-center">
+        <div id="respuesta" class="d-flex align-items-center justify-content-center fs-4 fw-bold" role="status" aria-live="polite">Hacé tu pregunta y agitá la bola.</div>
+      </div>
+    </div>
+
+    <div id="notice" class="alert alert-success py-2 d-none" role="status"></div>
+
+    <hr>
+
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script>
+    // __PURE_START__ (lógica sin DOM: se testea con node)
+    const RESPUESTAS = [
+      'Es seguro',
+      'Definitivamente sí',
+      'Sin ninguna duda',
+      'Sí, definitivamente',
+      'Puedes confiar en ello',
+      'Según lo veo, sí',
+      'Lo más probable',
+      'Las perspectivas son buenas',
+      'Sí',
+      'Todo apunta a que sí',
+      'No cuentes con ello',
+      'Mi respuesta es no',
+      'Mis fuentes dicen que no',
+      'Las perspectivas no son buenas',
+      'Es muy dudoso',
+      'La respuesta no es clara, inténtalo de nuevo',
+      'Pregunta de nuevo más tarde',
+      'Mejor no te lo digo ahora',
+      'No puedo predecirlo ahora',
+      'Concéntrate y vuelve a preguntar',
+    ];
+
+    // Respuesta uniforme: cada una con probabilidad 1/20.
+    function elegirRespuesta(rnd) {
+      const r = typeof rnd === 'function' ? rnd() : Math.random();
+      return RESPUESTAS[Math.floor(r * RESPUESTAS.length)];
+    }
+
+    // Link compartido: ?p=pregunta&r=índice (r se omite si aún no hay respuesta).
+    function encodeOracle(pregunta, indice) {
+      const q = new URLSearchParams();
+      if (pregunta) q.set('p', pregunta);
+      if (Number.isInteger(indice) && indice >= 0 && indice < RESPUESTAS.length) q.set('r', String(indice));
+      const s = q.toString();
+      return s ? `?${s}` : '';
+    }
+
+    function decodeOracle(search) {
+      let q;
+      try {
+        q = new URLSearchParams(search);
+      } catch {
+        return null;
+      }
+      const pregunta = q.get('p') || '';
+      let indice = -1;
+      if (q.has('r')) {
+        const r = Number(q.get('r'));
+        if (Number.isInteger(r) && r >= 0 && r < RESPUESTAS.length) indice = r;
+      }
+      if (!pregunta && indice === -1) return null;
+      return { pregunta, indice };
+    }
+    // __PURE_END__
+
+    const $form = document.getElementById('ask-form');
+    const $pregunta = document.getElementById('pregunta');
+    const $agitar = document.getElementById('agitar');
+    const $respuesta = document.getElementById('respuesta');
+    const $share = document.getElementById('share');
+    const $notice = document.getElementById('notice');
+    const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const ESPERA_MS = 700;
+    let consultando = false;
+    let noticeTimer;
+    let ultima = null; // { pregunta, indice } de la última respuesta revelada
+
+    function showNotice(text) {
+      $notice.textContent = text;
+      $notice.classList.remove('d-none');
+      clearTimeout(noticeTimer);
+      noticeTimer = setTimeout(() => $notice.classList.add('d-none'), 3500);
+    }
+
+    function copyText(text) {
+      if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
+      const input = document.createElement('textarea');
+      input.value = text;
+      input.style.position = 'fixed';
+      document.body.append(input);
+      input.select();
+      document.execCommand('copy');
+      input.remove();
+      return Promise.resolve();
+    }
+
+    function mostrarConsultando() {
+      $respuesta.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="presentation" aria-hidden="true"></span>Consultando…';
+    }
+
+    function agitar() {
+      if (consultando) return;
+      consultando = true;
+      $agitar.disabled = true;
+      if (REDUCED) {
+        revelar();
+        return;
+      }
+      mostrarConsultando();
+      setTimeout(revelar, ESPERA_MS);
+    }
+
+    function revelar() {
+      const texto = elegirRespuesta();
+      ultima = { pregunta: $pregunta.value, indice: RESPUESTAS.indexOf(texto) };
+      $respuesta.textContent = texto;
+      consultando = false;
+      $agitar.disabled = false;
+    }
+
+    $form.addEventListener('submit', e => {
+      e.preventDefault();
+      agitar();
+    });
+
+    $share.addEventListener('click', async () => {
+      // Solo se comparte la respuesta si el input no cambió desde que salió.
+      const conRespuesta = ultima && $pregunta.value === ultima.pregunta;
+      const qs = encodeOracle($pregunta.value, conRespuesta ? ultima.indice : -1);
+      const url = `${window.location.origin}${window.location.pathname}${qs}`;
+      try {
+        await copyText(url);
+        showNotice(conRespuesta
+          ? 'Se copió el enlace con la pregunta y la respuesta.'
+          : 'Se copió el enlace con la pregunta.');
+      } catch {
+        showNotice('No se pudo copiar el enlace.');
+      }
+    });
+
+    // init: si viene ?p=pregunta&r=índice se muestran tal cual (para reírse en compañía)
+    (function init() {
+      const data = decodeOracle(window.location.search);
+      if (!data) return;
+      $pregunta.value = data.pregunta;
+      if (data.indice !== -1) {
+        ultima = { pregunta: data.pregunta, indice: data.indice };
+        $respuesta.textContent = RESPUESTAS[data.indice];
+      }
+    })();
+
+    // theme toggle: Bootstrap's native data-bs-theme, remembered per browser
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

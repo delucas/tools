@@ -69,6 +69,7 @@
       cursor: grab;
       user-select: none;
       -webkit-user-select: none;
+      touch-action: none;
     }
 
     .al-obj.dragging {
@@ -264,7 +265,7 @@
       <div id="empty-hint">La mesa está vacía.<br>Agregá cartas, fichas o fibrones desde el panel.</div>
       <div id="discard" role="note" aria-label="Zona de descarte: arrastrá objetos aquí para quitarlos de la mesa.">🗑️<br>Descarte</div>
     </div>
-    <p class="text-body-secondary small mt-2 mb-0">Arrastrá con el mouse para mover. Lo que movés pasa al frente. Doble clic en una carta (o Enter con el teclado) la voltea; doble clic en el paño voltea todas; doble clic en un fibrón lo rota 90°. Arrastrá al 🗑️ Descarte para quitar objetos (o Supr con el teclado).</p>
+    <p class="text-body-secondary small mt-2 mb-0">Arrastrá con el dedo o el mouse para mover. Lo que movés pasa al frente. Doble clic en una carta (o Enter con el teclado) la voltea; doble clic en el paño voltea todas; doble clic en un fibrón lo rota 90°. Arrastrá al 🗑️ Descarte para quitar objetos (o Supr con el teclado).</p>
 
     <div id="notice" class="alert alert-success py-2 d-none" role="status"></div>
 
@@ -704,8 +705,7 @@
     }
 
     $mesa.addEventListener('pointerdown', e => {
-      if (e.pointerType && e.pointerType !== 'mouse') return; // v1: solo mouse
-      if (e.button !== undefined && e.button !== 0) return;
+      if (e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return;
       const el = e.target.closest('.al-obj');
       if (!el || !$mesa.contains(el)) return;
       const obj = findObj(Number(el.dataset.id));
@@ -721,13 +721,14 @@
         .filter(o => o.id !== obj.id)
         .map(o => ({ ...o, ...objSize(o) }));
       const startPileIds = pileMembers(obj.x, obj.y, s0.w, s0.h, startOthers).map(o => o.id);
-      drag = { id: obj.id, el, obj, startX: e.clientX, startY: e.clientY, baseX: obj.x, baseY: obj.y, moved: false, startPileIds };
+      drag = { id: obj.id, el, obj, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, baseX: obj.x, baseY: obj.y, moved: false, startPileIds };
       el.classList.add('dragging');
+      try { el.setPointerCapture(e.pointerId); } catch {}
     });
 
     document.addEventListener('pointermove', e => {
       if (!drag) return;
-      if (e.pointerType && e.pointerType !== 'mouse') return;
+      if (e.pointerId !== undefined && drag.pointerId !== undefined && e.pointerId !== drag.pointerId) return;
       const dx = e.clientX - drag.startX, dy = e.clientY - drag.startY;
       if (!drag.moved && Math.hypot(dx, dy) > 4) drag.moved = true;
       if (!drag.moved) return;
@@ -743,7 +744,7 @@
 
     function endDrag(e) {
       if (!drag) return;
-      if (e && e.pointerType && e.pointerType !== 'mouse') return;
+      if (e && e.pointerId !== undefined && drag.pointerId !== undefined && e.pointerId !== drag.pointerId) return;
       const d = drag;
       drag = null;
       d.el.classList.remove('dragging');

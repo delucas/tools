@@ -48,5 +48,7 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`azar`](./azar) | ¿azar?: frecuencias, rachas y χ² para secuencias, con puente a Roller. |
 | [`dataset`](./dataset) | Datos artificiales reproducibles con distribución, parámetros y semilla. |
 | [`n-factorial`](./n-factorial) | n! Explorador de conjuntos finitos: estructuras combinatorias con fórmulas y conteos exactos. |
+| [`moneda`](./moneda) | 🪙 Moneda: tirá y obtené un sí o un no, mitad y mitad. |
+| [`oracle`](./oracle) | 🔮 Oracle: la clásica bola 8 mágica en español, con 20 respuestas. |
 
 Cada carpeta tiene su propio `README.md` con el detalle de uso.

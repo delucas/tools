@@ -885,6 +885,8 @@
       $zoom.style.width = `${bw}px`;
       $zoom.style.height = `${bh}px`;
       $zoom.style.transform = zoom === 1 ? '' : `scale(${zoom})`;
+      // Al 100% el contenido mide lo mismo que la mesa: sin scroll (ni por redondeos).
+      $viewport.style.overflow = zoom === 1 ? 'hidden' : 'auto';
     }
     function setZoom(z) {
       z = clampZoom(z);

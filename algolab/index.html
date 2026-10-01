@@ -423,6 +423,11 @@
       };
     }
 
+    // Orden de la cascada de volteo: de arriba abajo y de izquierda a derecha.
+    function ordenCascada(cartas) {
+      return [...cartas].sort((a, b) => (a.y - b.y) || (a.x - b.x));
+    }
+
     function rectsOverlap(a, b) {
       const x = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
       const y = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
@@ -632,6 +637,7 @@
     let fromUrl = false;
     let drag = null;
     let pan = null; // paneo con la ruedita: mueve el scroll, no toca objetos
+    let volteando = false; // cascada de volteo en curso
     let zoom = 1; // solo vista: no se guarda ni se comparte
 
     function showNotice(text) {
@@ -924,10 +930,28 @@
         else return;
         renderObj(el, obj);
       } else {
-        const cards = state.objects.filter(o => o.kind === 'card');
-        if (!cards.length) return;
-        cards.forEach(o => { o.bocaAbajo = !o.bocaAbajo; });
-        renderAll();
+        if (volteando) return; // una cascada en curso: no re-disparar
+        const ids = ordenCascada(state.objects.filter(o => o.kind === 'card')).map(o => o.id);
+        if (!ids.length) return;
+        fromUrl = false;
+        volteando = true;
+        const paso = Math.min(50, Math.floor(1500 / ids.length));
+        ids.forEach((id, i) => {
+          setTimeout(() => {
+            const obj = findObj(id);
+            if (obj && obj.kind === 'card') {
+              obj.bocaAbajo = !obj.bocaAbajo;
+              const one = $zoom.querySelector(`[data-id="${id}"]`);
+              if (one) renderObj(one, obj);
+            }
+            if (i === ids.length - 1) {
+              volteando = false;
+              persist();
+              updateCount();
+            }
+          }, paso * (i + 1));
+        });
+        return; // el persist lo hace el último paso
       }
       persist();
     });

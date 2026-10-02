@@ -51,5 +51,6 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`moneda`](./moneda) | 🪙 Moneda: tirá y obtené un sí o un no, mitad y mitad. |
 | [`oracle`](./oracle) | 🔮 Oracle: la clásica bola 8 mágica en español, con 20 respuestas. |
 | [`between`](./between) | ⏳ Between: diferencias entre fechas en el orden que las pongas, con línea de tiempo. |
+| [`8`](./8) | 🔢 8: el juego del ocho, con óptimo exacto y ranking por nivel. |
 
 Cada carpeta tiene su propio `README.md` con el detalle de uso.

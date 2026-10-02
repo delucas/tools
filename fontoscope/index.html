@@ -242,11 +242,15 @@
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) {
           const s = JSON.parse(raw);
+          if (!s || typeof s !== 'object') throw new Error('ajustes');
+          const sizes = Array.isArray(s.sizes)
+            ? s.sizes.filter((n) => Number.isFinite(n) && n > 0 && n <= 500).slice(0, 40)
+            : [];
           return {
-            text: typeof s.text === 'string' ? s.text : DEFAULT_TEXT,
-            sizes: Array.isArray(s.sizes) && s.sizes.length ? s.sizes.filter(n => n > 0 && n <= 500) : DEFAULT_SIZES.slice(),
-            tracking: typeof s.tracking === 'number' ? s.tracking : 0,
-            leading: typeof s.leading === 'number' ? s.leading : 1.2
+            text: typeof s.text === 'string' ? s.text.slice(0, 2000) : DEFAULT_TEXT,
+            sizes: sizes.length ? sizes : DEFAULT_SIZES.slice(),
+            tracking: Number.isFinite(s.tracking) ? s.tracking : 0,
+            leading: Number.isFinite(s.leading) && s.leading > 0 && s.leading <= 10 ? s.leading : 1.2,
           };
         }
       } catch { /* defaults */ }

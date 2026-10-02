@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x23f3%3B%3C/text%3E%3C/svg%3E">
+  <title>Between — Diferencias entre fechas</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    #app input, #app select { font-size: 16px; }
+    .mono { font-family: var(--bs-font-monospace); }
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
+    .fila .handle { cursor: grab; }
+    p.signature { font-size: 0.8em; }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4" style="max-width: 960px;">
+    <div id="app">
+      <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+      <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+        <div>
+          <h1 class="h3 mb-1">⏳ Between</h1>
+          <p class="text-body-secondary mb-0">Diferencias entre fechas, en el orden que las pongas.</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ shared ? '¡Copiado!' : '🔗 Compartir' }}</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset">🗑️ Reiniciar</button>
+          <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+        </div>
+      </div>
+
+      <div v-if="notice" class="alert py-2 alert-flotante" :class="noticeClass" role="status">{{ notice }}</div>
+
+      <section class="card mb-3">
+        <div class="card-body">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+            <h2 class="h6 mb-0">Fechas</h2>
+            <span class="d-flex flex-wrap gap-2">
+              <button class="btn btn-outline-primary btn-sm" type="button" @click="addNow">⏱ + Agregar ahora</button>
+              <button class="btn btn-primary btn-sm" type="button" @click="add">+ Agregar fecha</button>
+            </span>
+          </div>
+          <ul id="lista" class="list-group mb-2">
+            <li v-for="(f, i) in fechas" :key="f.id" class="fila list-group-item d-flex flex-wrap align-items-center gap-2" :class="{ 'list-group-item-warning': !esValida(f) }">
+              <span class="handle text-body-secondary" title="Arrastrar para reordenar">⠿</span>
+              <span class="badge text-bg-secondary">{{ etiqueta(i) }}</span>
+              <span v-if="!esValida(f)" class="badge text-bg-warning" title="Esta fecha se ignora en el cálculo">revisá</span>
+              <template v-if="f.isNow">
+                <span class="badge text-bg-info">⏱ ahora (se actualiza)</span>
+                <span class="small mono">{{ vivoTxt(f) }}</span>
+                <div class="form-check mb-0">
+                  <input :id="'h-' + f.id" type="checkbox" class="form-check-input" v-model="f.hasTime" @change="onEdit">
+                  <label :for="'h-' + f.id" class="form-check-label small">con hora</label>
+                </div>
+              </template>
+              <template v-else>
+                <label :for="'d-' + f.id" class="visually-hidden">Fecha {{ i + 1 }}</label>
+                <input :id="'d-' + f.id" type="date" class="form-control" style="width:auto;" v-model="f.date" @change="onEdit">
+                <div class="form-check mb-0">
+                  <input :id="'h-' + f.id" type="checkbox" class="form-check-input" v-model="f.hasTime" @change="onEdit">
+                  <label :for="'h-' + f.id" class="form-check-label small">con hora</label>
+                </div>
+                <template v-if="f.hasTime">
+                  <label :for="'t-' + f.id" class="visually-hidden">Hora {{ i + 1 }}</label>
+                  <input :id="'t-' + f.id" type="time" class="form-control" style="width:auto;" v-model="f.time" @input="onEdit">
+                </template>
+              </template>
+              <span class="d-flex gap-1 ms-auto">
+                <button class="btn btn-outline-secondary btn-sm" type="button" title="Duplicar" @click="dup(i)">⧉</button>
+                <button class="btn btn-outline-danger btn-sm" type="button" title="Quitar" @click="remove(i)">🗑️</button>
+              </span>
+            </li>
+          </ul>
+          <p v-if="!fechas.length" class="text-body-secondary small mb-0">Agregá al menos una fecha para empezar.</p>
+        </div>
+      </section>
+
+      <section class="card mb-3">
+        <div class="card-body">
+          <h2 class="h6">Resultados</h2>
+          <p v-if="modoAhora" class="small mb-2">Ahora: <span class="mono">{{ ahoraTxt }}</span></p>
+          <p v-if="!validas.length" class="text-body-secondary small mb-0">Poné al menos una fecha válida para ver diferencias.</p>
+          <ul v-else class="list-group">
+            <li v-for="(t, i) in tramos" :key="i" class="list-group-item">
+              <div class="fw-bold">{{ t.titulo }}</div>
+              <div>{{ t.texto }}</div>
+              <div class="text-body-secondary small mono">{{ t.totales }}</div>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section v-if="linea" class="card mb-3">
+        <div class="card-body">
+          <h2 class="h6">Línea de tiempo</h2>
+          <div class="position-relative mx-2" style="height:64px;">
+            <div class="position-absolute w-100 bg-secondary-subtle rounded" style="height:6px;top:8px;"></div>
+            <div v-for="(s, i) in linea.segs" :key="i" class="position-absolute bg-primary rounded" :style="{ left: s.from + '%', width: s.w + '%', height: '6px', top: '8px' }"></div>
+            <div v-for="(p, i) in linea.puntos" :key="i" class="position-absolute" :style="{ left: p.pct + '%' }">
+              <span class="d-block rounded-circle bg-primary border border-white" style="width:14px;height:14px;margin:4px 0 0 -7px;"></span>
+              <span class="d-block small mono text-nowrap text-center" style="transform:translateX(-50%);">{{ p.et }}</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="tramos.length" class="card mb-3">
+        <div class="card-body">
+          <h2 class="h6">Duración por tramo</h2>
+          <div style="position:relative;height:200px;" class="mb-2"><canvas id="chart-tramos"></canvas></div>
+          <div class="table-responsive">
+            <table class="table table-sm mono small mb-0">
+              <thead><tr><th>Tramo</th><th class="text-end">Minutos</th><th class="text-end">Horas</th><th class="text-end">Días</th></tr></thead>
+              <tbody>
+                <tr v-for="(t, i) in tramos" :key="i">
+                  <td>Tramo {{ i + 1 }}</td>
+                  <td class="text-end">{{ t.mins.toLocaleString('es') }}</td>
+                  <td class="text-end">{{ fmtNum(t.mins / 60) }}</td>
+                  <td class="text-end">{{ fmtNum(t.mins / 1440) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <hr>
+
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.5.42/vue.global.prod.min.js"
+    integrity="sha512-PREsKi18CyKMgwXMJWtvkzinqjiN0znVfDovmVadp7pKiUpyNGtq7bD2fKElDBmdfH4DGJz8pmAdgihN8NZ8TQ=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"
+    integrity="sha512-WoViKhKD4qI2WruSZqv9+kvM4WfFhUMQCLN4QlDTt5aU56fLQy2gYoxWIqlEnXqJy/+Ac5q/hk1oWfqnMDhwMA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+
+  <script>
+    const STORAGE_KEY = 'between';
+
+    let uid = 0;
+    const nid = () => 'f' + (++uid) + '-' + Date.now().toString(36);
+    const mk = (date, hasTime, time) => ({ id: nid(), date: date || '', hasTime: !!hasTime, time: time || '12:00', isNow: false });
+    const mkNow = (hasTime) => ({ id: nid(), date: '', hasTime: !!hasTime, time: '12:00', isNow: true });
+
+    // Hoy a las 00:00 en hora local (para la fila "ahora" sin hora: día calendario).
+    function inicioHoy() {
+      const n = new Date();
+      return new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime();
+    }
+
+    function hoyLocal() {
+      const n = new Date();
+      return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+    }
+
+    function masDias(base, dias) {
+      const [y, m, d] = base.split('-').map(Number);
+      const dt = new Date(y, m - 1, d + dias);
+      return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+    }
+
+    function defecto() {
+      const hoy = hoyLocal();
+      return [mk(hoy, false, '12:00'), mk(masDias(hoy, 10), false, '12:00')];
+    }
+
+    // Parseo en hora local (nunca UTC): 'YYYY-MM-DD' + 'HH:MM'|null → ms, o null si inválido.
+    function toMs(dateStr, timeStr) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr || '')) return null;
+      const [y, m, d] = dateStr.split('-').map(Number);
+      let hh = 0, mm = 0;
+      if (timeStr !== null && timeStr !== undefined) {
+        if (!/^\d{2}:\d{2}$/.test(timeStr)) return null;
+        hh = Number(timeStr.slice(0, 2));
+        mm = Number(timeStr.slice(3, 5));
+        if (hh > 23 || mm > 59) return null;
+      }
+      const dt = new Date(y, m - 1, d, hh, mm);
+      if (dt.getFullYear() !== y || dt.getMonth() !== m - 1 || dt.getDate() !== d) return null;
+      return dt.getTime();
+    }
+
+    // Suma calendario con tope a fin de mes (31 ene + 1 mes = 29 feb, no 2 mar).
+    function addMonths(dt, n) {
+      const r = new Date(dt.getTime());
+      const day = r.getDate();
+      r.setDate(1);
+      r.setMonth(r.getMonth() + n);
+      const last = new Date(r.getFullYear(), r.getMonth() + 1, 0).getDate();
+      r.setDate(Math.min(day, last));
+      return r;
+    }
+
+    function addDays(dt, n) {
+      return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate() + n, dt.getHours(), dt.getMinutes());
+    }
+
+    // Descomposición calendario entre dos instantes (msA <= msB): años → meses → días,
+    // y horas/minutos del resto solo si conHora.
+    function descomponer(msA, msB, conHora) {
+      const E = new Date(msB);
+      let cur = new Date(msA);
+      let y = 0, m = 0, d = 0, h = 0, min = 0;
+      let guard = 0;
+      while (addMonths(cur, 12).getTime() <= E.getTime() && guard++ < 10000) { cur = addMonths(cur, 12); y++; }
+      guard = 0;
+      while (addMonths(cur, 1).getTime() <= E.getTime() && guard++ < 10000) { cur = addMonths(cur, 1); m++; }
+      guard = 0;
+      while (addDays(cur, 1).getTime() <= E.getTime() && guard++ < 10000) { cur = addDays(cur, 1); d++; }
+      if (conHora) {
+        let rest = E.getTime() - cur.getTime();
+        h = Math.floor(rest / 3600000);
+        rest -= h * 3600000;
+        min = Math.floor(rest / 60000);
+      }
+      return { y, m, d, h, min };
+    }
+
+    function fmtPartes(p) {
+      const out = [];
+      if (p.y) out.push(p.y + (p.y === 1 ? ' año' : ' años'));
+      if (p.m) out.push(p.m + (p.m === 1 ? ' mes' : ' meses'));
+      if (p.d) out.push(p.d + (p.d === 1 ? ' día' : ' días'));
+      if (p.h) out.push(p.h + ' h');
+      if (p.min) out.push(p.min + ' min');
+      return out.length ? out.join(', ') : 'mismo momento';
+    }
+
+    function sanitizarCompacto(arr) {
+      if (!Array.isArray(arr)) return null;
+      const filas = [];
+      for (const it of arr) {
+        if (!it || typeof it !== 'object') continue;
+        if (it.d === '@ahora') {
+          filas.push(mkNow(it.t === '@hora'));
+          if (filas.length >= 50) break;
+          continue;
+        }
+        const d = typeof it.d === 'string' ? it.d : '';
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
+        const [y, m, dd] = d.split('-').map(Number);
+        const chk = new Date(y, m - 1, dd);
+        if (chk.getFullYear() !== y || chk.getMonth() !== m - 1 || chk.getDate() !== dd) continue;
+        const t = typeof it.t === 'string' && /^\d{2}:\d{2}$/.test(it.t) ? it.t : null;
+        filas.push(mk(d, t !== null, t || '12:00'));
+        if (filas.length >= 50) break;
+      }
+      return filas.length ? filas : null;
+    }
+
+    function estadoInicial() {
+      const q = new URLSearchParams(window.location.search);
+      const raw = q.get('d');
+      if (raw !== null) {
+        try {
+          const filas = sanitizarCompacto(JSON.parse(raw));
+          if (filas) return { fechas: filas, fromUrl: true };
+        } catch {}
+      }
+      try {
+        const guardado = localStorage.getItem(STORAGE_KEY);
+        if (guardado) {
+          const filas = sanitizarCompacto(JSON.parse(guardado));
+          if (filas) return { fechas: filas, fromUrl: false };
+        }
+      } catch {}
+      return { fechas: defecto(), fromUrl: false };
+    }
+
+    const init = estadoInicial();
+    let noticeTimeout;
+    let sortableEl = null; // fuera de data: Vue lo envolvería en un Proxy y rompería la identidad
+    const app = Vue.createApp({
+      data() {
+        return { fechas: init.fechas, fromUrl: init.fromUrl, notice: '', noticeClass: 'alert-success', shared: false, storageWarned: false, ahoraMs: Date.now(), timer: null };
+      },
+      computed: {
+        validas() {
+          const out = [];
+          this.fechas.forEach((f, idx) => {
+            // La fila "ahora" es viva: vale el instante actual (o el día de hoy si va sin hora).
+            const ms = f.isNow ? (f.hasTime ? this.ahoraMs : inicioHoy()) : toMs(f.date, f.hasTime ? f.time : null);
+            if (ms !== null) out.push({ idx, f, ms });
+          });
+          return out;
+        },
+        modoAhora() { return this.validas.length === 1; },
+        ahoraTxt() {
+          return new Date(this.ahoraMs).toLocaleString('es', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        },
+        tramos() {
+          const v = this.validas;
+          if (!v.length) return [];
+          if (v.length === 1) {
+            const a = v[0];
+            const et = this.etiquetaCorta(a);
+            const S = Math.min(a.ms, this.ahoraMs), E = Math.max(a.ms, this.ahoraMs);
+            const partes = fmtPartes(descomponer(S, E, a.f.hasTime));
+            const texto = partes === 'mismo momento' ? 'es ahora mismo.'
+              : (a.ms < this.ahoraMs ? `hace ${partes}.` : `faltan ${partes}.`);
+            return [{ titulo: `${et} ↔ ahora`, texto, totales: this.totales(a.ms, this.ahoraMs), mins: Math.round(Math.abs(this.ahoraMs - a.ms) / 60000) }];
+          }
+          const out = [];
+          for (let k = 0; k < v.length - 1; k++) out.push(this.tramoEntre(v[k], v[k + 1]));
+          return out;
+        },
+        linea() {
+          const pts = this.validas.map((v) => ({ et: this.etiqueta(v.idx), ms: v.ms }));
+          if (this.modoAhora) pts.push({ et: 'ahora', ms: this.ahoraMs });
+          if (!pts.length) return null;
+          const ord = [...pts].sort((a, b) => a.ms - b.ms);
+          const min = ord[0].ms, total = ord[ord.length - 1].ms - min;
+          const puntos = ord.map((p, i) => ({
+            et: p.et,
+            pct: total ? ((p.ms - min) / total) * 100 : (ord.length === 1 ? 50 : (i / (ord.length - 1)) * 100),
+          }));
+          const segs = [];
+          for (let k = 0; k < puntos.length - 1; k++) {
+            segs.push({ from: puntos[k].pct, w: puntos[k + 1].pct - puntos[k].pct });
+          }
+          return { puntos, segs };
+        },
+      },
+      methods: {
+        etiqueta(i) { return i < 26 ? String.fromCharCode(65 + i) : String(i + 1); },
+        etiquetaCorta(v) {
+          if (v.f.isNow) return `${this.etiqueta(v.idx)} (ahora, ${this.vivoTxt(v.f)})`;
+          const base = new Date(v.ms).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' });
+          const hora = v.f.hasTime ? ', ' + new Date(v.ms).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }) : '';
+          return `${this.etiqueta(v.idx)} (${base}${hora})`;
+        },
+        vivoTxt(f) {
+          if (f.hasTime) return new Date(this.ahoraMs).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
+          return 'hoy ' + new Date(inicioHoy()).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' });
+        },
+        totales(msA, msB) {
+          const min = Math.round(Math.abs(msB - msA) / 60000);
+          const f = (x) => Number(x).toLocaleString('es', { maximumFractionDigits: 2 });
+          return `${f(min)} min · ${f(min / 60)} h · ${f(min / 1440)} días`;
+        },
+        tramoEntre(a, b) {
+          const S = Math.min(a.ms, b.ms), E = Math.max(a.ms, b.ms);
+          const conHora = a.f.hasTime || b.f.hasTime;
+          const partes = fmtPartes(descomponer(S, E, conHora));
+          const dir = b.ms >= a.ms ? 'posterior' : 'anterior';
+          return {
+            titulo: `${this.etiquetaCorta(a)} → ${this.etiquetaCorta(b)}`,
+            texto: partes === 'mismo momento' ? 'mismo momento.' : `${this.etiqueta(b.idx)} es ${dir} a ${this.etiqueta(a.idx)} por ${partes}.`,
+            totales: this.totales(a.ms, b.ms),
+            mins: Math.round(Math.abs(b.ms - a.ms) / 60000),
+          };
+        },
+        fmtNum(x) { return Number(x).toLocaleString('es', { maximumFractionDigits: 2 }); },
+        renderChart() {
+          const canvas = document.getElementById('chart-tramos');
+          if (typeof Chart !== 'undefined' && canvas) {
+            const viejo = Chart.getChart(canvas);
+            if (viejo) viejo.destroy();
+          }
+          if (!canvas || typeof Chart === 'undefined' || !this.tramos.length) return;
+          new Chart(canvas, {
+            type: 'bar',
+            data: {
+              labels: this.tramos.map((t, i) => 'Tramo ' + (i + 1)),
+              datasets: [{ data: this.tramos.map((t) => t.mins) }],
+            },
+            options: {
+              indexAxis: 'y',
+              plugins: { legend: { display: false } },
+              scales: { x: { title: { display: true, text: 'minutos' } } },
+            },
+          });
+        },
+        compacto() { return this.fechas.map((f) => (f.isNow ? { d: '@ahora', t: f.hasTime ? '@hora' : null } : { d: f.date, t: f.hasTime ? f.time : null })); },
+        persist() {
+          if (this.fromUrl) return; // un link compartido no pisa lo guardado hasta el primer cambio
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(this.compacto()));
+          } catch {
+            if (!this.storageWarned) {
+              this.storageWarned = true;
+              this.avisar('No se pudo guardar en este navegador (cuota llena o modo privado): sigo en memoria.', 'alert-danger', 6000);
+            }
+          }
+        },
+        esValida(f) { return f.isNow ? true : toMs(f.date, f.hasTime ? f.time : null) !== null; },
+        onEdit() { this.fromUrl = false; this.persist(); this.$nextTick(() => this.renderChart()); },
+        add() { this.fechas.push(mk(hoyLocal(), false, '12:00')); this.onEdit(); },
+        addNow() { this.fechas.push(mkNow(true)); this.onEdit(); },
+        dup(i) {
+          const f = this.fechas[i];
+          this.fechas.splice(i + 1, 0, f.isNow ? mkNow(f.hasTime) : mk(f.date, f.hasTime, f.time));
+          this.onEdit();
+        },
+        remove(i) { this.fechas.splice(i, 1); this.onEdit(); },
+        avisar(texto, clase, ms) {
+          this.notice = texto;
+          this.noticeClass = clase || 'alert-success';
+          clearTimeout(noticeTimeout);
+          noticeTimeout = setTimeout(() => { this.notice = ''; }, ms || 3500);
+        },
+        share() {
+          const url = `${window.location.origin}${window.location.pathname}?d=${encodeURIComponent(JSON.stringify(this.compacto()))}`;
+          const done = () => {
+            this.shared = true;
+            setTimeout(() => { this.shared = false; }, 1500);
+          };
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(done, () => this.avisar('No se pudo copiar automáticamente, copiá a mano: ' + url, 'alert-danger', 12000));
+          } else {
+            this.avisar('Copiá a mano: ' + url, 'alert-danger', 12000);
+          }
+        },
+        reset() {
+          try { localStorage.removeItem(STORAGE_KEY); } catch {}
+          this.fechas = defecto();
+          this.fromUrl = false;
+          history.replaceState(null, '', window.location.pathname);
+          this.persist();
+          this.$nextTick(() => this.renderChart());
+          this.avisar('Se reinició al ejemplo.');
+        },
+        initSortable() {
+          if (!window.Sortable) return;
+          const el = document.getElementById('lista');
+          if (!el || sortableEl === el) return;
+          sortableEl = el;
+          new Sortable(el, {
+            draggable: '.fila',
+            handle: '.handle',
+            animation: 150,
+            onEnd: (evt) => {
+              if (evt.oldIndex === evt.newIndex) return;
+              const [f] = this.fechas.splice(evt.oldIndex, 1);
+              this.fechas.splice(evt.newIndex, 0, f);
+              this.onEdit();
+            },
+          });
+        },
+      },
+      mounted() { this.initSortable(); this.$nextTick(() => this.renderChart()); },
+      updated() { this.initSortable(); },
+      created() {
+        // Todo se refresca una vez por minuto: la fila "ahora", el modo 1-fecha y el gráfico.
+        this.timer = setInterval(() => {
+          if (document.hidden) return;
+          this.ahoraMs = Date.now();
+          this.$nextTick(() => this.renderChart());
+        }, 60000);
+      },
+      beforeUnmount() { clearInterval(this.timer); },
+    });
+    app.mount('#app');
+
+    // theme toggle: Bootstrap's native data-bs-theme, remembered per browser
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const leer = () => { try { return localStorage.getItem('theme'); } catch { return null; } };
+      const guardar = (t) => { try { localStorage.setItem('theme', t); } catch {} };
+      const initial = leer() || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        guardar(next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -9,6 +9,7 @@ Este repositorio reúne herramientas web autocontenidas. Cada herramienta vive e
 - Preferir JavaScript vanilla; usar librerías por CDN solo si reducen trabajo de forma significativa.
 - Si se necesita estado, preferir Vue.js o JavaScript vanilla, antes de proponer cualquier otra alternativa.
 - Fijar versiones exactas de todo CDN; nunca usar `latest` ni versiones implícitas. Reutilizar los mismos CDN y versiones ya usados en otras herramientas (Bootstrap, Vue.js, SortableJS) para mantener consistencia.
+- Límite de 1000 líneas de JavaScript embebido por herramienta (se mide sumando los bloques `<script>` sin `src`). Si una herramienta lo supera, analizar si merece una app dedicada fuera de este repo en vez de crecer acá.
 - El contenido, nombres de carpetas y READMEs van en español, salvo que se pida expresamente otro idioma.
 - La licencia del repositorio es MIT (`LICENSE` raíz); no hace falta duplicarla en cada herramienta.
 

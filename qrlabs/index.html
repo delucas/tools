@@ -25,6 +25,12 @@
         font-size: 16px;
         font-family: var(--bs-font-monospace);
       }
+      #f-url,
+      #f-ssid,
+      #f-pass,
+      #f-email {
+        font-size: 16px;
+      }
     }
 
     p.signature {
@@ -147,7 +153,7 @@
     </section>
 
     <hr>
-    <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
   </main>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.5.2/qrcode.min.js"
@@ -336,9 +342,12 @@
         return svg + '</svg>';
       }
 
+      // Desde URL compartida (?d=) no se toca localStorage hasta la primera edición.
+      let fromUrl = getQueryParam('d') !== null;
+
       function render() {
         const state = readState();
-        writeStore(state, readStore().history);
+        if (!fromUrl) writeStore(state, readStore().history);
         Object.entries(panels).forEach(([key, panel]) => panel.classList.toggle('d-none', key !== state.t));
         fields.pass.disabled = state.sec === 'nopass';
         const payload = buildPayload(state);
@@ -352,7 +361,7 @@
         qr.make();
         currentSvg = drawModules(qr, parseInt(state.size, 10));
         payloadEl.textContent = payload;
-        scheduleHistorySave();
+        if (!fromUrl) scheduleHistorySave();
       }
 
       // Guarda al historial cuando el QR lleva un rato estable (evita una
@@ -364,6 +373,7 @@
       }
 
       function saveHistoryNow() {
+        if (fromUrl) return;
         const state = readState();
         const payload = buildPayload(state);
         if (!payload) return;
@@ -403,6 +413,7 @@
       $('history-list').addEventListener('click', (e) => {
         const loadBtn = e.target.closest('[data-load]');
         if (loadBtn) {
+          fromUrl = false;
           const store = readStore();
           const idx = store.history.findIndex(entry => entry.id === loadBtn.dataset.load);
           if (idx < 0) return;
@@ -417,6 +428,7 @@
         }
         const delBtn = e.target.closest('[data-del]');
         if (delBtn) {
+          fromUrl = false;
           const store = readStore();
           writeStore(store.form, store.history.filter(entry => entry.id !== delBtn.dataset.del));
           renderHistory();
@@ -437,6 +449,7 @@
         clearTimeout(clearTimer);
         clearArmed = false;
         btn.textContent = 'Borrar historial';
+        fromUrl = false;
         writeStore(readStore().form, []);
         renderHistory();
       });
@@ -492,18 +505,20 @@
       });
 
       $('reset').addEventListener('click', () => {
-        writeStore({ ...DEFAULTS }, readStore().history);
+        fromUrl = false;
+        try { localStorage.removeItem(STORAGE_KEY); } catch {}
         writeState({ ...DEFAULTS });
         history.replaceState(null, '', window.location.pathname);
         render();
+        renderHistory();
       });
 
       document.querySelectorAll('input[name="tipo"], input[name="tamano"]').forEach(el => {
-        el.addEventListener('change', render);
+        el.addEventListener('change', () => { fromUrl = false; render(); });
       });
       Object.values(fields).forEach(el => {
-        el.addEventListener('input', render);
-        el.addEventListener('change', render);
+        el.addEventListener('input', () => { fromUrl = false; render(); });
+        el.addEventListener('change', () => { fromUrl = false; render(); });
       });
 
       const boot = loadState();

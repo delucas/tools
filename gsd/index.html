@@ -14,6 +14,7 @@
   <style>
     [v-cloak] { display: none; }
     p.signature { font-size: 0.8em; }
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
     .task-done .task-text { text-decoration: line-through; }
     label.task-text { cursor: pointer; }
     .drag-handle {
@@ -42,7 +43,7 @@
       </div>
     </div>
 
-    <div v-if="notice" class="alert alert-success py-2" role="status">{{ notice }}</div>
+    <div v-if="notice" class="alert alert-success alert-flotante py-2" role="status">{{ notice }}</div>
 
     <div class="row g-3">
       <div class="col-12 col-md-4">
@@ -371,7 +372,8 @@
           newText: '',
           shared: false,
           notice: '',
-          pendingImport: state.isSnapshot ? 0 : state.importedCount
+          pendingImport: state.isSnapshot ? 0 : state.importedCount,
+          fromUrl: state.isSnapshot === true
         };
       },
       watch: {
@@ -421,6 +423,8 @@
       },
       methods: {
         save() {
+          // Un snapshot por URL no pisa lo guardado; se salta una sola vez y listo.
+          if (this.fromUrl) { this.fromUrl = false; return; }
           localStorage.setItem(STORAGE_KEY, JSON.stringify({ lists: this.lists, selectedId: this.selectedId }));
         },
         showNotice(text) {
@@ -574,7 +578,7 @@
           this.showNotice(this.pendingImport === 1 ? 'Se agregó 1 lista sin borrar las demás.' : `Se agregaron ${this.pendingImport} listas sin borrar las demás.`);
           this.pendingImport = 0;
         }
-        this.save();
+        if (!this.fromUrl) this.save();
         this.initSortable();
       }
     });

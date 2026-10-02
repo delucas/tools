@@ -54,12 +54,12 @@
               </select>
               <div class="form-text mb-3">{{ descDist }}</div>
               <div class="row g-2 mb-3" v-if="dist==='uniforme'">
-                <div class="col-6">
+                <div class="col-12 col-sm-6">
                   <label class="form-label small mb-1" for="pa">Mínimo a</label>
                   <input id="pa" class="form-control" type="number" step="any" v-model.number="pa" @input="onParam">
                   <div class="form-text">{{ ayudaPa }}</div>
                 </div>
-                <div class="col-6">
+                <div class="col-12 col-sm-6">
                   <label class="form-label small mb-1" for="pb">Máximo b</label>
                   <input id="pb" class="form-control" type="number" step="any" v-model.number="pb" @input="onParam">
                   <div class="form-text">{{ ayudaPb }}</div>
@@ -72,24 +72,24 @@
                 </div>
               </div>
               <div class="row g-2 mb-3" v-if="dist==='normal'">
-                <div class="col-6">
+                <div class="col-12 col-sm-6">
                   <label class="form-label small mb-1" for="pa">Media μ</label>
                   <input id="pa" class="form-control" type="number" step="any" v-model.number="pa" @input="onParam">
                   <div class="form-text">{{ ayudaPa }}</div>
                 </div>
-                <div class="col-6">
+                <div class="col-12 col-sm-6">
                   <label class="form-label small mb-1" for="pb">Desvío σ</label>
                   <input id="pb" class="form-control" type="number" min="0.0001" step="any" v-model.number="pb" @input="onParam">
                   <div class="form-text">{{ ayudaPb }}</div>
                 </div>
               </div>
               <div class="row g-2 mb-3" v-if="dist==='binomial'">
-                <div class="col-6">
+                <div class="col-12 col-sm-6">
                   <label class="form-label small mb-1" for="pa">Ensayos n</label>
                   <input id="pa" class="form-control" type="number" min="1" max="200" step="1" v-model.number="pa" @input="onParam">
                   <div class="form-text">{{ ayudaPa }}</div>
                 </div>
-                <div class="col-6">
+                <div class="col-12 col-sm-6">
                   <label class="form-label small mb-1" for="pb">Prob. p</label>
                   <input id="pb" class="form-control" type="number" min="0.01" max="0.99" step="0.01" v-model.number="pb" @input="onParam">
                   <div class="form-text">{{ ayudaPb }}</div>
@@ -106,12 +106,12 @@
                 <div class="form-text">{{ ayudaPa }}</div>
               </div>
               <div class="row g-2">
-                <div class="col-6">
+                <div class="col-12 col-sm-6">
                   <label class="form-label small mb-1" for="nobs">Observaciones</label>
                   <input id="nobs" class="form-control" type="number" min="2" max="50000" step="1" v-model.number="nobs" @input="onParam">
                   <div class="form-text">Entre 2 y 50.000.</div>
                 </div>
-                <div class="col-6">
+                <div class="col-12 col-sm-6">
                   <label class="form-label small mb-1" for="sem">Semilla</label>
                   <div class="input-group">
                     <input id="sem" class="form-control" type="number" min="0" step="1" v-model.number="semilla" @input="onParam">
@@ -128,7 +128,7 @@
           <div class="card mb-3">
             <div class="card-body">
               <h2 class="h6">Resumen <small class="text-body-secondary fw-normal" v-if="datos">({{ datos.length }} valores)</small></h2>
-              <div v-if="errorParam" class="alert alert-danger py-2 small" role="alert">{{ errorParam }}</div>
+              <div v-if="errorParam" class="alert alert-danger py-2 small alert-flotante" role="alert">{{ errorParam }}</div>
               <div v-else-if="resumen">
                 <dl class="row small mb-2">
                   <div class="col-4" v-for="it in resumen" :key="it[0]">

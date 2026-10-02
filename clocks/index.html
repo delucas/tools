@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" dir="ltr">
+<html lang="es">
 
 <head>
   <meta charset="UTF-8">
@@ -37,6 +37,7 @@
     p.signature {
       font-size: 0.8em;
     }
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
   </style>
 </head>
 
@@ -44,42 +45,45 @@
 
   <div id="app" class="container py-4">
 
-    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← All tools</a>
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
     <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
-      <h1 class="h3 mb-0">Clocks... assemble!</h1>
+      <div>
+        <h1 class="h3 mb-1">Clocks... assemble!</h1>
+        <p class="text-body-secondary mb-0">Reloj mundial para trackear la hora de tu equipo o contactos.</p>
+      </div>
       <div class="d-flex flex-wrap gap-2">
-        <button class="btn btn-outline-secondary btn-sm" type="button" v-on:click="share">{{ shared ? '✅ Copied!' : '🔗 Share' }}</button>
-        <button class="btn btn-outline-secondary btn-sm" type="button" v-on:click="reset">🗑️ Reset</button>
+        <button class="btn btn-outline-secondary btn-sm" type="button" v-on:click="share">{{ shared ? '✅ ¡Copiado!' : '🔗 Compartir' }}</button>
+        <button class="btn btn-outline-secondary btn-sm" type="button" v-on:click="reset">🗑️ Reiniciar</button>
         <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
       </div>
     </div>
     <hr>
 
-    <div class="alert alert-info alert-dismissible py-2 mb-3" v-if="showIntro && people.length == 0">
+    <div class="alert alert-info alert-dismissible alert-flotante py-2 mb-3" v-if="showIntro && people.length == 0">
       <div class="d-flex justify-content-between align-items-start gap-2">
-        <p class="mb-0">Having difficulties tracking <strong>what time is it</strong> for your contacts around the globe?
+        <p class="mb-0">¿Te cuesta saber <strong>qué hora es</strong> para tus contactos en otros países?
         <br>
-        This simple tool will help you with that! Just start adding them.
+        ¡Esta herramienta te ayuda con eso! Empezá agregándolos.
         <br>
-        And don't worry: <em>none of your data is sent to our server</em>.</p>
-        <button type="button" class="btn-close flex-shrink-0" style="font-size: 0.65rem; margin-top: 0.15rem;" aria-label="Dismiss" v-on:click="dismissIntro"></button>
+        Y no te preocupes: <em>ninguno de tus datos se envía a nuestro servidor</em>.</p>
+        <button type="button" class="btn-close flex-shrink-0" style="font-size: 0.65rem; margin-top: 0.15rem;" aria-label="Descartar" v-on:click="dismissIntro"></button>
       </div>
     </div>
     <p class="mb-3" v-else-if="!showIntro && people.length == 0">
-      <button type="button" class="btn btn-link btn-sm text-body-secondary text-decoration-none p-0" v-on:click="showIntroAgain">ⓘ What is this?</button>
+      <button type="button" class="btn btn-link btn-sm text-body-secondary text-decoration-none p-0" v-on:click="showIntroAgain">ⓘ ¿Qué es esto?</button>
     </p>
 
-    <h2 class="h5 text-center mt-4">My time: {{ myTime }}</h2>
+    <h2 class="h5 text-center mt-4">Mi hora: {{ myTime }}</h2>
 
     <form @submit.prevent="add">
       <div class="table-responsive">
       <table class="table table-striped table-hover align-middle">
         <thead>
           <tr>
-            <th scope="col">Team</th>
-            <th scope="col">Person</th>
-            <th scope="col">Current time</th>
-            <th scope="col">Actions</th>
+            <th scope="col">Equipo</th>
+            <th scope="col">Persona</th>
+            <th scope="col">Hora actual</th>
+            <th scope="col">Acciones</th>
           </tr>
         </thead>
 
@@ -99,10 +103,10 @@
               <small class="text-body-secondary">{{person.timezone}}</small>
             </td>
             <td>
-              <button class="btn btn-sm btn-secondary" type="button" v-on:click="edit(person)" title="Edit">
+              <button class="btn btn-sm btn-secondary" type="button" v-on:click="edit(person)" title="Editar">
                 <i class="fas fa-edit"></i>
               </button>
-              <button class="btn btn-sm btn-danger" type="button" v-on:click="remove(person)" title="Remove">
+              <button class="btn btn-sm btn-danger" type="button" v-on:click="remove(person)" title="Eliminar">
                 <i class="fas fa-times"></i>
               </button>
             </td>
@@ -113,26 +117,26 @@
           <tr>
             <td>
               <select class="form-select" v-model="new_person.team" required style="min-width: 140px">
-                <option value="" disabled>Team</option>
+                <option value="" disabled>Equipo</option>
                 <option v-for="t in teams" :value="t">{{t}}</option>
               </select>
             </td>
             <td>
-              <input class="form-control" v-model="new_person.name" placeholder="New person" required style="min-width: 140px">
+              <input class="form-control" v-model="new_person.name" placeholder="Nueva persona" required style="min-width: 140px">
             </td>
             <td>
               <input class="form-control" list="tz-list" v-model="new_person.timezoneLabel"
-                placeholder="Search timezone..." required @input="clearTimezoneError" style="min-width: 180px">
+                placeholder="Buscar zona horaria..." required @input="clearTimezoneError" style="min-width: 180px">
               <datalist id="tz-list">
                 <option v-for="tz in timezones" :value="tz.label"></option>
               </datalist>
             </td>
             <td>
               <div class="text-nowrap">
-                <button class="btn btn-primary" type="submit" title="Add">
+                <button class="btn btn-primary" type="submit" title="Agregar">
                   <i class="fas fa-plus"></i>
                 </button>
-                <button class="btn btn-secondary" type="button" v-if="editing" v-on:click="cancelEdit" title="Cancel">
+                <button class="btn btn-secondary" type="button" v-if="editing" v-on:click="cancelEdit" title="Cancelar">
                   <i class="fas fa-undo"></i>
                 </button>
               </div>
@@ -144,7 +148,7 @@
     </form>
 
     <hr>
-    <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.5.42/vue.global.prod.min.js"
@@ -270,7 +274,8 @@
           new_person: { pos: '', name: '', timezone: '', timezoneLabel: '', team: '' },
           people: [],
           shared: false,
-          showIntro: null
+          showIntro: null,
+          fromUrl: false
         };
       },
       methods: {
@@ -278,7 +283,7 @@
           const tzKey = this.timezoneByLabel.get(this.new_person.timezoneLabel);
           if (!tzKey) {
             const input = document.querySelector('input[list="tz-list"]');
-            input.setCustomValidity('Pick a timezone from the list');
+            input.setCustomValidity('Elegí una zona horaria de la lista');
             input.reportValidity();
             return;
           }
@@ -292,9 +297,11 @@
           }
           this.new_person = { pos: '', name: '', timezone: '', timezoneLabel: '', team: '' };
           this.editing = false;
+          this.fromUrl = false;
           this.savePeople();
         },
         remove(person) {
+          this.fromUrl = false;
           this.people.splice(this.people.indexOf(person), 1);
           this.savePeople();
         },
@@ -320,9 +327,11 @@
           setTimeout(() => this.updateTime(new Date()), 500);
         },
         savePeople() {
+          if (this.fromUrl) return; // Un link compartido no pisa lo guardado hasta la primera edición.
           localStorage.setItem(STORAGE_KEY, JSON.stringify({ people: this.people, introHidden: this.showIntro === false }));
         },
         reset() {
+          this.fromUrl = false;
           this.people = [];
           this.showIntro = true;
           localStorage.removeItem(STORAGE_KEY);
@@ -338,10 +347,12 @@
         },
         dismissIntro() {
           this.showIntro = false;
+          this.fromUrl = false;
           this.savePeople();
         },
         showIntroAgain() {
           this.showIntro = true;
+          this.fromUrl = false;
           this.savePeople();
         }
       },
@@ -363,6 +374,7 @@
         if (fromURL) {
           this.people = fromURL;
           this.showIntro = !getIntroHiddenReadOnly();
+          this.fromUrl = true;
         } else {
           const stored = loadMigratedState();
           if (stored) {

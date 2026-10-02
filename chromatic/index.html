@@ -52,6 +52,7 @@
       .slot-swatch { height: 72px; }
       input, textarea, select { font-size: 16px; }
     }
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
     p.signature { font-size: 0.8em; }
   </style>
 </head>
@@ -105,7 +106,7 @@
                 <input class="form-control form-control-sm" v-model="drafts[i]" @change="onText(i)"
                   :placeholder="i < 2 ? '#3B82F6' : 'HEX, rgb(), hsl()…'" :aria-label="'Color ' + (i + 1) + ' en texto'">
               </div>
-              <div class="text-danger small mt-1" v-if="errors[i]">{{ errors[i] }}</div>
+              <div class="text-danger small mt-1 alert-flotante" v-if="errors[i]">{{ errors[i] }}</div>
               <button class="btn btn-outline-secondary btn-sm w-100 mt-2" type="button" v-if="c" @click="copyHex(i)">
                 {{ copied === i ? '¡Copiado!' : 'Copiar HEX' }}
               </button>
@@ -120,9 +121,9 @@
             placeholder="Pegar varios colores separados por espacios o comas… (Enter para aplicar)">
         </div>
         <div class="col-12 col-md-4 d-flex flex-wrap gap-2">
-          <button class="btn btn-outline-secondary btn-sm" type="button" @click="copyPalette">Copy palette</button>
-          <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearAll">Clear all</button>
-          <span class="small text-body-secondary align-self-center" v-if="paletteMsg">{{ paletteMsg }}</span>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="copyPalette">Copiar paleta</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearAll">Borrar todo</button>
+          <span class="small text-body-secondary align-self-center alert-flotante" v-if="paletteMsg">{{ paletteMsg }}</span>
         </div>
       </div>
 
@@ -139,7 +140,7 @@
               <span class="d-block fw-semibold" :style="{ color: ink(t) }">{{ t.toUpperCase() }}</span>
             </button>
           </div>
-          <div class="text-danger small mt-1" v-if="trayMsg">{{ trayMsg }}</div>
+          <div class="text-danger small mt-1 alert-flotante" v-if="trayMsg">{{ trayMsg }}</div>
         </div>
       </div>
 
@@ -183,7 +184,7 @@
       <section v-if="activeCount === 2 && pairInfo" class="card mb-4">
         <div class="card-body">
           <h2 class="h5 mb-1">Relación entre colores</h2>
-          <p class="display-6 mb-1">Contrast {{ pairInfo.ratio.toFixed(2) }}:1</p>
+          <p class="display-6 mb-1">Contraste {{ pairInfo.ratio.toFixed(2) }}:1</p>
           <div class="d-flex flex-wrap gap-2 mb-3">
             <span class="badge" :class="pairInfo.aaN ? 'text-bg-success' : 'text-bg-danger'">{{ pairInfo.aaN ? '✓' : '✕' }} AA normal</span>
             <span class="badge" :class="pairInfo.aaaN ? 'text-bg-success' : 'text-bg-secondary'">{{ pairInfo.aaaN ? '✓' : '✕' }} AAA normal</span>
@@ -202,7 +203,7 @@
               </div>
             </div>
           </div>
-          <p class="mb-1">Perceptual distance: <strong>{{ pairInfo.distancia.toFixed(3) }}</strong>
+          <p class="mb-1">Distancia perceptual: <strong>{{ pairInfo.distancia.toFixed(3) }}</strong>
             <span class="text-body-secondary">({{ distLabel }})</span></p>
           <p class="mb-2">Relación cromática: <strong>{{ pairInfo.relacion }}</strong>
             <span class="text-body-secondary small">· Δhue {{ pairInfo.hueDiff.toFixed(0) }}° · Δluz {{ pairInfo.luzDiff.toFixed(2) }} · Δcroma {{ pairInfo.cromaDiff.toFixed(2) }}</span></p>
@@ -219,7 +220,7 @@
             <span v-for="c in activeColors" :key="c.hex" class="badge fw-normal font-monospace"
               :style="{ backgroundColor: c.hex, color: ink(c.hex) }">C{{ c.idx + 1 }} · {{ c.hex }}</span>
           </div>
-          <h3 class="h6 mb-2">Slide Preview
+          <h3 class="h6 mb-2">Vista previa
             <small class="text-body-secondary fw-normal" v-if="slide">({{ slideRoles }} · {{ slide.ratio.toFixed(1) }}:1)</small>
           </h3>
           <div v-if="slide" class="p-4 rounded border" :style="{ backgroundColor: slide.bg.hex, color: slide.fg.hex }">
@@ -240,7 +241,7 @@
       </section>
 
       <hr>
-      <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+      <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
     </div>
   </main>
 

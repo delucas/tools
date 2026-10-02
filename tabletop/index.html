@@ -24,6 +24,8 @@
       max-height: 24rem;
     }
 
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
+
     p.signature {
       font-size: 0.8em;
     }
@@ -89,7 +91,7 @@
       <button id="copy-out" class="btn btn-primary btn-sm" type="button">📋 Copiar</button>
       <button id="download-out" class="btn btn-outline-secondary btn-sm" type="button">⬇️ Descargar</button>
     </div>
-    <p id="notice" class="small mt-2 mb-0 d-none" role="status"></p>
+    <p id="notice" class="small mt-2 mb-0 d-none alert-flotante" role="status"></p>
 
     <hr>
 

@@ -128,7 +128,7 @@
           <div class="card mb-3">
             <div class="card-body">
               <h2 class="h6">Resumen <small class="text-body-secondary fw-normal" v-if="datos">({{ datos.length }} valores)</small></h2>
-              <div v-if="errorParam" class="alert alert-danger py-2 small alert-flotante" role="alert">{{ errorParam }}</div>
+              <div v-if="errorParam" class="alert alert-danger py-2 small" role="alert">{{ errorParam }}</div>
               <div v-else-if="resumen">
                 <dl class="row small mb-2">
                   <div class="col-4" v-for="it in resumen" :key="it[0]">

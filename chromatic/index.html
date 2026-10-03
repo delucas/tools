@@ -106,7 +106,7 @@
                 <input class="form-control form-control-sm" v-model="drafts[i]" @change="onText(i)"
                   :placeholder="i < 2 ? '#3B82F6' : 'HEX, rgb(), hsl()…'" :aria-label="'Color ' + (i + 1) + ' en texto'">
               </div>
-              <div class="text-danger small mt-1 alert-flotante" v-if="errors[i]">{{ errors[i] }}</div>
+              <div class="text-danger small mt-1" v-if="errors[i]">{{ errors[i] }}</div>
               <button class="btn btn-outline-secondary btn-sm w-100 mt-2" type="button" v-if="c" @click="copyHex(i)">
                 {{ copied === i ? '¡Copiado!' : 'Copiar HEX' }}
               </button>
@@ -123,7 +123,7 @@
         <div class="col-12 col-md-4 d-flex flex-wrap gap-2">
           <button class="btn btn-outline-secondary btn-sm" type="button" @click="copyPalette">Copiar paleta</button>
           <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearAll">Borrar todo</button>
-          <span class="small text-body-secondary align-self-center alert-flotante" v-if="paletteMsg">{{ paletteMsg }}</span>
+          <span class="small text-body-secondary align-self-center" v-if="paletteMsg">{{ paletteMsg }}</span>
         </div>
       </div>
 
@@ -140,7 +140,7 @@
               <span class="d-block fw-semibold" :style="{ color: ink(t) }">{{ t.toUpperCase() }}</span>
             </button>
           </div>
-          <div class="text-danger small mt-1 alert-flotante" v-if="trayMsg">{{ trayMsg }}</div>
+          <div class="text-danger small mt-1" v-if="trayMsg">{{ trayMsg }}</div>
         </div>
       </div>
 

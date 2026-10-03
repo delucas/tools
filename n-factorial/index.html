@@ -24,6 +24,7 @@
     #chart-wrap { position: relative; height: 220px; }
     #chart-wrap-explosion { position: relative; height: 260px; }
     .pseudo-pre { max-height: 340px; overflow: auto; white-space: pre; font-size: .8em; }
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
     p.signature { font-size: 0.8em; }
   </style>
 </head>
@@ -45,7 +46,7 @@
         </div>
       </div>
 
-      <div v-if="notice" class="alert alert-success py-2" role="status">{{ notice }}</div>
+      <div v-if="notice" class="alert alert-success py-2 alert-flotante" role="status">{{ notice }}</div>
 
       <!-- Conjunto de entrada -->
       <section class="card mb-3">

@@ -40,10 +40,7 @@
       }
     }
 
-    /* Espacio reservado para el aviso: mostrarlo u ocultarlo no mueve la pantalla. */
-    .notice-slot {
-      min-height: 2.9rem;
-    }
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
 
     .signature {
       font-size: 0.8em;
@@ -88,7 +85,7 @@
               </div>
             </div>
             <div class="form-text text-start">Cambiar el tope arranca un número nuevo. El número no cambia hasta que lo adivinás.</div>
-            <div class="notice-slot mt-1"><div id="notice" class="alert alert-success py-2 mb-0 d-none" role="status"></div></div>
+            <div id="notice" class="alert alert-success py-2 alert-flotante d-none" role="status"></div>
           </div>
         </div>
       </section>

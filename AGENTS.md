@@ -21,7 +21,20 @@ Este repositorio reúne herramientas web autocontenidas. Cada herramienta vive e
 - Cargar `bootstrap.bundle.min.js` únicamente si se usan componentes que lo requieren. Usar Font Awesome por CDN solo si un ícono aporta funcionalidad.
 - Todas las herramientas incluyen modo claro/oscuro mediante `data-bs-theme` de Bootstrap 5.3+. Guardar la elección en `localStorage`; si no existe, respetar `prefers-color-scheme`. El control de tema debe ser simple y no requerir íconos externos.
 - Para acciones habituales en la cabecera, seguir el patrón `🔗 Compartir`, `🗑️ Reiniciar` y el control de tema `🌙`/`☀️`. No usar Font Awesome solo para estos íconos.
-- Los avisos (`notice`/`error`) no deben mover el contenido al aparecer y desaparecer: mostrarlos flotantes con `position: fixed` (fuera del flujo), nunca como bloques que empujan lo de abajo.
+- Los avisos transitorios de confirmación (`notice`: "Copiado", "Guardado", "Link copiado") no deben ocupar ni liberar lugar al aparecer y desaparecer: van siempre flotantes abajo-centro, fuera del flujo, con la clase `alert-flotante`. No reservar hueco (`notice-slot` prohibido) ni usar márgenes que empujen el contenido. Auto-ocultar entre 1800 y 4000 ms.
+-
+- ```css
+- .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
+- ```
+-
+- ```html
+- <!-- vanilla -->
+- <div id="notice" class="alert alert-success py-2 alert-flotante d-none" role="status"></div>
+- <!-- vue -->
+- <div v-if="notice" class="alert alert-success py-2 alert-flotante" role="status">{{ notice }}</div>
+- ```
+-
+- - Las alertas persistentes o ancladas a un campo (informativas `alert-info`/`role=note`, vacíos tipo "Sin resultados", errores de validación atados a un input) sí van en flujo como bloques normales. Nunca aplicarles `alert-flotante`.
 - Toda herramienta numérica debe incluir al menos un gráfico que muestre lo calculado (curva, distribución o evolución), no solo el número: ayuda a entender el resultado.
 - Antes del `h1`, agregar el enlace relativo al índice:
 

@@ -29,6 +29,7 @@
     .signature {
       font-size: 0.8em;
     }
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
   </style>
 </head>
 <body>
@@ -47,7 +48,7 @@
     </div>
   </div>
 
-  <div v-if="notice.text" class="alert py-2" :class="notice.kind === 'error' ? 'alert-danger' : 'alert-success'" role="status">{{ notice.text }}</div>
+  <div v-if="notice.text" class="alert py-2 alert-flotante" :class="notice.kind === 'error' ? 'alert-danger' : 'alert-success'" role="status">{{ notice.text }}</div>
 
   <div class="alert alert-info py-2 small" role="note">
     Para instalar uno: mostrá la barra de marcadores (<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd>) y arrastrá el botón con su nombre hasta la barra. Ese botón <em>es</em> el bookmarklet.

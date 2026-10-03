@@ -69,6 +69,8 @@
     p.signature {
       font-size: 0.8em;
     }
+
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
   </style>
 </head>
 <body>
@@ -87,7 +89,7 @@
     </div>
     <hr>
 
-    <p id="notice" class="small d-none" role="status"></p>
+    <p id="notice" class="alert alert-success py-2 small alert-flotante d-none" role="status"></p>
 
     <section id="sec-cmp" aria-label="Comparar dos textos">
       <div class="row g-2 mb-2">

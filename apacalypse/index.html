@@ -21,6 +21,8 @@
     .signature {
       font-size: 0.8em;
     }
+
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
   </style>
 </head>
 <body>
@@ -39,7 +41,7 @@
       </div>
     </div>
 
-    <div id="notice" class="alert alert-success py-2 d-none" role="status"></div>
+    <div id="notice" class="alert alert-success py-2 alert-flotante d-none" role="status"></div>
 
     <div class="card mb-4">
       <div class="card-body">
@@ -330,7 +332,7 @@
       function showNotice(message, kind = 'success') {
         clearTimeout(noticeTimeout);
         notice.textContent = message;
-        notice.className = `alert py-2 alert-${kind === 'error' ? 'danger' : 'success'}`;
+        notice.className = `alert py-2 alert-flotante alert-${kind === 'error' ? 'danger' : 'success'}`;
         notice.classList.remove('d-none');
         noticeTimeout = setTimeout(() => notice.classList.add('d-none'), 2600);
       }

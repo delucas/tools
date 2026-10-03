@@ -48,6 +48,7 @@
     p.signature {
       font-size: 0.8em;
     }
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
   </style>
 </head>
 <body>
@@ -68,7 +69,7 @@
         </div>
       </div>
 
-      <div v-if="notice" class="alert alert-success py-2" role="status">{{ notice }}</div>
+      <div v-if="notice" class="alert alert-success py-2 alert-flotante" role="status">{{ notice }}</div>
 
       <div class="row g-3">
         <section class="col-12 col-lg-8">

@@ -21,10 +21,7 @@
       overflow-y: auto;
     }
 
-    /* Espacio reservado para el aviso: mostrarlo u ocultarlo no mueve la pantalla. */
-    .notice-slot {
-      min-height: 2.9rem;
-    }
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
 
     /* En desktop el historial ocupa la columna ancha y llena el alto visible:
        la lista scrollea por dentro y nunca agranda el scroll de la página. */
@@ -104,7 +101,7 @@
           <div class="card-body text-center">
             <p id="last-result" class="display-3 fw-bold mb-0" aria-live="polite">–</p>
             <p id="last-caption" class="text-body-secondary small mb-2">Todavía no tiraste.</p>
-            <div class="notice-slot"><div id="notice" class="alert alert-success py-2 mb-0 d-none" role="status"></div></div>
+            <div id="notice" class="alert alert-success py-2 alert-flotante d-none" role="status"></div>
           </div>
         </div>
       </section>

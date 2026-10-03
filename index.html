@@ -26,6 +26,7 @@
       .tool-columns.filtering .list-group-item { margin-top: 0; border-radius: var(--bs-border-radius); }
     }
     @media (max-width: 767.98px) { #chips .btn { min-height: 2.75rem; } }
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
   </style>
 </head>
 
@@ -461,7 +462,7 @@
           </div>
           <p class="text-body-secondary small mt-2 mb-0">Antes de reemplazar se descarga automáticamente una copia de seguridad de tu estado actual.</p>
         </div>
-        <p class="small mt-2 mb-0 d-none" id="escritorio-notice" role="status"></p>
+        <p class="alert alert-success py-2 small alert-flotante d-none" id="escritorio-notice" role="status"></p>
       </div>
     </section>
 

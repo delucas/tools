@@ -36,7 +36,7 @@
         </div>
         <div class="d-flex flex-wrap gap-2">
           <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ shared ? '¡Copiado!' : '🔗 Compartir' }}</button>
-          <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset">🗑️ Reiniciar</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset" :class="resetArmed ? 'btn-danger' : 'btn-outline-secondary'">{{ resetArmed ? '¿Seguro? Tocá de nuevo' : '🗑️ Reiniciar' }}</button>
           <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
         </div>
       </div>
@@ -191,6 +191,7 @@
 
     const init = estadoInicial();
     let noticeTimeout;
+    let resetTimer;
     let chartSens = null;
 
     Vue.createApp({
@@ -203,7 +204,7 @@
           pPct: Number.isFinite(init.pPct) ? init.pPct : 50,
           sigma: Number.isFinite(init.sigma) ? init.sigma : 10,
           nStr: init.nStr ?? '',
-          notice: '', shared: false, fromUrl: init.fromUrl
+          notice: '', shared: false, resetArmed: false, fromUrl: init.fromUrl
         };
       },
       computed: {
@@ -356,6 +357,8 @@
           else done(false);
         },
         reset() {
+          if (!this.resetArmed) { this.resetArmed = true; clearTimeout(resetTimer); resetTimer = setTimeout(() => { this.resetArmed = false; }, 5000); return; }
+          clearTimeout(resetTimer); this.resetArmed = false;
           try { localStorage.removeItem(STORAGE_KEY); } catch {}
           this.modo = 'prop'; this.conf = '95'; this.zCustom = 2;
           this.errorPct = 5; this.errorAbs = 2; this.pPct = 50; this.sigma = 10; this.nStr = '';

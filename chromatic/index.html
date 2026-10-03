@@ -71,7 +71,7 @@
         </div>
         <div class="d-flex flex-wrap gap-2">
           <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ shareLabel }}</button>
-          <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset">🗑️ Reiniciar</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset" :class="resetArmed ? 'btn-danger' : 'btn-outline-secondary'">{{ resetArmed ? '¿Seguro? Tocá de nuevo' : '🗑️ Reiniciar' }}</button>
           <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
         </div>
       </div>
@@ -442,6 +442,8 @@
       return { bg, fg, accent: rest[0] || null, extra: rest[1] || null, ratio: best.ratio };
     }
 
+    let resetTimer = null;
+
     const app = typeof Vue === 'undefined' ? null : Vue.createApp({
       data() {
         const state = readState();
@@ -457,7 +459,8 @@
           shareLabel: '🔗 Compartir',
           copied: null,
           copiedFmt: null,
-          paletteMsg: ''
+          paletteMsg: '',
+          resetArmed: false
         };
       },
       computed: {
@@ -707,6 +710,8 @@
           });
         },
         reset() {
+          if (!this.resetArmed) { this.resetArmed = true; clearTimeout(resetTimer); resetTimer = setTimeout(() => { this.resetArmed = false; }, 5000); return; }
+          clearTimeout(resetTimer); this.resetArmed = false;
           try { localStorage.removeItem(STORAGE_KEY); } catch {}
           this.fromURL = false;
           this.colors = DEFAULTS.slice();

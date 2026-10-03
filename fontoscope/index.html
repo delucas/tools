@@ -652,7 +652,13 @@
       fileInput.addEventListener('change', () => {
         if (fileInput.files.length) addFiles(fileInput.files);
       });
-      document.getElementById('reset').addEventListener('click', resetAll);
+      const resetBtn = document.getElementById('reset');
+      let resetArmada = false, resetTimer;
+      function resetDesarmar() { resetArmada = false; resetBtn.textContent = '🗑️ Reiniciar'; resetBtn.classList.remove('btn-danger'); resetBtn.classList.add('btn-outline-secondary'); }
+      resetBtn.addEventListener('click', () => {
+        if (!resetArmada) { resetArmada = true; resetBtn.textContent = '¿Seguro? Tocá de nuevo'; resetBtn.classList.remove('btn-outline-secondary'); resetBtn.classList.add('btn-danger'); clearTimeout(resetTimer); resetTimer = setTimeout(resetDesarmar, 5000); return; }
+        clearTimeout(resetTimer); resetDesarmar(); resetAll();
+      });
       if (!HAS_OPENTYPE) {
         document.getElementById('lib-warning').textContent = 'No se pudo cargar opentype.js. Revisá tu conexión y recargá.';
         document.getElementById('lib-warning').classList.remove('d-none');

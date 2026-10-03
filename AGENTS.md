@@ -71,7 +71,18 @@ Para herramientas con listas, formularios u opciones editables:
 - Cuando el estado viene de la URL, no tocar el `localStorage` (un link compartido no debe borrar ni sobrescribir lo guardado).
 - La sección `💾 Escritorio` del `index.html` raíz exporta/importa esas claves de una vez (`{ slug: valorEnCrudo }` más `theme` opcional); al agregar una herramienta, sumar su slug a `SLUGS` (y a `LEGACY` solo si reemplaza claves viejas).
 - Usar parámetros legibles para estado simple y un único parámetro JSON codificado para estado complejo.
-- Ofrecer reset: elimina el estado guardado, restaura valores predeterminados y limpia el query string con `history.replaceState`.
+- Ofrecer reset: elimina el estado guardado, restaura valores predeterminados y limpia el query string con `history.replaceState`. El botón `🗑️ Reiniciar` siempre pide confirmación en dos toques, en todas las herramientas: primer clic arma (`¿Seguro? Tocá de nuevo` + `btn-danger`), segundo clic ejecuta el reset real; se desarma solo a los 5 s. Nunca usar `confirm()` nativo ni borrar en un solo clic.
+-
+- ```js
+- // vanilla (ver `8` / `sudoku6` como referencia)
+- let resetArmada = false, resetTimer;
+- function resetDesarmar() { resetArmada = false; resetBtn.textContent = '🗑️ Reiniciar'; resetBtn.classList.remove('btn-danger'); resetBtn.classList.add('btn-outline-secondary'); }
+- resetBtn.addEventListener('click', () => {
+-   if (!resetArmada) { resetArmada = true; resetBtn.textContent = '¿Seguro? Tocá de nuevo'; resetBtn.classList.remove('btn-outline-secondary'); resetBtn.classList.add('btn-danger'); clearTimeout(resetTimer); resetTimer = setTimeout(resetDesarmar, 5000); return; }
+-   clearTimeout(resetTimer); resetDesarmar(); /* ...reset real... */
+- });
+- // vue: `resetArmed:false` en data(); `reset()` arma la primera vez (con timeout de 5 s para desarmar) y ejecuta la segunda; botón con `:class` y texto según `resetArmed`.
+- ```
 - Cuando corresponda, ofrecer compartir: copiar la URL con el estado codificado al portapapeles.
 - Repetir esta lógica dentro de cada `index.html`; no crear helpers compartidos.
 

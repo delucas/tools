@@ -72,7 +72,7 @@
   <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
   <div class="d-flex flex-wrap justify-content-end gap-2">
     <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ shared ? '¡Copiado!' : '🔗 Compartir' }}</button>
-    <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset">🗑️ Reiniciar</button>
+    <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset" :class="resetArmed ? 'btn-danger' : 'btn-outline-secondary'">{{ resetArmed ? '¿Seguro? Tocá de nuevo' : '🗑️ Reiniciar' }}</button>
     <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
   </div>
 
@@ -195,10 +195,12 @@ createApp({
     const celebrating = ref(false);
     const leaving = ref(false);
     const shared      = ref(false);
+    const resetArmed  = ref(false);
     const chatWindow  = ref(null);
     const inputRef    = ref(null);
     let   id          = messages.value.length;
     let   timer       = null;
+    let   resetTimer  = null;
 
     watch(messages, save, { deep: true });
 
@@ -251,6 +253,8 @@ createApp({
     }
 
     function reset() {
+      if (!resetArmed.value) { resetArmed.value = true; clearTimeout(resetTimer); resetTimer = setTimeout(() => { resetArmed.value = false; }, 5000); return; }
+      clearTimeout(resetTimer); resetArmed.value = false;
       messages.value = [];
       removeStored();
       history.replaceState(null, '', window.location.pathname);
@@ -258,7 +262,7 @@ createApp({
 
     scrollToBottom();
 
-    return { messages, draft, isTyping, celebrating, leaving, shared, chatWindow, inputRef, sendMessage, autoResize, resolved, share, reset };
+    return { messages, draft, isTyping, celebrating, leaving, shared, resetArmed, chatWindow, inputRef, sendMessage, autoResize, resolved, share, reset };
   }
 }).mount('#app');
 </script>

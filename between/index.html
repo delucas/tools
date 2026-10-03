@@ -32,7 +32,7 @@
         </div>
         <div class="d-flex flex-wrap gap-2">
           <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ shared ? '¡Copiado!' : '🔗 Compartir' }}</button>
-          <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset">🗑️ Reiniciar</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset" :class="resetArmed ? 'btn-danger' : 'btn-outline-secondary'">{{ resetArmed ? '¿Seguro? Tocá de nuevo' : '🗑️ Reiniciar' }}</button>
           <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
         </div>
       </div>
@@ -283,10 +283,11 @@
 
     const init = estadoInicial();
     let noticeTimeout;
+    let resetTimer = null;
     let sortableEl = null; // fuera de data: Vue lo envolvería en un Proxy y rompería la identidad
     const app = Vue.createApp({
       data() {
-        return { fechas: init.fechas, fromUrl: init.fromUrl, notice: '', noticeClass: 'alert-success', shared: false, storageWarned: false, ahoraMs: Date.now(), timer: null };
+        return { fechas: init.fechas, fromUrl: init.fromUrl, notice: '', noticeClass: 'alert-success', shared: false, storageWarned: false, ahoraMs: Date.now(), timer: null, resetArmed: false };
       },
       computed: {
         validas() {
@@ -426,6 +427,8 @@
           }
         },
         reset() {
+          if (!this.resetArmed) { this.resetArmed = true; clearTimeout(resetTimer); resetTimer = setTimeout(() => { this.resetArmed = false; }, 5000); return; }
+          clearTimeout(resetTimer); this.resetArmed = false;
           try { localStorage.removeItem(STORAGE_KEY); } catch {}
           this.fechas = defecto();
           this.fromUrl = false;

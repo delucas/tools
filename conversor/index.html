@@ -339,7 +339,12 @@
       setTimeout(() => { $share.textContent = '🔗 Compartir'; }, 1500);
     });
 
+    const resetBtn = $reset;
+    let resetArmada = false, resetTimer;
+    function resetDesarmar() { resetArmada = false; resetBtn.textContent = '🗑️ Reiniciar'; resetBtn.classList.remove('btn-danger'); resetBtn.classList.add('btn-outline-secondary'); }
     $reset.addEventListener('click', () => {
+      if (!resetArmada) { resetArmada = true; resetBtn.textContent = '¿Seguro? Tocá de nuevo'; resetBtn.classList.remove('btn-outline-secondary'); resetBtn.classList.add('btn-danger'); clearTimeout(resetTimer); resetTimer = setTimeout(resetDesarmar, 5000); return; }
+      clearTimeout(resetTimer); resetDesarmar();
       try { localStorage.removeItem(STORAGE_KEY); } catch {}
       Object.assign(state, DEFAULT_STATE, { history: [] });
       history.replaceState(null, '', window.location.pathname);

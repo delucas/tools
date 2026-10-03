@@ -243,7 +243,11 @@
         setTimeout(() => { shareBtn.textContent = sharedLabel; }, 1500);
       });
 
+      let resetArmada = false, resetTimer;
+      function resetDesarmar() { resetArmada = false; resetBtn.textContent = '🗑️ Reiniciar'; resetBtn.classList.remove('btn-danger'); resetBtn.classList.add('btn-outline-secondary'); }
       resetBtn.addEventListener('click', () => {
+        if (!resetArmada) { resetArmada = true; resetBtn.textContent = '¿Seguro? Tocá de nuevo'; resetBtn.classList.remove('btn-outline-secondary'); resetBtn.classList.add('btn-danger'); clearTimeout(resetTimer); resetTimer = setTimeout(resetDesarmar, 5000); return; }
+        clearTimeout(resetTimer); resetDesarmar();
         removeStored();
         undoStack.length = 0;
         editor.value = DEFAULT_TEXT;

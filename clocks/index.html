@@ -44,7 +44,7 @@
       </div>
       <div class="d-flex flex-wrap gap-2">
         <button class="btn btn-outline-secondary btn-sm" type="button" v-on:click="share">{{ shared ? '✅ ¡Copiado!' : '🔗 Compartir' }}</button>
-        <button class="btn btn-outline-secondary btn-sm" type="button" v-on:click="reset">🗑️ Reiniciar</button>
+        <button class="btn btn-outline-secondary btn-sm" type="button" v-on:click="reset" :class="resetArmed ? 'btn-danger' : 'btn-outline-secondary'">{{ resetArmed ? '¿Seguro? Tocá de nuevo' : '🗑️ Reiniciar' }}</button>
         <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
       </div>
     </div>
@@ -182,6 +182,8 @@
     const LEGACY_PEOPLE_KEY = 'people';
     const LEGACY_INTRO_KEY = 'clocks-intro';
 
+    let resetTimer = null;
+
     function getQueryParam(param) {
       const urlParams = new URLSearchParams(window.location.search);
       return urlParams.get(param);
@@ -266,7 +268,8 @@
           people: [],
           shared: false,
           showIntro: null,
-          fromUrl: false
+          fromUrl: false,
+          resetArmed: false
         };
       },
       methods: {
@@ -333,6 +336,8 @@
           localStorage.setItem(STORAGE_KEY, JSON.stringify({ people: this.people, introHidden: this.showIntro === false }));
         },
         reset() {
+          if (!this.resetArmed) { this.resetArmed = true; clearTimeout(resetTimer); resetTimer = setTimeout(() => { this.resetArmed = false; }, 5000); return; }
+          clearTimeout(resetTimer); this.resetArmed = false;
           this.fromUrl = false;
           this.people = [];
           this.showIntro = true;

@@ -38,7 +38,7 @@
       </div>
       <div class="d-flex flex-wrap gap-2">
         <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ shared ? '¡Copiado!' : '🔗 Compartir' }}</button>
-        <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset">🗑️ Reiniciar</button>
+        <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset" :class="resetArmed ? 'btn-danger' : 'btn-outline-secondary'">{{ resetArmed ? '¿Seguro? Tocá de nuevo' : '🗑️ Reiniciar' }}</button>
         <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
       </div>
     </div>
@@ -363,6 +363,7 @@
     // Elemento con Sortable activo (fuera de data: Vue envolvería el DOM en un Proxy y rompería la identidad).
     let sortableEl = null;
     let noticeTimer = null;
+    let resetTimer;
 
     const app = Vue.createApp({
       data() {
@@ -374,6 +375,7 @@
           newText: '',
           shared: false,
           notice: '',
+          resetArmed: false,
           pendingImport: state.isSnapshot ? 0 : state.importedCount,
           fromUrl: state.isSnapshot === true
         };
@@ -514,6 +516,8 @@
           return `${age} ${age === 1 ? 'día' : 'días'}`;
         },
         reset() {
+          if (!this.resetArmed) { this.resetArmed = true; clearTimeout(resetTimer); resetTimer = setTimeout(() => { this.resetArmed = false; }, 5000); return; }
+          clearTimeout(resetTimer); this.resetArmed = false;
           removeStored();
           this.lists = defaultLists();
           this.selectedId = this.lists[0]?.id || null;

@@ -425,7 +425,10 @@
         }, 5000);
       });
 
-      document.getElementById('reset').addEventListener('click', () => {
+      const resetBtn = document.getElementById('reset');
+      let resetArmada = false, resetTimer;
+      function resetDesarmar() { resetArmada = false; resetBtn.textContent = '🗑️ Reiniciar'; resetBtn.classList.remove('btn-danger'); resetBtn.classList.add('btn-outline-secondary'); }
+      function doReset() {
         stopBatch();
         try { localStorage.removeItem(STORAGE_KEY); } catch {}
         state = structuredClone(DEFAULT_STATE);
@@ -437,6 +440,10 @@
         renderPresets();
         renderHistory();
         showNotice('Se restauró el dado de 6 caras.');
+      }
+      resetBtn.addEventListener('click', () => {
+        if (!resetArmada) { resetArmada = true; resetBtn.textContent = '¿Seguro? Tocá de nuevo'; resetBtn.classList.remove('btn-outline-secondary'); resetBtn.classList.add('btn-danger'); clearTimeout(resetTimer); resetTimer = setTimeout(resetDesarmar, 5000); return; }
+        clearTimeout(resetTimer); resetDesarmar(); doReset();
       });
 
       // ---------- Tema ----------

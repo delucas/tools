@@ -64,7 +64,7 @@
         </div>
         <div class="d-flex flex-wrap gap-2">
           <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ shared ? '¡Copiado!' : '🔗 Compartir' }}</button>
-          <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset">🗑️ Reiniciar</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset" :class="resetArmed ? 'btn-danger' : 'btn-outline-secondary'">{{ resetArmed ? '¿Seguro? Tocá de nuevo' : '🗑️ Reiniciar' }}</button>
           <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
         </div>
       </div>
@@ -306,6 +306,7 @@
     }
 
     let noticeTimeout;
+    let resetTimer = null;
 
     Vue.createApp({
       data() {
@@ -319,7 +320,8 @@
           error: '',
           notice: '',
           shared: false,
-          pngBusy: false
+          pngBusy: false,
+          resetArmed: false
         };
       },
       methods: {
@@ -414,6 +416,8 @@
           );
         },
         reset() {
+          if (!this.resetArmed) { this.resetArmed = true; clearTimeout(resetTimer); resetTimer = setTimeout(() => { this.resetArmed = false; }, 5000); return; }
+          clearTimeout(resetTimer); this.resetArmed = false;
           localStorage.removeItem(STORAGE_KEY);
           localStorage.removeItem(LEGACY_FORMULAS_KEY);
           localStorage.removeItem(LEGACY_DRAFT_KEY);

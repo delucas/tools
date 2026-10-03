@@ -43,7 +43,7 @@
     </div>
     <div class="d-flex flex-wrap gap-2">
       <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">🔗 Compartir</button>
-      <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset">🗑️ Reiniciar</button>
+      <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset" :class="resetArmed ? 'btn-danger' : 'btn-outline-secondary'">{{ resetArmed ? '¿Seguro? Tocá de nuevo' : '🗑️ Reiniciar' }}</button>
       <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
     </div>
   </div>
@@ -160,6 +160,7 @@
 const { createApp, ref, reactive, computed } = Vue;
 
 const STORAGE_KEY = 'wand';
+let resetTimer;
 
 // Bookmarklets fijos: viajan con la página a cualquier navegador.
 // Para agregar más, sumar objetos { name, desc, code } a esta lista.
@@ -229,6 +230,7 @@ createApp({
     const editingId = ref(null);
     const draft = reactive({ name: '', desc: '', code: '' });
     const notice = reactive({ text: '', kind: 'success' });
+    const resetArmed = ref(false);
     let timer = null;
 
     const hasQuery = computed(() => norm(q.value.trim()) !== '');
@@ -341,6 +343,8 @@ createApp({
     }
 
     function reset() {
+      if (!resetArmed.value) { resetArmed.value = true; clearTimeout(resetTimer); resetTimer = setTimeout(() => { resetArmed.value = false; }, 5000); return; }
+      clearTimeout(resetTimer); resetArmed.value = false;
       try { localStorage.removeItem(STORAGE_KEY); } catch {}
       locals.value = [];
       editingId.value = null;
@@ -348,7 +352,7 @@ createApp({
       showNotice('Se borraron los bookmarklets de este navegador.');
     }
 
-    return { fixed, locals, q, hasQuery, visibleFixed, visibleLocals, fName, fDesc, fCode, editingId, draft, notice, href, copyCode, addBm, startEdit, saveEdit, removeBm, share, reset };
+    return { fixed, locals, q, hasQuery, visibleFixed, visibleLocals, fName, fDesc, fCode, editingId, draft, notice, resetArmed, href, copyCode, addBm, startEdit, saveEdit, removeBm, share, reset };
   }
 }).mount('#app');
 </script>

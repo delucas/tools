@@ -465,7 +465,12 @@
 
       searchInput.addEventListener('input', render);
 
-      document.getElementById('reset').addEventListener('click', () => {
+      const resetBtn = document.getElementById('reset');
+      let resetArmada = false, resetTimer;
+      function resetDesarmar() { resetArmada = false; resetBtn.textContent = '🗑️ Reiniciar'; resetBtn.classList.remove('btn-danger'); resetBtn.classList.add('btn-outline-secondary'); }
+      resetBtn.addEventListener('click', () => {
+        if (!resetArmada) { resetArmada = true; resetBtn.textContent = '¿Seguro? Tocá de nuevo'; resetBtn.classList.remove('btn-outline-secondary'); resetBtn.classList.add('btn-danger'); clearTimeout(resetTimer); resetTimer = setTimeout(resetDesarmar, 5000); return; }
+        clearTimeout(resetTimer); resetDesarmar();
         removeStored();
         state = { locals: [] };
         pending = null;

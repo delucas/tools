@@ -683,7 +683,13 @@
       renderTabs();
       renderOutput();
     }
-    $reset.addEventListener('click', resetAll);
+    let resetArmada = false, resetTimer;
+    function resetDesarmar() { resetArmada = false; $reset.textContent = '🗑️ Reiniciar'; $reset.classList.remove('btn-danger'); $reset.classList.add('btn-outline-secondary'); }
+    $reset.addEventListener('click', () => {
+      if (!resetArmada) { resetArmada = true; $reset.textContent = '¿Seguro? Tocá de nuevo'; $reset.classList.remove('btn-outline-secondary'); $reset.classList.add('btn-danger'); clearTimeout(resetTimer); resetTimer = setTimeout(resetDesarmar, 5000); return; }
+      clearTimeout(resetTimer); resetDesarmar();
+      resetAll();
+    });
 
     // init: URL > localStorage > ejemplo (desde URL no se toca localStorage hasta el primer cambio)
     (function init() {

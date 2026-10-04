@@ -53,10 +53,10 @@
       <div v-if="notice" class="alert alert-success py-2 alert-flotante" role="status">{{ notice }}</div>
 
       <section class="mb-3">
-        <label for="expr-input" class="form-label">Expresión <small class="text-body-secondary fw-normal">(Enter para guardar en historial)</small></label>
+        <label for="expr-input" class="form-label">Expresión <small class="text-body-secondary fw-normal">(Enter guarda · ↑↓ historial)</small></label>
         <input id="expr-input" class="form-control form-control-lg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
-          v-model="expr" @input="onInput" @keydown.enter="commit" placeholder="log2(1024) + 2^10">
-        <div class="form-text">Funciones: <code>log2()</code> <code>log10()</code> <code>sqrt()</code> · operadores: <code>+ - * / % ^</code> <code>()</code> <code>!</code> · <code>ans</code> vale el último resultado guardado.</div>
+          v-model="expr" @input="onInput" @keydown.enter="commit" @keydown.up.prevent="histNav(1)" @keydown.down.prevent="histNav(-1)" placeholder="log2(1024) + 2^10">
+        <div class="form-text">Funciones: <code>log2()</code> <code>log10()</code> <code>sqrt()</code> · operadores: <code>+ - * / % ^</code> <code>()</code> <code>!</code> · constantes: <code>pi</code> <code>e</code> (la <code>e</code> pegada a dígitos es científica: <code>1e3</code> = 1000) · <code>ans</code> vale el último resultado guardado y en el LaTeX aparece su valor.</div>
         <div class="d-flex flex-wrap gap-2 mt-2">
           <button v-for="s in snippets" :key="s.label" class="btn btn-outline-secondary btn-sm mono" type="button" @click="insert(s.text)" :title="s.hint">{{ s.label }}</button>
         </div>
@@ -66,19 +66,25 @@
         <div class="card-body">
           <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
             <h2 class="h6 mb-0">Resultado</h2>
-            <div class="d-flex flex-wrap gap-2">
-              <span class="badge text-bg-secondary mono" title="Último resultado guardado">ans = {{ fmtAns }}</span>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <span class="badge text-bg-secondary mono" title="Último resultado guardado">ans = {{ groupedAns }}</span>
+              <div class="form-check form-switch mb-0" title="Mostrar en notación científica los resultados de más de 3 cifras enteras">
+                <input id="sci-toggle" class="form-check-input" type="checkbox" role="switch" v-model="sci" @change="onSci">
+                <label class="form-check-label small" for="sci-toggle">Notación científica</label>
+              </div>
               <button class="btn btn-outline-secondary btn-sm" type="button" @click="commit" :disabled="!preview || !preview.ok">＝ Guardar</button>
-              <button class="btn btn-outline-secondary btn-sm" type="button" @click="copyRes" :disabled="!preview || !preview.ok">📋 Copiar</button>
-              <button class="btn btn-outline-secondary btn-sm" type="button" @click="openEqtex" :disabled="!preview || !preview.ok">∑ Abrir en EqTeX</button>
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="copyRes" :disabled="!preview || !preview.latex" title="Copiar el LaTeX al portapapeles">📋 LaTeX</button>
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="openEqtex" :disabled="!preview || !preview.latex">∑ Abrir en EqTeX</button>
             </div>
           </div>
-          <div v-if="preview && preview.ok">
-            <div class="fs-3 mono mb-2" id="res-num">= {{ preview.text }}</div>
+          <div v-if="preview && preview.latex">
+            <div v-if="preview.ok" class="fs-3 mono mb-2" id="res-num" @click="copyNum" title="Tocá para copiar el número" style="cursor: pointer;">= {{ groupedDisp }}</div>
             <div id="latex-box" class="p-3"><div id="latex-view"></div></div>
+            <div v-if="!preview.ok" class="alert alert-danger py-2 mb-0 mt-2" role="alert">{{ preview.error }}</div>
           </div>
           <div v-else-if="preview" class="alert alert-danger py-2 mb-0" role="alert">{{ preview.error }}</div>
           <div v-else class="text-body-secondary">Escribí algo para empezar.</div>
+          <p v-if="expr.trim()" class="mt-2 mb-0 text-end"><a :href="waUrl" target="_blank" rel="noopener" class="small text-body-secondary text-decoration-none">¿Más complicado? Probar en WolframAlpha ↗</a></p>
         </div>
       </section>
 
@@ -90,7 +96,7 @@
         <p v-if="!historial.length" class="text-body-secondary small">Todavía no guardaste nada: escribí una expresión y tocá Enter o ＝ Guardar.</p>
         <ul v-else class="list-group">
           <li v-for="(h, i) in historial" :key="h.t + '-' + i" class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <span class="hist-expr"><span class="mono">{{ h.e }}</span> <span class="text-body-secondary">=</span> <strong class="mono">{{ h.res }}</strong></span>
+            <span class="hist-expr"><span class="mono">{{ h.e }}</span> <span class="text-body-secondary">=</span> <strong class="mono">{{ histGrouped(h) }}</strong></span>
             <span class="d-flex gap-2">
               <button class="btn btn-outline-secondary btn-sm" type="button" @click="reload(h.e)" title="Cargar en la entrada">↩️</button>
               <button class="btn btn-outline-danger btn-sm" type="button" @click="delItem(i)" title="Borrar">×</button>
@@ -131,7 +137,11 @@
             if (src[j] === '.' || src[j] === ',') { if (seen) break; seen = true; }
             j++;
           }
-          const raw = src.slice(i, j).replace(',', '.');
+          let raw = src.slice(i, j);
+          // Notación científica pegada al número (1.024e+3): la e suelta sigue siendo Euler.
+          const sci = src.slice(j).match(/^[eE][+-]?\d+/);
+          if (sci) { raw += sci[0]; j += sci[0].length; }
+          raw = raw.replace(',', '.');
           if (raw === '.' || raw === '') err('Se esperaba un número, función o paréntesis');
           toks.push({ t: 'num', v: parseFloat(raw) });
           i = j;
@@ -215,16 +225,16 @@
     }
 
     function factorial(n) {
-      if (!Number.isInteger(n) || n < 0 || n > 170) throw new Error('! solo admite enteros entre 0 y 170');
+      if (!Number.isInteger(n) || n < 0 || n > 100000) throw new Error('! solo admite enteros entre 0 y 100000');
       let r = 1;
-      for (let i = 2; i <= n; i++) r *= i;
+      for (let i = 2; i <= n; i++) r *= i; // si desborda a Infinity, lo rescata el modo exacto (hasta 20000)
       return r;
     }
 
     function evaluate(n, ans) {
       switch (n.k) {
         case 'num': return n.v;
-        case 'const': return n.c === 'ans' ? ans : n.c === 'pi' ? Math.PI : Math.E;
+        case 'const': return n.c === 'ans' ? (typeof ans === 'number' ? ans : Number(ans)) : n.c === 'pi' ? Math.PI : Math.E;
         case 'neg': return -evaluate(n.x, ans);
         case 'fact': return factorial(evaluate(n.x, ans));
         case 'fn': {
@@ -249,43 +259,187 @@
             if (r === 0) throw new Error('Resto con divisor cero');
             return l % r;
           }
+          if (l === 0 && r < 0) throw new Error('División por cero');
           return Math.pow(l, r);
         }
       }
       throw new Error('Expresión no válida');
     }
 
-    function latexNum(v) {
-      if (!Number.isFinite(v)) return String(v);
-      const s = String(parseFloat(v.toPrecision(10)));
-      if (/e/i.test(s)) {
-        const m = s.match(/^(-?[\d.]+)[eE]([+-]?\d+)$/);
-        return m[1].replace('.', '{,}') + '\\times10^{' + parseInt(m[2], 10) + '}';
-      }
-      return s.replace('.', '{,}');
+    // ---- Modo exacto (BigInt): respaldo solo cuando el float nativo desborda ----
+    // Todo entero o nada: cualquier valor no entero aborta el fallback.
+    function bigSqrt(v) {
+      if (v < 2n) return v;
+      let x = v, y = (x + 1n) >> 1n;
+      while (y < x) { x = y; y = (x + v / x) >> 1n; }
+      return x;
     }
 
-    function toLatex(n) {
+    function guardBig(x) {
+      if (x.toString().replace('-', '').length > 12000000) throw new Error('big:huge');
+      return x;
+    }
+
+    // log10 ajustado de un BigInt (para estimar dígitos de una potencia sin calcularla).
+    function bigLog10(l) {
+      const s = (l < 0n ? -l : l).toString();
+      return (s.length - 1) + Math.log10(parseFloat(s.slice(0, 15)) || 1);
+    }
+
+    function evaluateBig(n, ans) {
+      const no = (c) => { throw new Error('big:' + (c || 'int')); };
+      switch (n.k) {
+        case 'num':
+          if (!Number.isInteger(n.v)) no('int');
+          return BigInt(n.v);
+        case 'const':
+          if (n.c !== 'ans') no('int'); // pi y e son irracionales
+          if (typeof ans === 'number') {
+            if (!Number.isInteger(ans)) no('int');
+            return BigInt(ans);
+          }
+          if (typeof ans === 'string' && /^-?\d+$/.test(ans)) return BigInt(ans);
+          no('int');
+          break;
+        case 'neg': return -evaluateBig(n.x, ans);
+        case 'fact': {
+          const v = evaluateBig(n.x, ans);
+          if (v < 0n || v > 20000n) no('fact');
+          let r = 1n;
+          for (let i = 2n; i <= v; i++) r *= i;
+          return r;
+        }
+        case 'fn': {
+          const v = evaluateBig(n.x, ans);
+          if (v <= 0n) no('fn');
+          if (n.fn === 'sqrt') {
+            const s = bigSqrt(v);
+            if (s * s !== v) no('fn'); // solo cuadrados perfectos
+            return s;
+          }
+          if (n.fn === 'log2') {
+            if ((v & (v - 1n)) !== 0n) no('fn'); // solo potencias exactas de dos
+            return BigInt(v.toString(2).length - 1);
+          }
+          const s = v.toString(); // log10 y log: solo potencias exactas de diez
+          if (!/^10*$/.test(s)) no('fn');
+          return BigInt(s.length - 1);
+        }
+        case 'bin': {
+          const l = evaluateBig(n.l, ans), r = evaluateBig(n.r, ans);
+          if (n.op === '+') return guardBig(l + r);
+          if (n.op === '-') return guardBig(l - r);
+          if (n.op === '*') return guardBig(l * r);
+          if (n.op === '/') {
+            if (r === 0n) throw new Error('División por cero');
+            if (l % r !== 0n) no('div');
+            return l / r;
+          }
+          if (n.op === '%') {
+            if (r === 0n) throw new Error('Resto con divisor cero');
+            return l % r;
+          }
+          if (r < 0n) { // exponente negativo: solo 0, 1 y -1 dan entero
+            if (l === 1n) return 1n;
+            if (l === -1n) return (r & 1n) ? -1n : 1n;
+            if (l === 0n) throw new Error('División por cero');
+            no('int');
+          }
+          if (l === 0n) return r === 0n ? 1n : 0n;
+          if (r > 1000000n) no('pow');
+          if (!(Number(r) * bigLog10(l) <= 10000000)) no('pow'); // tope de cálculo, no de BigInt
+          return guardBig(l ** r);
+        }
+      }
+      no('int');
+    }
+
+    function round4(d) { // d: dígitos → 4 significativos redondeados (+acarreo)
+      const h = (d.slice(0, 4) + '0000').slice(0, 4).split('').map(Number);
+      if (Number(d[4] || '0') < 5) return { head: h.join(''), bump: 0 };
+      let i = 3;
+      while (i >= 0) { h[i]++; if (h[i] < 10) break; h[i] = 0; i--; }
+      if (i < 0) return { head: '1000', bump: 1 };
+      return { head: h.join(''), bump: 0 };
+    }
+
+    function sciFromInt(digits) { // dígitos sin ceros líderes, len > 3 → "d.ddde+x"
+      const r = round4(digits);
+      return r.head[0] + '.' + r.head.slice(1) + 'e+' + (digits.length - 1 + r.bump);
+    }
+
+    function fmtBigStr(s, sci) { // s: entero en texto, exacto
+      const neg = s[0] === '-';
+      const t = neg ? s.slice(1) : s;
+      if (!/^\d+$/.test(t)) return s;
+      const digits = t.replace(/^0+/, '') || '0';
+      if (digits === '0') return '0';
+      if (digits.length > 2000) return (neg ? '-' : '') + sciFromInt(digits); // seguridad visual
+      if (sci && digits.length > 3) return (neg ? '-' : '') + sciFromInt(digits);
+      return (neg ? '-' : '') + digits;
+    }
+
+    function fmtAnsStr(s, sci) {
+      if (/^-?\d+$/.test(s)) return fmtBigStr(s, sci);
+      const n = parseFloat(s);
+      return Number.isFinite(n) ? fmtNum(n, sci) : '0';
+    }
+
+    function latexAnsStr(s) {
+      if (/^-?\d+$/.test(s)) {
+        const neg = s[0] === '-';
+        const digits = (neg ? s.slice(1) : s).replace(/^0+/, '') || '0';
+        if (digits.length > 500) return latexNum(fmtBigStr(s, true)); // abreviado en científico
+        return (neg ? '-' : '') + digits;
+      }
+      const n = parseFloat(s);
+      return Number.isFinite(n) ? latexNum(n) : '0';
+    }
+
+    function fmtPlain(v) { return String(parseFloat(v.toPrecision(10))); }
+
+    // Notación científica solo para magnitudes grandes (más de 3 cifras enteras).
+    function fmtSci(v) {
+      if (v === 0) return '0';
+      if (Math.abs(v) >= 1000) return v.toExponential(3);
+      return fmtPlain(v);
+    }
+
+    function fmtNum(v, sci) { return sci ? fmtSci(v) : fmtPlain(v); }
+
+    function latexNum(t) {
+      const s = typeof t === 'number'
+        ? (Number.isFinite(t) ? String(parseFloat(t.toPrecision(10))) : String(t))
+        : String(t);
+      if (/e/i.test(s)) {
+        const m = s.match(/^(-?[\d.]+)[eE]([+-]?\d+)$/);
+        if (m) return m[1] + '\\times10^{' + parseInt(m[2], 10) + '}';
+      }
+      return s;
+    }
+
+    // ans se sustituye por el valor guardado (en el LaTeX aparece el número).
+    function toLatex(n, ans) {
       const prec = (o) => (o === '+' || o === '-' ? 1 : o === '*' || o === '/' || o === '%' ? 2 : 3);
       switch (n.k) {
         case 'num': return latexNum(n.v);
-        case 'const': return n.c === 'ans' ? '\\text{ans}' : n.c === 'pi' ? '\\pi' : 'e';
-        case 'neg': return (n.x.k === 'num' || n.x.k === 'const') ? '-' + toLatex(n.x) : '-(' + toLatex(n.x) + ')';
-        case 'fact': return '{' + toLatex(n.x) + '}!';
+        case 'const': return n.c === 'ans' ? (typeof ans === 'string' ? latexAnsStr(ans) : latexNum(ans)) : n.c === 'pi' ? '\\pi' : 'e';
+        case 'neg': return (n.x.k === 'num' || n.x.k === 'const') ? '-' + toLatex(n.x, ans) : '-(' + toLatex(n.x, ans) + ')';
+        case 'fact': return '{' + toLatex(n.x, ans) + '}!';
         case 'fn': {
-          const x = toLatex(n.x);
+          const x = toLatex(n.x, ans);
           if (n.fn === 'sqrt') return '\\sqrt{' + x + '}';
           if (n.fn === 'log2') return '\\log_{2}{(' + x + ')}';
           return '\\log_{10}{(' + x + ')}';
         }
         case 'bin': {
-          if (n.op === '/') return '\\frac{' + toLatex(n.l) + '}{' + toLatex(n.r) + '}';
+          if (n.op === '/') return '\\frac{' + toLatex(n.l, ans) + '}{' + toLatex(n.r, ans) + '}';
           if (n.op === '^') {
-            const b = (n.l.k === 'bin' || n.l.k === 'neg') ? '(' + toLatex(n.l) + ')' : toLatex(n.l);
-            const e = (n.r.k === 'num' || n.r.k === 'const') ? toLatex(n.r) : toLatex(n.r);
+            const b = (n.l.k === 'bin' || n.l.k === 'neg') ? '(' + toLatex(n.l, ans) + ')' : toLatex(n.l, ans);
+            const e = (n.r.k === 'num' || n.r.k === 'const') ? toLatex(n.r, ans) : toLatex(n.r, ans);
             return '{' + b + '}^{' + e + '}';
           }
-          const L = toLatex(n.l), R = toLatex(n.r);
+          const L = toLatex(n.l, ans), R = toLatex(n.r, ans);
           const wL = (n.l.k === 'bin' && prec(n.l.op) < prec(n.op)) ? '(' + L + ')' : L;
           const needR = n.r.k === 'bin' && (prec(n.r.op) < prec(n.op) || ((n.op === '-' || n.op === '%' || n.op === '*') && prec(n.r.op) <= prec(n.op)));
           const wR = needR ? '(' + R + ')' : R;
@@ -297,26 +451,125 @@
       return '';
     }
 
-    function fmtRes(v) { return String(parseFloat(v.toPrecision(10))); }
-
     function calc(expr, ans) {
       if (!String(expr).trim()) return { ok: false, empty: true, error: '' };
+      let ast;
       try {
-        const ast = parseToks(tokenize(String(expr)));
-        const value = evaluate(ast, ans);
-        if (typeof value !== 'number' || Number.isNaN(value)) return { ok: false, error: 'Resultado no definido' };
-        if (!Number.isFinite(value)) return { ok: false, error: 'Resultado fuera de rango' };
-        return { ok: true, value: parseFloat(value.toPrecision(10)), text: fmtRes(value), latex: toLatex(ast) };
+        ast = parseToks(tokenize(String(expr)));
       } catch (e) {
         return { ok: false, error: e.message || 'Expresión no válida' };
       }
+      const latex = toLatex(ast, ans); // el LaTeX existe aunque falle la evaluación
+      let value;
+      try {
+        value = evaluate(ast, ans);
+      } catch (e) {
+        return { ok: false, error: e.message || 'Expresión no válida', latex };
+      }
+      if (typeof value !== 'number' || Number.isNaN(value)) return { ok: false, error: 'Resultado no definido', latex };
+      if (!Number.isFinite(value)) {
+        try {
+          const big = evaluateBig(ast, ans).toString();
+          return { ok: true, big, value: null, text: big, latex };
+        } catch (e) {
+          if (e.message === 'División por cero' || e.message === 'Resto con divisor cero') return { ok: false, error: e.message, latex };
+          if (typeof e.message === 'string' && e.message.startsWith('big:')) {
+            const base = 'Fuera de rango: los decimales llegan hasta ±1,8e308';
+            const code = e.message.slice(4);
+            if (code === 'div') return { ok: false, error: base + ' y el modo exacto exige división exacta.', latex };
+            if (code === 'fn') return { ok: false, error: base + ' y en modo exacto el logaritmo y la raíz solo valen si son exactos.', latex };
+            if (code === 'fact') return { ok: false, error: base + ' y el factorial exacto llega hasta 20000.', latex };
+            if (code === 'pow' || code === 'huge') return { ok: false, error: 'Fuera de rango: supera el tope de cálculo (~10 millones de cifras). Los decimales llegan hasta ±1,8e308.', latex };
+            return { ok: false, error: base + ' y el modo exacto solo admite enteros con operaciones exactas.', latex };
+          }
+          return { ok: false, error: 'Resultado fuera de rango', latex };
+        }
+      }
+      return { ok: true, big: null, value: parseFloat(value.toPrecision(10)), text: fmtPlain(value), latex };
+    }
+
+    // Lo que 📋 Copiar lleva al portapapeles: ecuación completa si hay resultado,
+    // solo la expresión si la evaluación falló, null si ni siquiera parsea.
+    function copyTextFor(preview, sci) {
+      if (!preview || !preview.latex) return null;
+      if (!preview.ok) return preview.latex;
+      const t = preview.big != null ? fmtBigStr(preview.big, sci) : fmtNum(preview.value, sci);
+      return preview.latex + '=' + latexNum(t);
+    }
+
+    // Agrupamiento de a 3 solo para mostrar (lo copiado/compartido sigue exacto).
+    // Separador: espacio fino inseparable (U+202F), más angosto y sin cortes de línea.
+    function groupDigits(s) {
+      if (/e/i.test(s)) return s;
+      const neg = s[0] === '-';
+      const t = neg ? s.slice(1) : s;
+      const parts = t.split('.');
+      if (!/^\d+$/.test(parts[0])) return s;
+      const g = parts[0].replace(/\B(?=(?:\d{3})+$)/g, ' ');
+      return (neg ? '-' : '') + g + (parts.length > 1 ? '.' + parts[1] : '');
+    }
+
+    // Navegación del historial: idx -1 = borrador actual, 0..n de nuevo a viejo.
+    function histStep(idx, len, dir) {
+      if (!len) return -1;
+      if (dir > 0) return idx < 0 ? 0 : Math.min(idx + 1, len - 1);
+      if (idx < 0) return -1;
+      return idx - 1;
+    }
+
+    // Texto para WolframAlpha: ans por su valor, ** → ^ y log( → log10(
+    // (en WA, log( solo es logaritmo natural).
+    function waQueryText(expr, ans) {
+      let q = String(expr).replace(/\*\*/g, '^').replace(/\blog\(/g, 'log10(');
+      let a = typeof ans === 'string' ? ans : fmtPlain(ans);
+      if (/^-?\d+$/.test(a)) {
+        const digits = (a[0] === '-' ? a.slice(1) : a).replace(/^0+/, '');
+        if (digits.length > 400) a = fmtBigStr(a, true); // URL manejable
+      }
+      return q.replace(/\bans\b/g, '(' + a + ')');
     }
 
     // ---- Estado: URL > localStorage > defecto (con URL no se toca storage) ----
+    // sci es preferencia de visualización: se lee del storage aunque haya URL.
+    function readSci() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const s = JSON.parse(raw);
+          if (s && typeof s === 'object' && typeof s.sci === 'boolean') return s.sci;
+        }
+      } catch { /* defecto: apagado */ }
+      return false;
+    }
+
+    // ans se guarda como texto exacto (los BigInt no entran en un number).
+    function normAns(a) {
+      if (typeof a === 'number' && Number.isFinite(a)) return fmtPlain(a);
+      if (typeof a === 'string' && /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(a.trim())) return a.trim();
+      return '0';
+    }
+
+    // Normaliza entradas viejas al formato { e, latex, vnum, vbig, t }.
+    function normHist(list) {
+      if (!Array.isArray(list)) return [];
+      return list
+        .filter(h => h && typeof h.e === 'string')
+        .map(h => ({
+          e: h.e,
+          latex: typeof h.latex === 'string' ? h.latex : '',
+          vbig: typeof h.vbig === 'string' && /^-?\d+$/.test(h.vbig) ? h.vbig : null,
+          vnum: typeof h.vnum === 'number' ? h.vnum
+            : typeof h.v === 'number' ? h.v
+            : typeof h.res === 'string' ? parseFloat(h.res) : NaN,
+          t: h.t || ''
+        }))
+        .filter(h => h.vbig !== null || Number.isFinite(h.vnum));
+    }
+
     function loadInitial() {
       const q = new URLSearchParams(window.location.search);
       if (q.get('e') !== null) {
-        return { expr: q.get('e') || DEFAULT_EXPR, ans: 0, historial: [], fromUrl: true };
+        return { expr: q.get('e') || DEFAULT_EXPR, ans: '0', historial: [], sci: readSci(), fromUrl: true };
       }
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
@@ -325,20 +578,23 @@
           if (s && typeof s === 'object') {
             return {
               expr: typeof s.expr === 'string' ? s.expr : DEFAULT_EXPR,
-              ans: typeof s.ans === 'number' ? s.ans : 0,
-              historial: Array.isArray(s.historial) ? s.historial.filter(h => typeof h?.e === 'string') : [],
+              ans: normAns(s.ans),
+              historial: normHist(s.historial),
+              sci: typeof s.sci === 'boolean' ? s.sci : false,
               fromUrl: false
             };
           }
         }
       } catch { /* se usa el ejemplo */ }
-      return { expr: DEFAULT_EXPR, ans: 0, historial: [], fromUrl: false };
+      return { expr: DEFAULT_EXPR, ans: '0', historial: [], sci: false, fromUrl: false };
     }
 
     const SNIPPETS = [
       { label: 'log2()', text: 'log2()', hint: 'Logaritmo en base 2' },
       { label: 'log10()', text: 'log10()', hint: 'Logaritmo en base 10' },
       { label: '√', text: 'sqrt()', hint: 'Raíz cuadrada' },
+      { label: 'π', text: 'pi', hint: 'Constante π' },
+      { label: 'e', text: 'e', hint: 'Constante de Euler' },
       { label: 'xʸ', text: '^', hint: 'Potencia' },
       { label: 'n!', text: '!', hint: 'Factorial' },
       { label: '%', text: '%', hint: 'Resto (módulo)' },
@@ -356,7 +612,10 @@
           expr: init.expr,
           ans: init.ans,
           historial: init.historial,
+          sci: init.sci,
           fromUrl: init.fromUrl,
+          histIdx: -1,
+          draftExpr: '',
           snippets: SNIPPETS,
           notice: '',
           shared: false,
@@ -369,46 +628,90 @@
           const r = calc(this.expr, this.ans);
           return r.empty ? null : r;
         },
+        dispText() {
+          if (!this.preview || !this.preview.ok) return '';
+          return this.preview.big != null ? fmtBigStr(this.preview.big, this.sci) : fmtNum(this.preview.value, this.sci);
+        },
+        dispLatex() {
+          if (!this.preview || !this.preview.ok) return '';
+          return latexNum(this.dispText);
+        },
         fmtAns() {
-          return fmtRes(this.ans);
+          return fmtAnsStr(this.ans, this.sci);
+        },
+        groupedDisp() {
+          return groupDigits(this.dispText);
+        },
+        groupedAns() {
+          return groupDigits(this.fmtAns);
+        },
+        waUrl() {
+          return 'https://www.wolframalpha.com/input?i=' + encodeURIComponent(waQueryText(this.expr.trim() || DEFAULT_EXPR, this.ans));
         }
       },
       methods: {
         render() {
           this.$nextTick(() => {
             const el = document.getElementById('latex-view');
-            if (!el || !this.preview || !this.preview.ok) return;
+            if (!el || !this.preview || !this.preview.latex) return;
+            const code = this.preview.ok ? this.preview.latex + '=' + this.dispLatex : this.preview.latex;
+            const flat = this.preview.ok ? this.preview.latex + ' = ' + this.dispText : this.preview.latex;
             if (typeof katex === 'undefined') {
               this.katexError = 'No se pudo cargar KaTeX (revisá tu conexión).';
-              el.textContent = this.preview.latex + ' = ' + this.preview.text;
+              el.textContent = flat;
               return;
             }
             try {
-              katex.render(this.preview.latex + '=' + latexNum(this.preview.value), el, { displayMode: true, throwOnError: true });
+              katex.render(code, el, { displayMode: true, throwOnError: true });
               this.katexError = '';
             } catch (e) {
-              el.textContent = this.preview.latex + ' = ' + this.preview.text;
+              el.textContent = flat;
             }
           });
         },
         onInput() {
+          this.histIdx = -1;
           if (this.fromUrl) this.fromUrl = false;
           else this.persist();
           this.render();
         },
         persist() {
           try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify({ expr: this.expr, ans: this.ans, historial: this.historial.slice(0, MAX_HISTORY) }));
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ expr: this.expr, ans: this.ans, sci: this.sci, historial: this.historial.slice(0, MAX_HISTORY) }));
           } catch { /* cuota llena o modo privado: se sigue sin guardar */ }
+        },
+        onSci() {
+          this.fromUrl = false;
+          this.persist();
+          this.render();
+        },
+        histText(h) {
+          if (typeof h.vbig === 'string') return fmtBigStr(h.vbig, this.sci);
+          const v = typeof h.vnum === 'number' ? h.vnum : (typeof h.v === 'number' ? h.v : parseFloat(h.res));
+          return Number.isFinite(v) ? fmtNum(v, this.sci) : (h.res || '');
+        },
+        histGrouped(h) {
+          return groupDigits(this.histText(h));
+        },
+        histNav(dir) {
+          const next = histStep(this.histIdx, this.historial.length, dir);
+          if (next === this.histIdx) return;
+          if (this.histIdx === -1 && dir > 0) this.draftExpr = this.expr;
+          this.histIdx = next;
+          this.expr = next === -1 ? this.draftExpr : this.historial[next].e;
+          this.fromUrl = false;
+          this.persist();
+          this.render();
         },
         commit() {
           const r = this.preview;
           if (!r || !r.ok) return;
           if (!this.historial.length || this.historial[0].e !== this.expr.trim()) {
-            this.historial.unshift({ e: this.expr.trim(), latex: r.latex, res: r.text, t: new Date().toISOString() });
+            this.historial.unshift({ e: this.expr.trim(), latex: r.latex, vnum: r.big == null ? r.value : null, vbig: r.big, t: new Date().toISOString() });
             this.historial = this.historial.slice(0, MAX_HISTORY);
           }
-          this.ans = r.value;
+          this.ans = r.big != null ? r.big : fmtPlain(r.value);
+          this.histIdx = -1;
           this.fromUrl = false;
           this.persist();
           this.render();
@@ -428,6 +731,7 @@
         },
         reload(e) {
           this.expr = e;
+          this.histIdx = -1;
           this.fromUrl = false;
           this.persist();
           this.render();
@@ -445,21 +749,50 @@
           this.showNotice('Historial borrado.');
         },
         copyText(text) {
-          if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
-          return Promise.reject(new Error('sin portapapeles'));
+          // Igual que en EqTeX: moderno primero, textarea+execCommand de respaldo.
+          if (navigator.clipboard?.writeText) {
+            return navigator.clipboard.writeText(text).catch(() => this.legacyCopy(text));
+          }
+          return this.legacyCopy(text);
+        },
+        legacyCopy(text) {
+          return new Promise((resolve, reject) => {
+            try {
+              const ta = document.createElement('textarea');
+              ta.value = text;
+              ta.style.position = 'fixed';
+              ta.style.opacity = '0';
+              document.body.appendChild(ta);
+              ta.select();
+              const ok = document.execCommand('copy');
+              ta.remove();
+              if (ok) resolve();
+              else reject(new Error('sin portapapeles'));
+            } catch (e) {
+              reject(e);
+            }
+          });
+        },
+        copyNum() {
+          if (!this.preview || !this.preview.ok) return;
+          this.copyText(this.dispText).then(
+            () => this.showNotice('Número copiado.'),
+            () => this.showNotice('No se pudo copiar.')
+          );
         },
         copyRes() {
-          if (!this.preview || !this.preview.ok) return;
-          this.copyText(this.preview.text).then(
-            () => this.showNotice('Resultado copiado: ' + this.preview.text),
+          const t = copyTextFor(this.preview, this.sci);
+          if (t === null) return;
+          this.copyText(t).then(
+            () => this.showNotice(this.preview.ok ? 'LaTeX copiado.' : 'LaTeX copiado (sin resultado).'),
             () => this.showNotice('No se pudo copiar.')
           );
         },
         openEqtex() {
-          if (!this.preview || !this.preview.ok) return;
+          if (!this.preview || !this.preview.latex) return;
           const url = new URL('../eqtex/', window.location.href);
-          url.searchParams.set('nombre', this.expr.trim() + ' = ' + this.preview.text);
-          url.searchParams.set('latex', this.preview.latex + '=' + latexNum(this.preview.value));
+          url.searchParams.set('nombre', this.preview.ok ? this.expr.trim() + ' = ' + this.dispText : this.expr.trim());
+          url.searchParams.set('latex', this.preview.ok ? this.preview.latex + '=' + this.dispLatex : this.preview.latex);
           window.open(url.toString(), '_blank', 'noopener');
         },
         share() {
@@ -482,8 +815,11 @@
           this.resetArmed = false;
           try { localStorage.removeItem(STORAGE_KEY); } catch { /* nada */ }
           this.expr = DEFAULT_EXPR;
-          this.ans = 0;
+          this.ans = '0';
           this.historial = [];
+          this.sci = false;
+          this.histIdx = -1;
+          this.draftExpr = '';
           this.fromUrl = false;
           history.replaceState(null, '', window.location.pathname);
           this.render();

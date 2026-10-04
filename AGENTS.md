@@ -104,6 +104,7 @@ Para herramientas con estado que usen Vue.js (vía CDN, versión fija):
 
 ## Commits
 
+- Nunca commitear sin orden explícita del humano; por defecto los cambios quedan en el working tree.
 - Mensajes simples y cortos, en español, describiendo el cambio.
 - Solamente el mensaje: sin coautorías, sin menciones a IA ni metadatos extra.
 - Revisar `git status` antes de `git add` y agregar solo los archivos que correspondan al cambio.

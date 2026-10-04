@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f4cb%3B%3C/text%3E%3C/svg%3E">
+  <title>Board — mini Trello minimalista</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    #app input, #app textarea, #app select { font-size: 16px; }
+    /* El tablero llena la pantalla: las columnas scrollean por dentro. */
+    .board-page { height: 100vh; height: 100dvh; display: flex; flex-direction: column; }
+    .board-page #app { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+    .board { flex: 1 1 auto; min-height: 0; align-items: flex-start; }
+    .board-col { display: flex; flex-direction: column; max-height: 100%; }
+    .board-col > .card-body { display: flex; flex-direction: column; min-height: 0; }
+    .card-list { flex: 1 1 auto; overflow-y: auto; }
+    .board { display: flex; gap: .75rem; overflow-x: auto; padding-bottom: .5rem; }
+    .board-col { flex: 0 0 280px; max-width: 280px; }
+    .board-col-ghost { flex: 0 0 280px; max-width: 280px; }
+    .col-title { cursor: pointer; overflow-wrap: anywhere; }
+    .card-list { min-height: 3rem; }
+    .card-title { overflow-wrap: anywhere; cursor: pointer; }
+    .sortable-ghost { opacity: .4; }
+    .overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, .5); z-index: 1060; display: flex; align-items: flex-start; justify-content: center; padding: 10vh 1rem 1rem; }
+    .dialog { width: 100%; max-width: 560px; }
+    .mono { font-family: var(--bs-font-monospace); }
+    p.signature { font-size: 0.8em; }
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
+  </style>
+</head>
+<body>
+
+  <main class="container-fluid py-4 board-page" style="max-width: 1400px;">
+    <div id="app">
+      <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+      <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+        <div>
+          <h1 class="h3 mb-1">📌 Board</h1>
+          <p class="text-body-secondary mb-0">Mini Trello minimalista: columnas y tarjetas arrastrables.</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset" :class="resetArmed ? 'btn-danger' : 'btn-outline-secondary'">{{ resetArmed ? '¿Seguro? Tocá de nuevo' : '🗑️ Reiniciar' }}</button>
+          <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+        </div>
+      </div>
+
+      <div v-if="notice" class="alert alert-success py-2 alert-flotante" role="status">{{ notice }}</div>
+
+      <details class="mb-3">
+        <summary class="text-body-secondary small" style="cursor: pointer;">🛠️ Herramientas: plantillas y respaldo</summary>
+        <div class="d-flex flex-wrap gap-3 mt-2">
+          <div class="d-flex gap-2 align-items-end">
+            <div>
+              <label for="preset-sel" class="form-label small mb-1">Plantilla</label>
+              <select id="preset-sel" class="form-select form-select-sm" v-model="presetSel">
+                <option v-for="(p, id) in presets" :key="id" :value="id">{{ p.name }}</option>
+              </select>
+            </div>
+            <div>
+              <button class="btn btn-outline-secondary btn-sm text-nowrap" type="button" @click="loadPreset" :class="loadArmed ? 'btn-danger' : 'btn-outline-secondary'">{{ loadArmed ? '¿Reemplazar? Tocá de nuevo' : 'Cargar' }}</button>
+              <div class="form-text">Reemplaza todo el tablero.</div>
+            </div>
+          </div>
+          <div class="d-flex gap-2 align-items-end">
+            <button class="btn btn-outline-secondary btn-sm" type="button" @click="exportJSON">JSON ⬇️</button>
+            <button class="btn btn-outline-secondary btn-sm" type="button" @click="exportMD">MD ⬇️</button>
+            <button class="btn btn-outline-secondary btn-sm" type="button" @click="openImport">📥 Importar</button>
+            <input id="import-file" type="file" accept=".json,application/json" hidden @change="importBoard">
+          </div>
+        </div>
+      </details>
+
+      <section class="board mb-3" id="board-cols">
+        <p v-if="!columns.length" class="text-body-secondary">Tablero vacío: agregá una columna o cargá una plantilla.</p>
+        <div v-for="col in columns" :key="col.id" class="board-col card" :data-id="col.id">
+          <div class="card-header d-flex justify-content-between align-items-center gap-1">
+            <span class="col-handle text-body-secondary" title="Arrastrar columna">⠿</span>
+            <strong v-if="editingColId !== col.id" class="col-title flex-grow-1" @click="editCol(col)" :title="'Renombrar ' + col.title">{{ col.title }}</strong>
+            <input v-else class="form-control form-control-sm" type="text" v-model="draftTitle" @keydown.enter="saveCol(col)" @blur="saveCol(col)" maxlength="60" :data-rename="col.id">
+            <span class="badge text-bg-secondary fw-normal">{{ col.cards.length }}</span>
+            <button class="btn btn-outline-secondary btn-sm py-0 px-1" type="button" @click="clearColumn(col)" :class="clearArmed === col.id ? 'btn-danger' : 'btn-outline-secondary'" :title="clearArmed === col.id ? 'Tocá de nuevo para vaciar' : 'Vaciar columna'">🧹</button>
+            <button class="btn btn-outline-danger btn-sm py-0 px-1" type="button" @click="delCol(col)" :class="delColArmed === col.id ? 'btn-danger' : 'btn-outline-danger'" :title="delColArmed === col.id ? 'Tocá de nuevo para borrar' : 'Borrar columna'">{{ delColArmed === col.id ? '¿Sí?' : '×' }}</button>
+          </div>
+          <div class="card-body p-2">
+            <div class="card-list d-flex flex-column gap-2" :data-col-id="col.id">
+              <div v-for="k in col.cards" :key="k.id" class="card" :data-id="k.id">
+                <div class="card-body p-2 d-flex align-items-start gap-1">
+                  <span class="drag-handle text-body-secondary" title="Arrastrar tarjeta">⠿</span>
+                  <span class="card-title flex-grow-1" @click="openCard(col, k)" @dblclick="openCard(col, k)" :title="k.desc || k.title">{{ k.title }}</span>
+                  <span v-if="k.desc && k.desc.trim()" class="text-body-secondary" title="Tiene explicación">📝</span>
+                  <button class="btn btn-outline-secondary btn-sm py-0 px-1" type="button" @click="openCard(col, k)" title="Abrir tarjeta">✏️</button>
+                  <button class="btn btn-sm py-0 px-1" type="button" @click="delCard(col, k)" :class="delCardArmed === k.id ? 'btn-danger' : 'btn-outline-danger'" :title="delCardArmed === k.id ? 'Tocá de nuevo para borrar' : 'Borrar tarjeta'">{{ delCardArmed === k.id ? '¿Sí?' : '×' }}</button>
+                </div>
+              </div>
+              <p v-if="!col.cards.length" class="text-body-secondary small px-1 py-2 mb-0">Sin tarjetas.</p>
+            </div>
+            <div class="d-flex gap-1 mt-2">
+              <input class="form-control form-control-sm" type="text" :value="drafts[col.id] || ''" @input="drafts[col.id] = $event.target.value" @keydown.enter="addCardUi(col)" placeholder="+ Agregar tarjeta" maxlength="120" :aria-label="'Agregar tarjeta en ' + col.title">
+              <button class="btn btn-outline-primary btn-sm" type="button" @click="addCardUi(col)">+</button>
+            </div>
+          </div>
+        </div>
+        <div class="board-col-ghost">
+          <button v-if="!addingCol" class="btn btn-outline-secondary w-100" type="button" @click="startAddCol" style="border-style: dashed;">+ Agregar columna</button>
+          <div v-else class="card">
+            <div class="card-body p-2">
+              <input id="new-col" class="form-control form-control-sm mb-2" type="text" v-model="newCol" @keydown.enter="addColumn" @keydown.esc="cancelAddCol" placeholder="Nombre" maxlength="60">
+              <div class="d-flex gap-2">
+                <button class="btn btn-primary btn-sm" type="button" @click="addColumn">Agregar</button>
+                <button class="btn btn-outline-secondary btn-sm" type="button" @click="cancelAddCol">Cancelar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div v-if="editing" class="overlay" @click.self="closeCard" @keydown.esc="closeCard">
+        <div class="dialog card" role="dialog" aria-modal="true" aria-label="Editar tarjeta">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>Tarjeta</strong>
+            <button class="btn btn-outline-secondary btn-sm" type="button" @click="closeCard">Cerrar</button>
+          </div>
+          <div class="card-body">
+            <label for="card-title" class="form-label small">Título</label>
+            <input id="card-title" class="form-control mb-2" type="text" v-model="editing.title" @keydown.enter="saveCard" maxlength="120">
+            <label for="card-desc" class="form-label small">Explicación</label>
+            <textarea id="card-desc" class="form-control" rows="5" v-model="editing.desc" @keydown.ctrl.enter="saveCard" placeholder="Texto plano…"></textarea>
+            <div class="form-text">Enter guarda el título · Ctrl+Enter guarda todo.</div>
+          </div>
+          <div class="card-footer d-flex justify-content-end gap-2">
+            <button class="btn btn-outline-secondary btn-sm" type="button" @click="closeCard">Descartar</button>
+            <button class="btn btn-primary btn-sm" type="button" @click="saveCard">Guardar</button>
+          </div>
+        </div>
+      </div>
+
+      <hr>
+
+      <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+    </div>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.5.42/vue.global.prod.min.js"
+    integrity="sha512-PREsKi18CyKMgwXMJWtvkzinqjiN0znVfDovmVadp7pKiUpyNGtq7bD2fKElDBmdfH4DGJz8pmAdgihN8NZ8TQ=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"
+    integrity="sha512-csIng5zcB+XpulRUa+ev1zKo7zRNGpEaVfNB9On1no9KYTEY/rLGAEEpvgdw6nim1WdTuihZY1eqZ31K7/fZjw=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script>
+    const STORAGE_KEY = 'board';
+
+    function uid() {
+      return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    }
+
+    function createColumn(title) {
+      return { id: uid(), title: String(title || '').trim() || 'Sin título', cards: [] };
+    }
+
+    function addCard(col, title) {
+      const card = { id: uid(), title: String(title || '').trim() || 'Sin título', desc: '' };
+      col.cards.push(card);
+      return card;
+    }
+
+    const PRESETS = {
+      kanban: { name: 'Kanban', columns: ['Por hacer', 'En curso', 'Hecho'] },
+      scrum: { name: 'Scrum', columns: ['Backlog', 'Para hacer', 'En curso', 'En revisión', 'Hecho'] },
+      daki: { name: 'Daki', columns: ['Drop', 'Add', 'Keep', 'Improve'] },
+      vacio: { name: 'Vacío', columns: [] }
+    };
+
+    function applyPreset(id) {
+      const p = PRESETS[id] || PRESETS.vacio;
+      return p.columns.map(t => createColumn(t));
+    }
+
+    function findCard(columns, colId, cardId) {
+      for (const col of columns) {
+        if (col.id !== colId) continue;
+        for (const card of col.cards) {
+          if (card.id === cardId) return { col, card };
+        }
+      }
+      return null;
+    }
+
+    // Reconcilia el estado con el orden del DOM tras un arrastre.
+    // orders: {colId: [cardId...]} con el orden de cada lista renderizada.
+    function applyOrder(columns, orders) {
+      const byId = new Map();
+      const home = new Map();
+      columns.forEach(c => c.cards.forEach(k => { byId.set(k.id, k); home.set(k.id, c.id); }));
+      const seen = new Set();
+      Object.entries(orders).forEach(([colId, ids]) => {
+        const col = columns.find(c => c.id === colId);
+        if (!col) return;
+        col.cards = ids.map(id => byId.get(id)).filter(Boolean);
+        ids.forEach(id => seen.add(id));
+      });
+      // Seguridad: ninguna tarjeta se pierde por un DOM desincronizado.
+      byId.forEach((card, id) => {
+        if (seen.has(id)) return;
+        const col = columns.find(c => c.id === home.get(id));
+        if (col && !col.cards.includes(card)) col.cards.push(card);
+      });
+      return columns;
+    }
+
+    function applyColOrder(columns, ids) {
+      const byId = new Map(columns.map(c => [c.id, c]));
+      const ordered = ids.map(id => byId.get(id)).filter(Boolean);
+      columns.filter(c => !ids.includes(c.id)).forEach(c => { if (!ordered.includes(c)) ordered.push(c); });
+      return ordered;
+    }
+
+    function boardToMarkdown(state) {
+      const lines = [];
+      state.columns.forEach(c => {
+        lines.push('# ' + c.title, '');
+        c.cards.forEach(k => {
+          lines.push('- ' + k.title);
+          String(k.desc || '').split('\n').forEach(l => { if (l.trim()) lines.push('  ' + l); });
+        });
+        lines.push('');
+      });
+      return lines.join('\n');
+    }
+
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function serialize(state) {
+      return JSON.stringify({ columns: state.columns });
+    }
+
+    function validState(s) {
+      if (!s || typeof s !== 'object' || !Array.isArray(s.columns)) return false;
+      return s.columns.every(c => c && typeof c === 'object'
+        && typeof c.id === 'string' && typeof c.title === 'string' && Array.isArray(c.cards)
+        && c.cards.every(k => k && typeof k === 'object' && typeof k.id === 'string' && typeof k.title === 'string' && typeof k.desc === 'string'));
+    }
+
+    function loadInitial() {
+      const q = new URLSearchParams(window.location.search);
+      const preset = q.get('preset');
+      if (preset !== null) {
+        return { columns: Object.prototype.hasOwnProperty.call(PRESETS, preset) ? applyPreset(preset) : [], fromUrl: true };
+      }
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const s = JSON.parse(raw);
+          if (validState(s)) return { columns: s.columns, fromUrl: false };
+        }
+      } catch { /* se usa el tablero vacío */ }
+      return { columns: [], fromUrl: false };
+    }
+
+    let noticeTimeout;
+    let resetTimer = null;
+    let loadTimer = null;
+    let delColTimer = null;
+    let delCardTimer = null;
+    let clearTimer = null;
+
+    // Instancias Sortable activas (fuera de data: Vue las envolvería en un Proxy).
+    // Clave 'cols' para columnas; el elemento para cada lista de tarjetas.
+    const sortableRegs = new Map();
+
+    Vue.createApp({
+      data() {
+        const init = loadInitial();
+        return {
+          columns: init.columns,
+          fromUrl: init.fromUrl,
+          newCol: '',
+          addingCol: false,
+          presets: PRESETS,
+          presetSel: 'kanban',
+          editingColId: null,
+          draftTitle: '',
+          drafts: {},
+          editing: null,
+          notice: '',
+          resetArmed: false,
+          loadArmed: false,
+          delColArmed: null,
+          delCardArmed: null,
+          clearArmed: null
+        };
+      },
+      methods: {
+        showNotice(msg) {
+          clearTimeout(noticeTimeout);
+          this.notice = msg;
+          noticeTimeout = setTimeout(() => { this.notice = ''; }, 1800);
+        },
+        persist() {
+          if (this.fromUrl) return;
+          try {
+            localStorage.setItem(STORAGE_KEY, serialize(this));
+          } catch { /* cuota llena o modo privado: se sigue sin guardar */ }
+        },
+        touch() {
+          this.fromUrl = false;
+          history.replaceState(null, '', window.location.pathname);
+          this.persist();
+        },
+        addColumn() {
+          const t = this.newCol.trim();
+          if (!t) return;
+          this.columns.push(createColumn(t));
+          this.newCol = '';
+          this.addingCol = false;
+          this.touch();
+        },
+        startAddCol() {
+          this.addingCol = true;
+          this.$nextTick(() => {
+            const input = document.getElementById('new-col');
+            if (input) input.focus();
+          });
+        },
+        cancelAddCol() {
+          this.addingCol = false;
+          this.newCol = '';
+        },
+        addCardUi(col) {
+          const t = (this.drafts[col.id] || '').trim();
+          if (!t) return;
+          addCard(col, t);
+          this.drafts[col.id] = '';
+          this.touch();
+        },
+        openCard(col, card) {
+          this.editing = { colId: col.id, cardId: card.id, title: card.title, desc: card.desc };
+          this.$nextTick(() => {
+            const input = document.getElementById('card-title');
+            if (input) input.focus();
+          });
+        },
+        saveCard() {
+          if (!this.editing) return;
+          const found = findCard(this.columns, this.editing.colId, this.editing.cardId);
+          if (found) {
+            const t = this.editing.title.trim();
+            if (t) found.card.title = t;
+            found.card.desc = this.editing.desc;
+            this.touch();
+            this.showNotice('Tarjeta guardada.');
+          }
+          this.editing = null;
+        },
+        closeCard() {
+          this.editing = null;
+        },
+        delCard(col, card) {
+          if (this.delCardArmed !== card.id) {
+            this.delCardArmed = card.id;
+            clearTimeout(delCardTimer);
+            delCardTimer = setTimeout(() => { this.delCardArmed = null; }, 5000);
+            return;
+          }
+          clearTimeout(delCardTimer);
+          this.delCardArmed = null;
+          col.cards = col.cards.filter(k => k.id !== card.id);
+          this.touch();
+          this.showNotice('Tarjeta borrada.');
+        },
+        editCol(col) {
+          this.editingColId = col.id;
+          this.draftTitle = col.title;
+          this.$nextTick(() => {
+            const input = document.querySelector('[data-rename="' + col.id + '"]');
+            if (input) input.focus();
+          });
+        },
+        saveCol(col) {
+          if (this.editingColId !== col.id) return;
+          const t = this.draftTitle.trim();
+          if (t) col.title = t;
+          this.editingColId = null;
+          this.touch();
+        },
+        clearColumn(col) {
+          if (!col.cards.length) return;
+          if (this.clearArmed !== col.id) {
+            this.clearArmed = col.id;
+            clearTimeout(clearTimer);
+            clearTimer = setTimeout(() => { this.clearArmed = null; }, 5000);
+            return;
+          }
+          clearTimeout(clearTimer);
+          this.clearArmed = null;
+          col.cards = [];
+          this.touch();
+          this.showNotice('Columna vaciada.');
+        },
+        initSortables() {
+          if (!window.Sortable) return;
+          this.$nextTick(() => {
+            const colsEl = document.getElementById('board-cols');
+            if (colsEl && !sortableRegs.has('cols')) {
+              sortableRegs.set('cols', true);
+              new Sortable(colsEl, {
+                animation: 150,
+                draggable: '.board-col',
+                handle: '.col-handle',
+                ghostClass: 'sortable-ghost',
+                onEnd: () => {
+                  const ids = [...colsEl.querySelectorAll('.board-col[data-id]')].map(n => n.dataset.id);
+                  this.columns = applyColOrder(this.columns, ids);
+                  this.touch();
+                }
+              });
+            }
+            this.columns.forEach(c => {
+              const el = document.querySelector('[data-col-id="' + c.id + '"]');
+              if (!el || sortableRegs.has(el)) return;
+              sortableRegs.set(el, true);
+              new Sortable(el, {
+                animation: 150,
+                group: 'board-cards',
+                draggable: '.card',
+                handle: '.drag-handle',
+                ghostClass: 'sortable-ghost',
+                onEnd: () => this.syncAllCards()
+              });
+            });
+          });
+        },
+        syncAllCards() {
+          const orders = {};
+          this.columns.forEach(c => {
+            const el = document.querySelector('[data-col-id="' + c.id + '"]');
+            if (el) orders[c.id] = [...el.querySelectorAll('[data-id]')].map(n => n.dataset.id);
+          });
+          applyOrder(this.columns, orders);
+          this.touch();
+          this.initSortables();
+        },
+        exportJSON() {
+          downloadBlob(new Blob([serialize(this)], { type: 'application/json' }), 'board.json');
+          this.showNotice('Tablero exportado en JSON.');
+        },
+        exportMD() {
+          downloadBlob(new Blob([boardToMarkdown(this)], { type: 'text/markdown;charset=utf-8' }), 'board.md');
+          this.showNotice('Tablero exportado en Markdown.');
+        },
+        openImport() {
+          document.getElementById('import-file').click();
+        },
+        async importBoard(event) {
+          const [file] = event.target.files;
+          event.target.value = '';
+          if (!file) return;
+          try {
+            if (file.size > 1000000) throw new Error('El archivo supera 1 MB.');
+            const data = JSON.parse(await file.text());
+            if (!validState(data)) throw new Error('Ese archivo no es un tablero válido.');
+            data.columns.forEach(c => { c.id = uid(); c.cards.forEach(k => { k.id = uid(); }); });
+            this.columns = data.columns;
+            this.touch();
+            history.replaceState(null, '', window.location.pathname);
+            this.showNotice('Tablero importado.');
+          } catch (e) {
+            this.showNotice(e.message || 'No se pudo importar.');
+          }
+        },
+        delCol(col) {
+          if (this.delColArmed !== col.id) {
+            this.delColArmed = col.id;
+            clearTimeout(delColTimer);
+            delColTimer = setTimeout(() => { this.delColArmed = null; }, 5000);
+            return;
+          }
+          clearTimeout(delColTimer);
+          this.delColArmed = null;
+          this.columns = this.columns.filter(c => c.id !== col.id);
+          this.touch();
+          this.showNotice('Columna borrada.');
+        },
+        loadPreset() {
+          if (!this.loadArmed) {
+            this.loadArmed = true;
+            clearTimeout(loadTimer);
+            loadTimer = setTimeout(() => { this.loadArmed = false; }, 5000);
+            return;
+          }
+          clearTimeout(loadTimer);
+          this.loadArmed = false;
+          this.columns = applyPreset(this.presetSel);
+          this.touch();
+          history.replaceState(null, '', window.location.pathname);
+          this.showNotice('Plantilla cargada: ' + PRESETS[this.presetSel].name + '.');
+        },
+        reset() {
+          if (!this.resetArmed) {
+            this.resetArmed = true;
+            clearTimeout(resetTimer);
+            resetTimer = setTimeout(() => { this.resetArmed = false; }, 5000);
+            return;
+          }
+          clearTimeout(resetTimer);
+          this.resetArmed = false;
+          try { localStorage.removeItem(STORAGE_KEY); } catch { /* nada */ }
+          this.columns = [];
+          this.fromUrl = false;
+          this.addingCol = false;
+          this.newCol = '';
+          history.replaceState(null, '', window.location.pathname);
+          this.showNotice('Tablero reiniciado.');
+        }
+      },
+      mounted() {
+        this.initSortables();
+      },
+      updated() {
+        this.initSortables();
+      }
+    }).mount('#app');
+
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

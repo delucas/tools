@@ -13,6 +13,7 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`csv-a-grafico`](./csv-a-grafico) | Convierte un CSV pegado en un gráfico de torta, series o líneas. |
 | [`pseditor`](./pseditor) | Editor de pseudocódigo con resaltado, indentación y operadores Unicode. |
 | [`basket`](./basket) | Lista de compras para cualquier comercio, con cantidades, unidades y orden personalizado. |
+| [`board`](./board) | 📌 Board: mini Trello minimalista con columnas y tarjetas arrastrables. |
 | [`gsd`](./gsd) | Get Sh*t Done: lista de tareas con fecha de creación y fecha de tildado. |
 | [`checksmith`](./checksmith) | Forja de checklists: catálogo de plantillas para instanciar en Get Sh*t Done. |
 | [`hojitas`](./hojitas) | Hojas A4 para imprimir: puntitos, renglones o cuadrícula configurables. |

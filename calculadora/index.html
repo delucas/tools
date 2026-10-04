@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f9ee%3B%3C/text%3E%3C/svg%3E">
+  <title>Calculadora — escribí en texto, mirá en LaTeX</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.18.6/katex.min.css" rel="stylesheet"
+    integrity="sha512-hlhL0Hg3cxOco8tCQqGSQJpKClqXth8ioVSeCyXoRBvcWvMJGlKAtgz6McECrKqrzwiTtZf/p8U+LPzShtmgVw=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    #app input { font-size: 16px; }
+    #expr-input { font-family: var(--bs-font-monospace); }
+    #latex-box {
+      background-color: #ffffff;
+      color: #000000;
+      border: 1px solid #dee2e6;
+      border-radius: var(--bs-border-radius);
+      overflow-x: auto;
+      min-height: 4.5rem;
+    }
+    #latex-box .katex { color: #000000; }
+    .mono { font-family: var(--bs-font-monospace); }
+    .hist-expr { overflow-wrap: anywhere; }
+    p.signature { font-size: 0.8em; }
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4" style="max-width: 760px;">
+    <div id="app">
+      <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+      <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+        <div>
+          <h1 class="h3 mb-1">🧮 Calculadora</h1>
+          <p class="text-body-secondary mb-0">Escribí en texto, mirá el resultado en LaTeX.</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ shared ? '¡Copiado!' : '🔗 Compartir' }}</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset" :class="resetArmed ? 'btn-danger' : 'btn-outline-secondary'">{{ resetArmed ? '¿Seguro? Tocá de nuevo' : '🗑️ Reiniciar' }}</button>
+          <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+        </div>
+      </div>
+
+      <div v-if="notice" class="alert alert-success py-2 alert-flotante" role="status">{{ notice }}</div>
+
+      <section class="mb-3">
+        <label for="expr-input" class="form-label">Expresión <small class="text-body-secondary fw-normal">(Enter para guardar en historial)</small></label>
+        <input id="expr-input" class="form-control form-control-lg" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
+          v-model="expr" @input="onInput" @keydown.enter="commit" placeholder="log2(1024) + 2^10">
+        <div class="form-text">Funciones: <code>log2()</code> <code>log10()</code> <code>sqrt()</code> · operadores: <code>+ - * / % ^</code> <code>()</code> <code>!</code> · <code>ans</code> vale el último resultado guardado.</div>
+        <div class="d-flex flex-wrap gap-2 mt-2">
+          <button v-for="s in snippets" :key="s.label" class="btn btn-outline-secondary btn-sm mono" type="button" @click="insert(s.text)" :title="s.hint">{{ s.label }}</button>
+        </div>
+      </section>
+
+      <section class="card mb-3">
+        <div class="card-body">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+            <h2 class="h6 mb-0">Resultado</h2>
+            <div class="d-flex flex-wrap gap-2">
+              <span class="badge text-bg-secondary mono" title="Último resultado guardado">ans = {{ fmtAns }}</span>
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="commit" :disabled="!preview || !preview.ok">＝ Guardar</button>
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="copyRes" :disabled="!preview || !preview.ok">📋 Copiar</button>
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="openEqtex" :disabled="!preview || !preview.ok">∑ Abrir en EqTeX</button>
+            </div>
+          </div>
+          <div v-if="preview && preview.ok">
+            <div class="fs-3 mono mb-2" id="res-num">= {{ preview.text }}</div>
+            <div id="latex-box" class="p-3"><div id="latex-view"></div></div>
+          </div>
+          <div v-else-if="preview" class="alert alert-danger py-2 mb-0" role="alert">{{ preview.error }}</div>
+          <div v-else class="text-body-secondary">Escribí algo para empezar.</div>
+        </div>
+      </section>
+
+      <section class="mb-3">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+          <h2 class="h6 mb-0">Historial <span class="badge text-bg-secondary fw-normal">{{ historial.length }}</span></h2>
+          <button class="btn btn-outline-danger btn-sm" type="button" @click="clearHistory" v-if="historial.length">🗑️ Borrar historial</button>
+        </div>
+        <p v-if="!historial.length" class="text-body-secondary small">Todavía no guardaste nada: escribí una expresión y tocá Enter o ＝ Guardar.</p>
+        <ul v-else class="list-group">
+          <li v-for="(h, i) in historial" :key="h.t + '-' + i" class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <span class="hist-expr"><span class="mono">{{ h.e }}</span> <span class="text-body-secondary">=</span> <strong class="mono">{{ h.res }}</strong></span>
+            <span class="d-flex gap-2">
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="reload(h.e)" title="Cargar en la entrada">↩️</button>
+              <button class="btn btn-outline-danger btn-sm" type="button" @click="delItem(i)" title="Borrar">×</button>
+            </span>
+          </li>
+        </ul>
+      </section>
+
+      <hr>
+
+      <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+    </div>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.5.42/vue.global.prod.min.js"
+    integrity="sha512-PREsKi18CyKMgwXMJWtvkzinqjiN0znVfDovmVadp7pKiUpyNGtq7bD2fKElDBmdfH4DGJz8pmAdgihN8NZ8TQ=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.18.6/katex.min.js"
+    integrity="sha512-R6ebU8e1iPsUu+8q3BMGd8M7DyKQcB2lVvWSyTC1RK7O3ywVWCbHDr4a9C10w3HNbYvhxiRtIwjE5w3hPRwzRw=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script>
+    const STORAGE_KEY = 'calculadora';
+    const MAX_HISTORY = 50;
+    const DEFAULT_EXPR = 'log2(1024)';
+
+    // ---- Motor: tokenizer + parser por descenso recursivo (sin eval) ----
+    function tokenize(src) {
+      const toks = [];
+      let i = 0;
+      const err = (m) => { throw new Error(m); };
+      while (i < src.length) {
+        const c = src[i];
+        if (c === ' ' || c === '\t' || c === '\n') { i++; continue; }
+        if ((c >= '0' && c <= '9') || c === '.' || c === ',') {
+          let j = i, seen = false;
+          while (j < src.length && ((src[j] >= '0' && src[j] <= '9') || src[j] === '.' || src[j] === ',')) {
+            if (src[j] === '.' || src[j] === ',') { if (seen) break; seen = true; }
+            j++;
+          }
+          const raw = src.slice(i, j).replace(',', '.');
+          if (raw === '.' || raw === '') err('Se esperaba un número, función o paréntesis');
+          toks.push({ t: 'num', v: parseFloat(raw) });
+          i = j;
+          continue;
+        }
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
+          let j = i;
+          while (j < src.length && ((src[j] >= 'a' && src[j] <= 'z') || (src[j] >= 'A' && src[j] <= 'Z') || (src[j] >= '0' && src[j] <= '9'))) j++;
+          toks.push({ t: 'id', v: src.slice(i, j).toLowerCase() });
+          i = j;
+          continue;
+        }
+        if (c === '*' && src[i + 1] === '*') { toks.push({ t: 'op', v: '^' }); i += 2; continue; }
+        if ('+-*/%^!(),'.includes(c)) { toks.push({ t: (c === '(' || c === ')' || c === ',') ? c : 'op', v: c }); i++; continue; }
+        err('Carácter no válido: ' + c);
+      }
+      toks.push({ t: 'eof' });
+      return toks;
+    }
+
+    function parseToks(toks) {
+      let p = 0;
+      const peek = () => toks[p];
+      const next = () => toks[p++];
+      const expr = () => {
+        let n = term();
+        while (peek().t === 'op' && (peek().v === '+' || peek().v === '-')) {
+          const op = next().v;
+          n = { k: 'bin', op, l: n, r: term() };
+        }
+        return n;
+      };
+      const term = () => {
+        let n = power();
+        while (peek().t === 'op' && (peek().v === '*' || peek().v === '/' || peek().v === '%')) {
+          const op = next().v;
+          n = { k: 'bin', op, l: n, r: power() };
+        }
+        return n;
+      };
+      // ^ es asociativa a derecha: 2^3^2 = 2^(3^2)
+      const power = () => {
+        const b = unary();
+        if (peek().t === 'op' && peek().v === '^') { next(); return { k: 'bin', op: '^', l: b, r: power() }; }
+        return b;
+      };
+      const unary = () => {
+        if (peek().t === 'op' && (peek().v === '-' || peek().v === '+')) {
+          return next().v === '-' ? { k: 'neg', x: unary() } : unary();
+        }
+        return postfix();
+      };
+      const postfix = () => {
+        let n = prim();
+        while (peek().t === 'op' && peek().v === '!') { next(); n = { k: 'fact', x: n }; }
+        return n;
+      };
+      const prim = () => {
+        const k = peek();
+        if (k.t === 'num') { next(); return { k: 'num', v: k.v }; }
+        if (k.t === '(') { next(); const n = expr(); const c = next(); if (c.t !== ')') throw new Error('Paréntesis sin cerrar'); return n; }
+        if (k.t === 'id') {
+          next();
+          if (['log2', 'log10', 'log', 'sqrt'].includes(k.v)) {
+            if (peek().t !== '(') throw new Error('Se esperaba un número, función o paréntesis');
+            next();
+            const a = expr();
+            const c = next();
+            if (c.t !== ')') throw new Error('Paréntesis sin cerrar');
+            return { k: 'fn', fn: k.v, x: a };
+          }
+          if (k.v === 'ans' || k.v === 'pi' || k.v === 'e') return { k: 'const', c: k.v };
+          throw new Error('Función desconocida: ' + k.v);
+        }
+        if (k.t === 'eof') throw new Error('Expresión vacía');
+        throw new Error('Se esperaba un número, función o paréntesis');
+      };
+      const n = expr();
+      if (peek().t !== 'eof') throw new Error('Se esperaba un número, función o paréntesis');
+      return n;
+    }
+
+    function factorial(n) {
+      if (!Number.isInteger(n) || n < 0 || n > 170) throw new Error('! solo admite enteros entre 0 y 170');
+      let r = 1;
+      for (let i = 2; i <= n; i++) r *= i;
+      return r;
+    }
+
+    function evaluate(n, ans) {
+      switch (n.k) {
+        case 'num': return n.v;
+        case 'const': return n.c === 'ans' ? ans : n.c === 'pi' ? Math.PI : Math.E;
+        case 'neg': return -evaluate(n.x, ans);
+        case 'fact': return factorial(evaluate(n.x, ans));
+        case 'fn': {
+          const v = evaluate(n.x, ans);
+          if (n.fn === 'sqrt') {
+            if (v < 0) throw new Error('sqrt de un número negativo');
+            return Math.sqrt(v);
+          }
+          if (v <= 0) throw new Error('log de un número ≤ 0');
+          return n.fn === 'log2' ? Math.log2(v) : Math.log10(v);
+        }
+        case 'bin': {
+          const l = evaluate(n.l, ans), r = evaluate(n.r, ans);
+          if (n.op === '+') return l + r;
+          if (n.op === '-') return l - r;
+          if (n.op === '*') return l * r;
+          if (n.op === '/') {
+            if (r === 0) throw new Error('División por cero');
+            return l / r;
+          }
+          if (n.op === '%') {
+            if (r === 0) throw new Error('Resto con divisor cero');
+            return l % r;
+          }
+          return Math.pow(l, r);
+        }
+      }
+      throw new Error('Expresión no válida');
+    }
+
+    function latexNum(v) {
+      if (!Number.isFinite(v)) return String(v);
+      const s = String(parseFloat(v.toPrecision(10)));
+      if (/e/i.test(s)) {
+        const m = s.match(/^(-?[\d.]+)[eE]([+-]?\d+)$/);
+        return m[1].replace('.', '{,}') + '\\times10^{' + parseInt(m[2], 10) + '}';
+      }
+      return s.replace('.', '{,}');
+    }
+
+    function toLatex(n) {
+      const prec = (o) => (o === '+' || o === '-' ? 1 : o === '*' || o === '/' || o === '%' ? 2 : 3);
+      switch (n.k) {
+        case 'num': return latexNum(n.v);
+        case 'const': return n.c === 'ans' ? '\\text{ans}' : n.c === 'pi' ? '\\pi' : 'e';
+        case 'neg': return (n.x.k === 'num' || n.x.k === 'const') ? '-' + toLatex(n.x) : '-(' + toLatex(n.x) + ')';
+        case 'fact': return '{' + toLatex(n.x) + '}!';
+        case 'fn': {
+          const x = toLatex(n.x);
+          if (n.fn === 'sqrt') return '\\sqrt{' + x + '}';
+          if (n.fn === 'log2') return '\\log_{2}{(' + x + ')}';
+          return '\\log_{10}{(' + x + ')}';
+        }
+        case 'bin': {
+          if (n.op === '/') return '\\frac{' + toLatex(n.l) + '}{' + toLatex(n.r) + '}';
+          if (n.op === '^') {
+            const b = (n.l.k === 'bin' || n.l.k === 'neg') ? '(' + toLatex(n.l) + ')' : toLatex(n.l);
+            const e = (n.r.k === 'num' || n.r.k === 'const') ? toLatex(n.r) : toLatex(n.r);
+            return '{' + b + '}^{' + e + '}';
+          }
+          const L = toLatex(n.l), R = toLatex(n.r);
+          const wL = (n.l.k === 'bin' && prec(n.l.op) < prec(n.op)) ? '(' + L + ')' : L;
+          const needR = n.r.k === 'bin' && (prec(n.r.op) < prec(n.op) || ((n.op === '-' || n.op === '%' || n.op === '*') && prec(n.r.op) <= prec(n.op)));
+          const wR = needR ? '(' + R + ')' : R;
+          if (n.op === '*') return wL + '\\cdot ' + wR;
+          if (n.op === '%') return wL + ' \\bmod ' + wR;
+          return wL + n.op + wR;
+        }
+      }
+      return '';
+    }
+
+    function fmtRes(v) { return String(parseFloat(v.toPrecision(10))); }
+
+    function calc(expr, ans) {
+      if (!String(expr).trim()) return { ok: false, empty: true, error: '' };
+      try {
+        const ast = parseToks(tokenize(String(expr)));
+        const value = evaluate(ast, ans);
+        if (typeof value !== 'number' || Number.isNaN(value)) return { ok: false, error: 'Resultado no definido' };
+        if (!Number.isFinite(value)) return { ok: false, error: 'Resultado fuera de rango' };
+        return { ok: true, value: parseFloat(value.toPrecision(10)), text: fmtRes(value), latex: toLatex(ast) };
+      } catch (e) {
+        return { ok: false, error: e.message || 'Expresión no válida' };
+      }
+    }
+
+    // ---- Estado: URL > localStorage > defecto (con URL no se toca storage) ----
+    function loadInitial() {
+      const q = new URLSearchParams(window.location.search);
+      if (q.get('e') !== null) {
+        return { expr: q.get('e') || DEFAULT_EXPR, ans: 0, historial: [], fromUrl: true };
+      }
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const s = JSON.parse(raw);
+          if (s && typeof s === 'object') {
+            return {
+              expr: typeof s.expr === 'string' ? s.expr : DEFAULT_EXPR,
+              ans: typeof s.ans === 'number' ? s.ans : 0,
+              historial: Array.isArray(s.historial) ? s.historial.filter(h => typeof h?.e === 'string') : [],
+              fromUrl: false
+            };
+          }
+        }
+      } catch { /* se usa el ejemplo */ }
+      return { expr: DEFAULT_EXPR, ans: 0, historial: [], fromUrl: false };
+    }
+
+    const SNIPPETS = [
+      { label: 'log2()', text: 'log2()', hint: 'Logaritmo en base 2' },
+      { label: 'log10()', text: 'log10()', hint: 'Logaritmo en base 10' },
+      { label: '√', text: 'sqrt()', hint: 'Raíz cuadrada' },
+      { label: 'xʸ', text: '^', hint: 'Potencia' },
+      { label: 'n!', text: '!', hint: 'Factorial' },
+      { label: '%', text: '%', hint: 'Resto (módulo)' },
+      { label: 'ans', text: 'ans', hint: 'Último resultado guardado' },
+      { label: '()', text: '()', hint: 'Paréntesis' },
+    ];
+
+    let noticeTimeout;
+    let resetTimer = null;
+
+    Vue.createApp({
+      data() {
+        const init = loadInitial();
+        return {
+          expr: init.expr,
+          ans: init.ans,
+          historial: init.historial,
+          fromUrl: init.fromUrl,
+          snippets: SNIPPETS,
+          notice: '',
+          shared: false,
+          resetArmed: false,
+          katexError: ''
+        };
+      },
+      computed: {
+        preview() {
+          const r = calc(this.expr, this.ans);
+          return r.empty ? null : r;
+        },
+        fmtAns() {
+          return fmtRes(this.ans);
+        }
+      },
+      methods: {
+        render() {
+          this.$nextTick(() => {
+            const el = document.getElementById('latex-view');
+            if (!el || !this.preview || !this.preview.ok) return;
+            if (typeof katex === 'undefined') {
+              this.katexError = 'No se pudo cargar KaTeX (revisá tu conexión).';
+              el.textContent = this.preview.latex + ' = ' + this.preview.text;
+              return;
+            }
+            try {
+              katex.render(this.preview.latex + '=' + latexNum(this.preview.value), el, { displayMode: true, throwOnError: true });
+              this.katexError = '';
+            } catch (e) {
+              el.textContent = this.preview.latex + ' = ' + this.preview.text;
+            }
+          });
+        },
+        onInput() {
+          if (this.fromUrl) this.fromUrl = false;
+          else this.persist();
+          this.render();
+        },
+        persist() {
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ expr: this.expr, ans: this.ans, historial: this.historial.slice(0, MAX_HISTORY) }));
+          } catch { /* cuota llena o modo privado: se sigue sin guardar */ }
+        },
+        commit() {
+          const r = this.preview;
+          if (!r || !r.ok) return;
+          if (!this.historial.length || this.historial[0].e !== this.expr.trim()) {
+            this.historial.unshift({ e: this.expr.trim(), latex: r.latex, res: r.text, t: new Date().toISOString() });
+            this.historial = this.historial.slice(0, MAX_HISTORY);
+          }
+          this.ans = r.value;
+          this.fromUrl = false;
+          this.persist();
+          this.render();
+        },
+        insert(text) {
+          const input = document.getElementById('expr-input');
+          const start = input.selectionStart ?? this.expr.length;
+          const end = input.selectionEnd ?? this.expr.length;
+          this.expr = this.expr.slice(0, start) + text + this.expr.slice(end);
+          this.onInput();
+          this.$nextTick(() => {
+            input.focus();
+            let pos = start + text.length;
+            if (text.endsWith('()')) pos -= 1; // cursor adentro del paréntesis
+            input.setSelectionRange(pos, pos);
+          });
+        },
+        reload(e) {
+          this.expr = e;
+          this.fromUrl = false;
+          this.persist();
+          this.render();
+          document.getElementById('expr-input').focus();
+        },
+        delItem(i) {
+          this.historial.splice(i, 1);
+          this.fromUrl = false;
+          this.persist();
+        },
+        clearHistory() {
+          this.historial = [];
+          this.fromUrl = false;
+          this.persist();
+          this.showNotice('Historial borrado.');
+        },
+        copyText(text) {
+          if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
+          return Promise.reject(new Error('sin portapapeles'));
+        },
+        copyRes() {
+          if (!this.preview || !this.preview.ok) return;
+          this.copyText(this.preview.text).then(
+            () => this.showNotice('Resultado copiado: ' + this.preview.text),
+            () => this.showNotice('No se pudo copiar.')
+          );
+        },
+        openEqtex() {
+          if (!this.preview || !this.preview.ok) return;
+          const url = new URL('../eqtex/', window.location.href);
+          url.searchParams.set('nombre', this.expr.trim() + ' = ' + this.preview.text);
+          url.searchParams.set('latex', this.preview.latex + '=' + latexNum(this.preview.value));
+          window.open(url.toString(), '_blank', 'noopener');
+        },
+        share() {
+          const url = new URL(window.location.href);
+          url.search = '';
+          url.searchParams.set('e', this.expr.trim() || DEFAULT_EXPR);
+          this.copyText(url.toString()).then(
+            () => { this.shared = true; setTimeout(() => { this.shared = false; }, 1500); },
+            () => this.showNotice('No se pudo copiar el enlace.')
+          );
+        },
+        reset() {
+          if (!this.resetArmed) {
+            this.resetArmed = true;
+            clearTimeout(resetTimer);
+            resetTimer = setTimeout(() => { this.resetArmed = false; }, 5000);
+            return;
+          }
+          clearTimeout(resetTimer);
+          this.resetArmed = false;
+          try { localStorage.removeItem(STORAGE_KEY); } catch { /* nada */ }
+          this.expr = DEFAULT_EXPR;
+          this.ans = 0;
+          this.historial = [];
+          this.fromUrl = false;
+          history.replaceState(null, '', window.location.pathname);
+          this.render();
+          this.showNotice('Se reinició la calculadora.');
+        },
+        showNotice(msg) {
+          clearTimeout(noticeTimeout);
+          this.notice = msg;
+          noticeTimeout = setTimeout(() => { this.notice = ''; }, 1800);
+        }
+      },
+      mounted() {
+        this.render();
+      }
+    }).mount('#app');
+
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

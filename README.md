@@ -39,6 +39,7 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`vcard`](./vcard) | Tu tarjeta laboral: descargala como `.vcf` o abrila en QRlabs para que la escaneen. |
 | [`lector-qr`](./lector-qr) | Escaneá QR y códigos de barras con cámara o imagen, con historial local. |
 | [`conversor`](./conversor) | Conversor mínimo de unidades, con dos casillas mutuas e historial manual. |
+| [`calculadora`](./calculadora) | 🧮 Calculadora de texto con log2, potencias y LaTeX, con puente a EqTeX. |
 | [`tabletop`](./tabletop) | Convertí tablas entre Markdown, CSV, HTML, ASCII y LaTeX, con grilla editable. |
 | [`algolab`](./algolab) | Mesa virtual para enseñar algoritmos con cartas, fichas y fibrones. |
 | [`swatchbook`](./swatchbook) | Biblioteca de paletas: explorá, compará y reutilizá, con ida y vuelta a Chromatic. |

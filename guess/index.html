@@ -116,6 +116,7 @@
     <div class="alert alert-info mb-0 small" role="note">
       🔢 <strong>Sin trampa:</strong> el número se elige con <code>crypto.getRandomValues</code> y se guarda
       en tu navegador — ni recargar la página lo cambia. Nada sale de tu máquina.
+      El óptimo es <code>ceil(log2(tope))</code> (búsqueda binaria) y el récord es la mínima distancia a ese óptimo, como en el 8.
     </div>
 
     <hr>
@@ -206,6 +207,11 @@
         return String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
       }
 
+      // Óptimo = peor caso de búsqueda binaria en 1..n.
+      function optimo(n) { return Math.ceil(Math.log2(n)); }
+      function difDe(e) { return e.pasos - optimo(e.tope); }
+      function fmtDif(d) { return (d > 0 ? '+' : '') + d; }
+
       // Entero equiprobable en 1..n con muestreo por rechazo (sin sesgo de módulo).
       function randInt(n) {
         if (crypto?.getRandomValues) {
@@ -230,7 +236,9 @@
         intentoInput.disabled = !!a?.ganado;
         if (!a) { feedback.textContent = '–'; tried.textContent = 'Todavía no probaste.'; return; }
         if (a.ganado) {
-          feedback.textContent = `🎉 ¡Era el ${a.secreto}! (${a.intentos.length} ${a.intentos.length === 1 ? 'paso' : 'pasos'})`;
+          const o = optimo(state.tope);
+          const d = a.intentos.length - o;
+          feedback.textContent = `🎉 ¡Era el ${a.secreto}! (${a.intentos.length} ${a.intentos.length === 1 ? 'paso' : 'pasos'}, óptimo ${o}, dif ${fmtDif(d)})`;
           tried.textContent = `Probaste: ${a.intentos.join(', ')}.`;
           return;
         }
@@ -294,12 +302,12 @@
         showNotice(`Tope en ${n}: arranca un número nuevo.`);
       });
 
-      // ---------- Récord (mínimo pasos/tope) ----------
+      // ---------- Récord (mínima distancia al óptimo, como en el 8) ----------
       function bestRecord() {
         let best = null;
         for (const e of state.historial) {
-          const ratio = e.pasos / e.tope;
-          if (!best || ratio < best.ratio) best = { ...e, ratio };
+          const d = difDe(e);
+          if (!best || d < best.d || (d === best.d && e.pasos < best.pasos)) best = { ...e, d };
         }
         return best;
       }
@@ -315,7 +323,7 @@
         recordBox.classList.toggle('d-none', !best);
         if (best) {
           recordBox.innerHTML = `🏆 <strong>Récord:</strong> ${escapeHtml(best.pasos)} ${best.pasos === 1 ? 'paso' : 'pasos'} en 1–${escapeHtml(best.tope)} `
-            + `(era el ${escapeHtml(best.elegido)}, ${escapeHtml(formatTs(best.ts))}).`;
+            + `(óptimo ${escapeHtml(optimo(best.tope))}, dif ${escapeHtml(fmtDif(best.d))}; era el ${escapeHtml(best.elegido)}, ${escapeHtml(formatTs(best.ts))}).`;
         } else {
           recordBox.innerHTML = '';
         }
@@ -323,11 +331,11 @@
 
       // ---------- Historial ----------
       function csvText() {
-        const rows = ['fecha_hora,tope,elegido,pasos'];
+        const rows = ['fecha_hora,tope,elegido,pasos,optimo,dif'];
         const pad = x => String(x).padStart(2, '0');
         state.historial.forEach(e => {
           const d = new Date(e.ts);
-          rows.push(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())},${e.tope},${e.elegido},${e.pasos}`);
+          rows.push(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())},${e.tope},${e.elegido},${e.pasos},${optimo(e.tope)},${difDe(e)}`);
         });
         return rows.join('\n');
       }
@@ -352,6 +360,7 @@
           const num = state.historial.length - i;
           return `<div class="list-group-item d-flex justify-content-between align-items-center gap-2">`
             + `<span>#${num} · 1–${e.tope} → <strong>${e.elegido}</strong> en ${e.pasos} ${e.pasos === 1 ? 'paso' : 'pasos'}`
+            + ` (óptimo ${optimo(e.tope)}, dif ${fmtDif(difDe(e))})`
             + ` <small class="text-body-secondary">${escapeHtml(formatTs(e.ts))}</small></span>`
             + `<button class="btn btn-outline-danger btn-sm" type="button" data-del="${i}" aria-label="Borrar juego ${num}">✕</button></div>`;
         }).join('');

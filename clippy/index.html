@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f4cb%3B%3C/text%3E%3C/svg%3E">
+  <title>Clippy — Inspector de portapapeles</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
+    p.signature { font-size: 0.8em; }
+    textarea, input { font-size: 16px; }
+    pre.contenido { max-height: 320px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+    iframe.vista-html { width: 100%; min-height: 200px; border: 1px solid var(--bs-border-color); border-radius: var(--bs-border-radius); background: #fff; }
+    img.vista-img { max-width: 100%; height: auto; border: 1px solid var(--bs-border-color); border-radius: var(--bs-border-radius); }
+    #zona-pegar { border: 2px dashed var(--bs-border-color); border-radius: var(--bs-border-radius); cursor: text; }
+    #zona-pegar:focus { border-color: var(--bs-primary); outline: none; }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4" style="max-width: 720px;">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">📋 Clippy</h1>
+        <p class="text-body-secondary mb-0">Pegá algo y mirá qué hay adentro del portapapeles.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div id="notice" class="alert alert-success py-2 alert-flotante d-none" role="status"></div>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <div class="d-flex flex-wrap gap-2 mb-2">
+          <button id="leer" class="btn btn-primary btn-sm" type="button">📋 Leer portapapeles</button>
+          <span class="align-self-center text-body-secondary small">o pegá con <kbd>Ctrl</kbd>+<kbd>V</kbd> en cualquier parte</span>
+        </div>
+        <div id="zona-pegar" class="p-3" tabindex="0" aria-label="Zona de pegado. Hacé foco acá y pegá con Ctrl+V">
+          <label for="manual" class="form-label small text-body-secondary mb-1">Pegado manual (útil en el celu: mantené presionado → Pegar)</label>
+          <textarea id="manual" class="form-control" rows="3" placeholder="Pegá texto acá…"></textarea>
+        </div>
+        <p id="aviso-permiso" class="alert alert-info small py-2 mt-2 mb-0 d-none" role="note"></p>
+      </div>
+    </section>
+
+    <div id="vacio" class="alert alert-secondary" role="status">
+      Vacío: todavía no hay nada para inspeccionar. Pegá texto, HTML o una imagen.
+    </div>
+
+    <div id="resultado" class="d-none">
+      <section class="card mb-3">
+        <div class="card-body">
+          <h2 class="h6 mb-2">Resumen</h2>
+          <div class="table-responsive">
+            <table class="table table-sm small mb-0">
+              <tbody>
+                <tr><th scope="row" class="text-nowrap">Origen</th><td id="r-origen"></td></tr>
+                <tr><th scope="row" class="text-nowrap">Fecha</th><td id="r-fecha"></td></tr>
+                <tr><th scope="row" class="text-nowrap">Formatos</th><td id="r-tipos"></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="sec-texto" class="card mb-3 d-none">
+        <div class="card-body">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+            <h2 class="h6 mb-0">Texto plano <span class="text-body-secondary fw-normal small">text/plain</span></h2>
+            <div class="d-flex flex-wrap gap-2">
+              <button id="copiar-texto" class="btn btn-outline-secondary btn-sm" type="button">Copiar</button>
+              <button id="bajar-texto" class="btn btn-outline-secondary btn-sm" type="button">Descargar .txt</button>
+              <a id="abrir-svg-texto" class="btn btn-outline-secondary btn-sm d-none" href="../svg/">Editar en SVG</a>
+            </div>
+          </div>
+          <p id="stats-texto" class="small text-body-secondary mb-2"></p>
+          <pre id="ver-texto" class="contenido border rounded p-2 small mb-0"></pre>
+        </div>
+      </section>
+
+      <section id="sec-html" class="card mb-3 d-none">
+        <div class="card-body">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+            <h2 class="h6 mb-0">HTML <span class="text-body-secondary fw-normal small">text/html</span></h2>
+            <div class="d-flex flex-wrap gap-2">
+              <button id="copiar-html" class="btn btn-outline-secondary btn-sm" type="button">Copiar</button>
+              <button id="bajar-html" class="btn btn-outline-secondary btn-sm" type="button">Descargar .html</button>
+            </div>
+          </div>
+          <p id="stats-html" class="small text-body-secondary mb-2"></p>
+          <h3 class="h6 small text-body-secondary">Vista renderizada (aislada)</h3>
+          <iframe id="ver-html-render" class="vista-html mb-2" sandbox="" title="Vista previa del HTML pegado"></iframe>
+          <h3 class="h6 small text-body-secondary">Código fuente</h3>
+          <pre id="ver-html-src" class="contenido border rounded p-2 small mb-0"></pre>
+        </div>
+      </section>
+
+      <section id="sec-img" class="card mb-3 d-none">
+        <div class="card-body">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+            <h2 class="h6 mb-0">Imagen <span id="mime-img" class="text-body-secondary fw-normal small"></span></h2>
+            <div class="d-flex flex-wrap gap-2">
+              <button id="copiar-img" class="btn btn-outline-secondary btn-sm" type="button">Copiar</button>
+              <button id="bajar-img" class="btn btn-outline-secondary btn-sm" type="button">Descargar</button>
+              <a id="abrir-svg-img" class="btn btn-outline-secondary btn-sm d-none" href="../svg/">Editar en SVG</a>
+            </div>
+          </div>
+          <p id="stats-img" class="small text-body-secondary mb-2"></p>
+          <img id="ver-img" class="vista-img" alt="Vista previa de la imagen pegada">
+        </div>
+      </section>
+
+      <section id="sec-otros" class="card mb-3 d-none">
+        <div class="card-body">
+          <h2 class="h6 mb-2">Otros formatos</h2>
+          <div class="table-responsive">
+            <table class="table table-sm small mb-0">
+              <thead><tr><th>MIME</th><th class="text-end">Tamaño</th><th class="text-end">Acción</th></tr></thead>
+              <tbody id="cuerpo-otros"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="alert alert-info small" role="note">
+      🔒 <strong>Privado:</strong> todo se procesa en tu navegador. Nada se guarda ni se envía a ningún lado; al recargar se pierde.
+    </div>
+
+    <hr>
+
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const notice = $('notice'), vacio = $('vacio'), resultado = $('resultado');
+    let noticeTimer;
+    // Último pegado en memoria (nunca se persiste: puede tener datos sensibles).
+    let actual = null; // { origen, fecha, texto, html, img:{blob,url,mime}, otros:[{mime,blob}] }
+
+    function avisar(texto, ms) {
+      notice.textContent = texto;
+      notice.classList.remove('d-none');
+      clearTimeout(noticeTimer);
+      noticeTimer = setTimeout(() => notice.classList.add('d-none'), ms || 2500);
+    }
+
+    function bytesDe(texto) { return new TextEncoder().encode(texto).length; }
+    function fmtBytes(n) {
+      if (n == null || isNaN(n)) return '—';
+      if (n < 1024) return n + ' B';
+      if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+      return (n / 1048576).toFixed(2) + ' MB';
+    }
+    function statsTexto(t) {
+      const lineas = t === '' ? 0 : t.split('\n').length;
+      const palabras = (t.trim().match(/\S+/g) || []).length;
+      return `${t.length} caracteres · ${palabras} palabras · ${lineas} líneas · ${fmtBytes(bytesDe(t))}`;
+    }
+    function extDe(mime) {
+      if (mime === 'image/png') return 'png';
+      if (mime === 'image/jpeg') return 'jpg';
+      if (mime === 'image/gif') return 'gif';
+      if (mime === 'image/webp') return 'webp';
+      if (mime === 'image/svg+xml') return 'svg';
+      return 'bin';
+    }
+
+    // Puente a la herramienta SVG (acepta ?codigo= por URL, como vCard → QRlabs).
+    function esSvg(texto) {
+      const t = texto.trim();
+      return t.length > 5 && /^<svg[\s>]/.test(t);
+    }
+    function svgURL(codigo) {
+      if (codigo.length > 200000) return null; // muy grande para pasar por URL: descargar y abrir el archivo en SVG
+      const base = window.location.pathname.replace(/\/clippy\/?$/, '/svg/');
+      return `${base}?codigo=${encodeURIComponent(codigo)}`;
+    }
+    function actualizarPuenteSvg() {
+      const linkT = $('abrir-svg-texto'), linkI = $('abrir-svg-img');
+      linkT.classList.add('d-none');
+      linkI.classList.add('d-none');
+      if (!actual) return;
+      if (actual.texto != null && esSvg(actual.texto)) {
+        const url = svgURL(actual.texto.trim());
+        if (url) { linkT.href = url; linkT.classList.remove('d-none'); }
+      }
+      if (actual.img && actual.img.mime === 'image/svg+xml' && actual.img.svgText) {
+        const url = svgURL(actual.img.svgText);
+        if (url) { linkI.href = url; linkI.classList.remove('d-none'); }
+      }
+    }
+
+    function descargar(blob, nombre) {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = nombre;
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    }
+    async function copiarTextoAlPortapapeles(t, etiqueta) {
+      try {
+        await navigator.clipboard.writeText(t);
+        avisar((etiqueta || 'Contenido') + ' copiado.');
+      } catch {
+        avisar('No se pudo copiar (el navegador lo bloqueó).');
+      }
+    }
+
+    function mostrar() {
+      if (!actual) {
+        vacio.classList.remove('d-none');
+        resultado.classList.add('d-none');
+        return;
+      }
+      vacio.classList.add('d-none');
+      resultado.classList.remove('d-none');
+      $('r-origen').textContent = actual.origen;
+      $('r-fecha').textContent = actual.fecha.toLocaleString('es');
+      const tipos = [];
+      if (actual.texto != null) tipos.push('text/plain');
+      if (actual.html != null) tipos.push('text/html');
+      if (actual.img) tipos.push(actual.img.mime);
+      actual.otros.forEach((o) => tipos.push(o.mime));
+      $('r-tipos').textContent = tipos.length ? tipos.join(' · ') : '—';
+
+      const hayTexto = actual.texto != null;
+      $('sec-texto').classList.toggle('d-none', !hayTexto);
+      if (hayTexto) {
+        $('stats-texto').textContent = statsTexto(actual.texto);
+        $('ver-texto').textContent = actual.texto === '' ? '(vacío)' : actual.texto.slice(0, 20000);
+      }
+
+      const hayHtml = actual.html != null;
+      $('sec-html').classList.toggle('d-none', !hayHtml);
+      if (hayHtml) {
+        $('stats-html').textContent = statsTexto(actual.html);
+        $('ver-html-src').textContent = actual.html.slice(0, 20000);
+        $('ver-html-render').srcdoc = actual.html;
+      }
+
+      const hayImg = !!actual.img;
+      $('sec-img').classList.toggle('d-none', !hayImg);
+      if (hayImg) {
+        $('mime-img').textContent = actual.img.mime;
+        $('ver-img').src = actual.img.url;
+        const dim = actual.img.ancho ? `${actual.img.ancho} × ${actual.img.alto} px · ` : '';
+        $('stats-img').textContent = `${dim}${fmtBytes(actual.img.blob.size)}`;
+      }
+
+      const cuerpo = $('cuerpo-otros');
+      cuerpo.innerHTML = '';
+      $('sec-otros').classList.toggle('d-none', actual.otros.length === 0);
+      actual.otros.forEach((o, i) => {
+        const tr = document.createElement('tr');
+        const tdM = document.createElement('td'); tdM.textContent = o.mime;
+        const tdT = document.createElement('td'); tdT.className = 'text-end'; tdT.textContent = fmtBytes(o.blob.size);
+        const tdA = document.createElement('td'); tdA.className = 'text-end';
+        const btn = document.createElement('button');
+        btn.type = 'button'; btn.className = 'btn btn-outline-secondary btn-sm'; btn.textContent = 'Descargar';
+        btn.addEventListener('click', () => descargar(o.blob, `clippy-otro-${i}.bin`));
+        tdA.append(btn);
+        tr.append(tdM, tdT, tdA);
+        cuerpo.append(tr);
+      });
+      actualizarPuenteSvg();
+    }
+
+    function limpiarUrls() {
+      if (actual && actual.img) { try { URL.revokeObjectURL(actual.img.url); } catch {} }
+    }
+
+    function inspeccionar({ origen, texto, html, archivos }) {
+      limpiarUrls();
+      const otros = [];
+      let img = null;
+      (archivos || []).forEach((f) => {
+        if (!img && f.type.startsWith('image/')) {
+          img = { blob: f, url: URL.createObjectURL(f), mime: f.type || 'image/*', ancho: 0, alto: 0 };
+        } else {
+          otros.push({ mime: f.type || '(sin tipo)', blob: f });
+        }
+      });
+      actual = { origen, fecha: new Date(), texto: texto ?? null, html: html ?? null, img, otros };
+      if (img && img.mime === 'image/svg+xml') {
+        // El blob ES el código: lo leemos para ofrecer el puente a la herramienta SVG.
+        img.blob.text().then((t) => {
+          if (actual && actual.img && actual.img.blob === img.blob) { img.svgText = t; actualizarPuenteSvg(); }
+        }).catch(() => {});
+      }
+      if (img) {
+        const probe = new Image();
+        probe.onload = () => {
+          if (actual && actual.img && actual.img.blob === img.blob) {
+            img.ancho = probe.naturalWidth; img.alto = probe.naturalHeight;
+            const dim = `${img.ancho} × ${img.alto} px · `;
+            const el = $('stats-img');
+            if (el) el.textContent = `${dim}${fmtBytes(img.blob.size)}`;
+            try { URL.revokeObjectURL(probe.src); } catch {}
+          }
+        };
+        probe.src = img.url;
+      }
+      mostrar();
+      avisar('Pegado inspeccionado.');
+    }
+
+    function leerTextoDeItem(item) {
+      return new Promise((resolve) => {
+        try { item.getAsString((s) => resolve(s)); }
+        catch { resolve(null); }
+      });
+    }
+
+    async function desdeDataTransfer(dt, origen) {
+      let texto = null, html = null;
+      const archivos = [];
+      const otrosTmp = [];
+      const promesas = [];
+      for (const item of dt.items) {
+        if (item.kind === 'string') {
+          if (item.type === 'text/plain') promesas.push(leerTextoDeItem(item).then((s) => { texto = s; }));
+          else if (item.type === 'text/html') promesas.push(leerTextoDeItem(item).then((s) => { html = s; }));
+          else promesas.push(leerTextoDeItem(item).then((s) => {
+            if (s != null) otrosTmp.push({ mime: item.type, blob: new Blob([s], { type: item.type }) });
+          }));
+        } else if (item.kind === 'file') {
+          const f = item.getAsFile();
+          if (f) archivos.push(f);
+        }
+      }
+      await Promise.all(promesas);
+      otrosTmp.forEach((o) => archivos.push(o.blob));
+      if (texto == null && html == null && archivos.length === 0 && dt.files.length) {
+        for (const f of dt.files) archivos.push(f);
+      }
+      if (texto == null && html == null && archivos.length === 0) {
+        avisar('No se encontró contenido legible en ese pegado.');
+        return;
+      }
+      inspeccionar({ origen, texto, html, archivos });
+    }
+
+    async function leerConApi() {
+      const aviso = $('aviso-permiso');
+      aviso.classList.add('d-none');
+      if (!navigator.clipboard || !navigator.clipboard.read) {
+        aviso.textContent = 'Este navegador no soporta lectura directa. Pegá con Ctrl+V (o usá el cuadro de pegado manual).';
+        aviso.classList.remove('d-none');
+        return;
+      }
+      let items;
+      try {
+        items = await navigator.clipboard.read();
+      } catch (e) {
+        aviso.textContent = 'El navegador bloqueó la lectura. Hacé clic en la página, aceptá el permiso o pegá con Ctrl+V.';
+        aviso.classList.remove('d-none');
+        return;
+      }
+      let texto = null, html = null;
+      const archivos = [];
+      for (const item of items) {
+        for (const tipo of item.types) {
+          let blob;
+          try { blob = await item.getType(tipo); }
+          catch { continue; }
+          if (tipo === 'text/plain' && texto == null) texto = await blob.text();
+          else if (tipo === 'text/html' && html == null) html = await blob.text();
+          else archivos.push(new File([blob], 'clipboard', { type: tipo }));
+        }
+      }
+      if (texto == null && html == null && archivos.length === 0) {
+        avisar('El portapapeles está vacío o no es legible.');
+        return;
+      }
+      inspeccionar({ origen: 'botón Leer portapapeles (Clipboard API)', texto, html, archivos });
+    }
+
+    document.addEventListener('paste', (e) => {
+      if (!e.clipboardData) return;
+      if (e.target && (e.target.id === 'manual')) return; // lo maneja el textarea
+      e.preventDefault();
+      desdeDataTransfer(e.clipboardData, 'pegado con Ctrl+V');
+    });
+
+    $('manual').addEventListener('paste', (e) => {
+      if (!e.clipboardData) return;
+      e.preventDefault();
+      desdeDataTransfer(e.clipboardData, 'cuadro de pegado manual');
+    });
+    // Si el celu pega sin evento con tipos (solo texto), igual lo capturamos.
+    $('manual').addEventListener('input', (e) => {
+      const v = e.target.value;
+      if (v) {
+        inspeccionar({ origen: 'cuadro de pegado manual (solo texto)', texto: v, html: null, archivos: [] });
+        e.target.value = '';
+      }
+    });
+
+    $('leer').addEventListener('click', leerConApi);
+
+    $('copiar-texto').addEventListener('click', () => { if (actual && actual.texto != null) copiarTextoAlPortapapeles(actual.texto, 'Texto'); });
+    $('bajar-texto').addEventListener('click', () => {
+      if (actual && actual.texto != null) descargar(new Blob([actual.texto], { type: 'text/plain' }), 'clippy.txt');
+    });
+    $('copiar-html').addEventListener('click', async () => {
+      if (!actual || actual.html == null) return;
+      try {
+        const item = new ClipboardItem({ 'text/html': new Blob([actual.html], { type: 'text/html' }) });
+        await navigator.clipboard.write([item]);
+        avisar('HTML copiado.');
+      } catch { copiarTextoAlPortapapeles(actual.html, 'HTML'); }
+    });
+    $('bajar-html').addEventListener('click', () => {
+      if (actual && actual.html != null) descargar(new Blob([actual.html], { type: 'text/html' }), 'clippy.html');
+    });
+    $('copiar-img').addEventListener('click', async () => {
+      if (!actual || !actual.img) return;
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ [actual.img.mime]: actual.img.blob })]);
+        avisar('Imagen copiada.');
+      } catch { avisar('No se pudo copiar la imagen (el navegador lo bloqueó).'); }
+    });
+    $('bajar-img').addEventListener('click', () => {
+      if (actual && actual.img) descargar(actual.img.blob, `clippy-imagen.${extDe(actual.img.mime)}`);
+    });
+
+    // Reiniciar en dos toques: limpia la inspección (nada se guarda, así que no hay más que borrar).
+    const resetBtn = $('reset');
+    let resetArmada = false, resetTimer;
+    function resetDesarmar() { resetArmada = false; resetBtn.textContent = '🗑️ Reiniciar'; resetBtn.classList.remove('btn-danger'); resetBtn.classList.add('btn-outline-secondary'); }
+    resetBtn.addEventListener('click', () => {
+      if (!resetArmada) {
+        resetArmada = true;
+        resetBtn.textContent = '¿Seguro? Tocá de nuevo';
+        resetBtn.classList.remove('btn-outline-secondary');
+        resetBtn.classList.add('btn-danger');
+        clearTimeout(resetTimer);
+        resetTimer = setTimeout(resetDesarmar, 5000);
+        return;
+      }
+      clearTimeout(resetTimer); resetDesarmar();
+      limpiarUrls();
+      actual = null;
+      $('manual').value = '';
+      mostrar();
+      avisar('Limpio. Pegá algo nuevo para inspeccionar.');
+    });
+
+    (() => {
+      const root = document.documentElement;
+      const btn = $('theme-toggle');
+      const leer = () => { try { return localStorage.getItem('theme'); } catch { return null; } };
+      const guardar = (t) => { try { localStorage.setItem('theme', t); } catch {} };
+      const initial = leer() || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        guardar(next);
+        apply(next);
+      });
+    })();
+
+    mostrar();
+  </script>
+</body>
+</html>

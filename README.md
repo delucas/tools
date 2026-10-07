@@ -56,5 +56,6 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`8`](./8) | 🔢 8: el juego del ocho, con óptimo exacto y ranking por nivel. |
 | [`sudoku6`](./sudoku6) | 🔢 Sudoku6: sudoku chico y tranquilo, con anotaciones y partida guardada. |
 | [`clippy`](./clippy) | 📋 Clippy: pegá algo y mirá qué hay adentro del portapapeles. |
+| [`metalicos`](./metalicos) | 🔩 Metálicos: los 10 ratios del platino al plomo, con calculadora y comparador. |
 
 Cada carpeta tiene su propio `README.md` con el detalle de uso.

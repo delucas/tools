@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%F0%9F%94%A9%3C/text%3E%3C/svg%3E">
+  <title>Metálicos</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.18.6/katex.min.css" rel="stylesheet"
+    integrity="sha512-hlhL0Hg3cxOco8tCQqGSQJpKClqXth8ioVSeCyXoRBvcWvMJGlKAtgz6McECrKqrzwiTtZf/p8U+LPzShtmgVw=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+  <style>
+    input.form-control, select.form-select { font-size: 16px; }
+    p.signature { font-size: 0.8em; }
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
+    .ratio-valor { font-variant-numeric: tabular-nums; word-break: break-all; }
+    .barra { height: 2rem; }
+    .barra-mini { height: 1.15rem; }
+    .grafico { max-width: 100%; height: auto; }
+    .tex-clip { overflow: clip; }
+    .tex-clip .katex { font-size: 1.02em; }
+    @media (max-width: 400px) { .tex-clip .katex { font-size: 0.9em; } }
+  </style>
+</head>
+<body>
+  <main class="container py-4" style="max-width: 640px;">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">🔩 Metálicos</h1>
+        <p class="text-body-secondary mb-0">Los 10 ratios metálicos, del platino al plomo: comparalos y calculá medidas.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="share" class="btn btn-outline-secondary btn-sm" type="button">🔗 Compartir</button>
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <label for="ratio" class="form-label">Elegí el metal (n = 0 a 9)</label>
+    <div class="input-group input-group-lg mb-3">
+      <button id="metal-prev" class="btn btn-outline-secondary" type="button" title="Metal anterior">‹</button>
+      <select id="ratio" class="form-select"></select>
+      <button id="metal-next" class="btn btn-outline-secondary" type="button" title="Metal siguiente">›</button>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <div>
+            <div id="ratio-formula" class="small text-body-secondary tex-clip"><span id="tex-hero">φ = (1 + √5) / 2</span></div>
+            <div id="ratio-valor" class="ratio-valor fs-4 fw-bold">1,6180339887</div>
+            <div class="small"><a id="ratio-oeis" href="https://oeis.org/A001622" target="_blank" rel="noopener">Ver decimal en OEIS: A001622</a></div>
+          </div>
+          <div class="d-flex flex-wrap gap-2">
+            <button id="copiar" class="btn btn-outline-secondary btn-sm" type="button">📋 Copiar</button>
+            <button id="eqtex" class="btn btn-outline-secondary btn-sm" type="button" title="Abrir la fórmula en EqTeX">∑ EqTeX</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h2 class="h5 mt-4">Calculadora</h2>
+    <div class="row g-2">
+      <div class="col-12 col-sm-6">
+        <label for="medida" class="form-label">Tu medida</label>
+        <input id="medida" type="text" class="form-control form-control-lg" inputmode="decimal" autocomplete="off" placeholder="Ej: 100">
+      </div>
+      <div class="col-12 col-sm-6">
+        <label for="tipo" class="form-label">Esa medida es…</label>
+        <select id="tipo" class="form-select form-select-lg">
+          <option value="corto">el tramo corto</option>
+          <option value="largo" selected>el tramo largo</option>
+          <option value="total">el total</option>
+        </select>
+      </div>
+    </div>
+    <div id="error" class="alert alert-danger py-2 mt-2 d-none mb-0" role="alert">Ingresá un número positivo mayor a cero.</div>
+
+    <div id="resultados" class="mt-3">
+      <ul class="list-group mb-2">
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <span>Tramo corto <small id="tag-corto" class="badge text-bg-secondary fw-normal d-none">tu dato</small></span>
+          <strong id="r-corto" class="fs-5">–</strong>
+        </li>
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <span>Tramo largo <small id="tag-largo" class="badge text-bg-secondary fw-normal d-none">tu dato</small></span>
+          <strong id="r-largo" class="fs-5">–</strong>
+        </li>
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <span>Total <small id="tag-total" class="badge text-bg-secondary fw-normal d-none">tu dato</small></span>
+          <strong id="r-total" class="fs-5">–</strong>
+        </li>
+      </ul>
+      <p class="form-text"><span id="tex-calc-1">largo = m × corto</span><br><span id="tex-calc-2">corto = largo / m</span><br><span id="tex-calc-3">total = corto + largo</span></p>
+      <div class="progress barra mb-1" role="img" aria-label="Segmento dividido según el metal elegido">
+        <div id="bar-corto" class="progress-bar text-bg-info" style="width: 38.2%">corto</div>
+        <div id="bar-largo" class="progress-bar text-bg-warning" style="width: 61.8%">largo</div>
+      </div>
+      <div class="d-flex justify-content-between small text-body-secondary mb-3">
+        <span id="leyenda-corto">38,2%</span>
+        <span id="leyenda-m">m ≈ 1,618</span>
+        <span id="leyenda-largo">61,8%</span>
+      </div>
+    </div>
+
+    <hr>
+    <h2 class="h5">Comparador: los 10 metales</h2>
+    <p class="text-body-secondary small">Cada metal cae entre n y n+1 y vale <span id="tex-general" class="tex-clip d-inline-block align-middle">m = (n + √(n² + 4)) / 2</span>. Cuanto más grande n, más desparejo el reparto.</p>
+
+    <h3 class="h6 mt-3 mb-2">Valor de cada metal</h3>
+    <div class="card mb-3">
+      <div class="card-body">
+        <svg id="chart-valores" class="grafico w-100" viewBox="0 0 320 228" role="img" aria-label="Barras con el valor de los 10 metales"></svg>
+        <p class="form-text mb-0">Crece casi lineal: el plomo (≈ 9,11) reparte 9,9% / 90,1% y el oro (≈ 1,62) reparte 38,2% / 61,8%.</p>
+      </div>
+    </div>
+
+    <h3 class="h6 mb-2">Reparto corto / largo en cada metal</h3>
+    <div id="comparador" class="mb-3"></div>
+
+    <h3 class="h6 mb-2">Tu rectángulo y sus vecinos</h3>
+    <div class="card mb-3">
+      <div class="card-body">
+        <svg id="rect-vecinos" class="grafico w-100" viewBox="0 0 320 174" role="img" aria-label="Rectángulo del metal elegido comparado con los metales adyacentes"></svg>
+        <p id="leyenda-vecinos" class="form-text mb-0">Cada rectángulo es corto×largo con tu dato como referencia.</p>
+      </div>
+    </div>
+
+    <h3 class="h6 mb-2">Tu medida en cada metal</h3>
+    <div class="table-responsive mb-1">
+      <table class="table table-sm align-middle mb-0">
+        <thead><tr><th>Metal</th><th>Corto</th><th>Largo</th><th>Total</th></tr></thead>
+        <tbody id="tabla-comp"></tbody>
+      </table>
+    </div>
+    <p id="comp-leyenda" class="form-text"></p>
+
+    <hr>
+    <h2 class="h5">Cómo se calcula</h2>
+    <div class="list-group mb-3">
+      <div class="list-group-item"><strong>1. Fórmula general.</strong><br><span class="text-body-secondary small"><span id="tex-cuad-1">x² = n·x + 1</span><br><span id="tex-cuad-2">m = (n + √(n²+4)) / 2</span></span><br><span class="text-body-secondary small">Con n = 0 da el platino, n = 1 el oro, n = 2 la plata, y así hasta n = 9 (plomo).</span></div>
+      <div class="list-group-item">
+        <strong>2. Sucesiones.</strong><br>
+        <span class="text-body-secondary small">Empezá en 0, 1 y seguí con <span id="tex-seq">u = 1·anterior + otro</span>. El cociente de dos seguidos tiende al <span id="seq-metal">oro</span>.</span>
+        <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+          <button id="seq-menos" class="btn btn-outline-secondary btn-sm" type="button">−</button>
+          <span class="small">u(<span id="seq-n">7</span>) = <strong id="seq-a">21</strong> · u(<span id="seq-n2">8</span>) = <strong id="seq-b">34</strong></span>
+          <button id="seq-mas" class="btn btn-outline-secondary btn-sm" type="button">+</button>
+        </div>
+        <div class="small mt-1"><span id="seq-div">34 / 21</span> = <strong id="seq-coc">1,61905</strong> <span id="seq-dif" class="text-body-secondary"></span></div>
+      </div>
+      <div class="list-group-item"><strong>3. Segmento.</strong><br><span class="text-body-secondary small">Partí un segmento en corto y largo tal que <span id="tex-segmento">total / largo = largo / corto = m</span>. Eso es lo que calcula esta página.</span></div>
+    </div>
+
+    <h2 class="h5">Los 10 + OEIS</h2>
+    <div class="table-responsive mb-1">
+      <table class="table table-sm align-middle mb-0">
+        <thead><tr><th>n</th><th>Metal*</th><th>Valor</th><th>Decimal OEIS</th><th>Sucesión (u = n·ant + otro)</th></tr></thead>
+        <tbody id="tabla-oeis"></tbody>
+      </table>
+    </div>
+    <p class="form-text">* Oro, plata y bronce son los nombres clásicos; cobre y níquel se usan a veces (Rosetta Code). Platino (n=0) y el resto son convención adoptada acá para ordenar los diez primeros (n=0 a 9) hasta el plomo: no es canónica. Decimales según OEIS wiki “Metallic means”.</p>
+
+    <h2 class="h5 mt-3">Trivia rápida</h2>
+    <ul class="small text-body-secondary">
+      <li>Oro: <span id="tex-tri-1">φ² = φ + 1</span>, <span id="tex-tri-2">1/φ = φ − 1</span>; la letra es por Fidias. Sucesión: Fibonacci <a href="https://oeis.org/A000045" target="_blank" rel="noopener">A000045</a>.</li>
+      <li>Plata y bronce: la plata rige el octógono (se sacan 2 cuadrados y queda uno igual); el bronce saca 3. Sucesiones: Pell <a href="https://oeis.org/A000129" target="_blank" rel="noopener">A000129</a> y <a href="https://oeis.org/A006190" target="_blank" rel="noopener">A006190</a>.</li>
+      <li>Platino y plomo: el platino es el caso n=0 y vale exactamente 1 (reparto 50/50); el plomo es el 9.º (n=9), ≈ 9,10977, decimal en <a href="https://oeis.org/A176522" target="_blank" rel="noopener">A176522</a>.</li>
+      <li>En diseño sirven para escalas: con cuerpo 16, título en oro ≈ 26, en plata ≈ 39 y en cobre (≈ 4,236) ≈ 68.</li>
+    </ul>
+
+    <hr>
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <div id="notice" class="alert alert-success py-2 alert-flotante d-none" role="status"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.18.6/katex.min.js"
+    integrity="sha512-R6ebU8e1iPsUu+8q3BMGd8M7DyKQcB2lVvWSyTC1RK7O3ywVWCbHDr4a9C10w3HNbYvhxiRtIwjE5w3hPRwzRw=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script>
+    const METALES = [
+      { key: 'platino', n: 0, nombre: 'Platino', emoji: '💿', simbolo: 'Pt', oeis: null, seqOeis: null },
+      { key: 'oro', n: 1, nombre: 'Oro', emoji: '🥇', simbolo: 'φ', oeis: 'A001622', seqOeis: 'A000045' },
+      { key: 'plata', n: 2, nombre: 'Plata', emoji: '🥈', simbolo: 'δ', oeis: 'A014176', seqOeis: 'A000129' },
+      { key: 'bronce', n: 3, nombre: 'Bronce', emoji: '🥉', simbolo: 'ρ', oeis: 'A098316', seqOeis: 'A006190' },
+      { key: 'cobre', n: 4, nombre: 'Cobre', emoji: '🟤', simbolo: 'm₄', oeis: 'A098317', seqOeis: null },
+      { key: 'niquel', n: 5, nombre: 'Níquel', emoji: '⚙️', simbolo: 'm₅', oeis: 'A098318', seqOeis: null },
+      { key: 'aluminio', n: 6, nombre: 'Aluminio', emoji: '🔩', simbolo: 'm₆', oeis: 'A176398', seqOeis: null },
+      { key: 'hierro', n: 7, nombre: 'Hierro', emoji: '⛓️', simbolo: 'm₇', oeis: 'A176439', seqOeis: null },
+      { key: 'estanio', n: 8, nombre: 'Estaño', emoji: '🥫', simbolo: 'm₈', oeis: 'A176458', seqOeis: null },
+      { key: 'plomo', n: 9, nombre: 'Plomo', emoji: '⚓', simbolo: 'm₉', oeis: 'A176522', seqOeis: null }
+    ];
+    const SIMTEX = { platino: '\\mathrm{Pt}', oro: '\\varphi', plata: '\\delta', bronce: '\\rho' };
+    METALES.forEach((mt) => {
+      mt.valor = (mt.n + Math.sqrt(mt.n * mt.n + 4)) / 2;
+      mt.texto = mt.valor.toFixed(10).replace('.', ',');
+      mt.formula = mt.n === 2 ? 'δ = 1 + √2' : mt.simbolo + ' = (' + mt.n + ' + √' + (mt.n * mt.n + 4) + ') / 2';
+      const sim = SIMTEX[mt.key] || ('m_{' + mt.n + '}');
+      if (mt.n === 0) mt.tex = sim + ' = \\frac{0 + \\sqrt{4}}{2} = 1';
+      else if (mt.n === 2) mt.tex = sim + ' = 1 + \\sqrt{2}';
+      else mt.tex = sim + ' = \\frac{' + mt.n + ' + \\sqrt{' + (mt.n * mt.n + 4) + '}}{2}';
+    });
+    const POR_CLAVE = Object.fromEntries(METALES.map((m) => [m.key, m]));
+    const ALIAS = { golden: 'oro', silver: 'plata', bronze: 'bronce', zinc: 'plomo' };
+    const STORAGE_KEY = 'metalicos';
+    const DEFAULTS = { r: 'oro', v: '100', t: 'largo', k: 7 };
+
+    const $ratio = document.getElementById('ratio');
+    const $medida = document.getElementById('medida');
+    const $tipo = document.getElementById('tipo');
+    const $error = document.getElementById('error');
+    const $share = document.getElementById('share');
+    const $reset = document.getElementById('reset');
+    const $notice = document.getElementById('notice');
+    const state = { ...DEFAULTS };
+    let fromUrl = false;
+
+    METALES.forEach((mt) => {
+      const opt = document.createElement('option');
+      opt.value = mt.key;
+      opt.textContent = mt.emoji + ' ' + mt.nombre + ' (n=' + mt.n + ') · ' + mt.texto;
+      $ratio.append(opt);
+    });
+
+    function showNotice(text) {
+      $notice.textContent = text;
+      $notice.classList.remove('d-none');
+      clearTimeout(showNotice.timer);
+      showNotice.timer = setTimeout(() => $notice.classList.add('d-none'), 2500);
+    }
+
+    function renderTex(id, code, fallback) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (typeof katex === 'undefined') {
+        el.textContent = fallback !== undefined ? fallback : code;
+        return;
+      }
+      try { katex.render(code, el, { throwOnError: false }); }
+      catch { el.textContent = fallback !== undefined ? fallback : code; }
+    }
+
+    function renderTexEstaticos() {
+      renderTex('tex-calc-1', '\\text{largo} = m \\times \\text{corto}');
+      renderTex('tex-calc-2', '\\text{corto} = \\text{largo} / m');
+      renderTex('tex-calc-3', '\\text{total} = \\text{corto} + \\text{largo}');
+      renderTex('tex-general', 'm = \\frac{n + \\sqrt{n^2 + 4}}{2}');
+      renderTex('tex-cuad-1', 'x^2 = n\\,x + 1');
+      renderTex('tex-cuad-2', 'm = \\frac{n + \\sqrt{n^2+4}}{2}');
+      renderTex('tex-segmento', '\\frac{\\text{total}}{\\text{largo}} = \\frac{\\text{largo}}{\\text{corto}} = m');
+      renderTex('tex-tri-1', '\\varphi^2 = \\varphi + 1');
+      renderTex('tex-tri-2', '1/\\varphi = \\varphi - 1');
+    }
+
+    function parseNum(s) {
+      const n = parseFloat(String(s).trim().replace(',', '.'));
+      return Number.isFinite(n) ? n : NaN;
+    }
+
+    function fmt(n) {
+      const r = Math.round(n * 100) / 100;
+      return String(r).replace('.', ',');
+    }
+
+    function fmtPct(n) {
+      return String(Math.round(n * 10) / 10).replace('.', ',') + '%';
+    }
+
+    function metal() { return POR_CLAVE[state.r].valor; }
+
+    function calc(v, t, m) {
+      if (t === 'corto') return { corto: v, largo: v * m, total: v * (1 + m) };
+      if (t === 'largo') return { corto: v / m, largo: v, total: v + v / m };
+      return { corto: v / (1 + m), largo: v * m / (1 + m), total: v };
+    }
+
+    function seqTerms(n, hasta) {
+      const arr = [0, 1];
+      for (let i = 2; i <= hasta; i++) arr.push(n * arr[i - 1] + arr[i - 2]);
+      return arr;
+    }
+
+    function renderComparador(v, t, ok) {
+      const box = document.getElementById('comparador');
+      box.innerHTML = '';
+      METALES.forEach((mt) => {
+        const pC = 100 / (1 + mt.valor);
+        const row = document.createElement('div');
+        row.className = 'mb-1';
+        row.innerHTML = '<div class="d-flex justify-content-between small mb-1"><span></span><span class="text-body-secondary"></span></div>' +
+          '<div class="progress barra-mini"><div class="progress-bar text-bg-info"></div><div class="progress-bar text-bg-warning"></div></div>';
+        row.querySelector('span').textContent = mt.emoji + ' ' + mt.nombre + ' · ' + mt.texto.slice(0, 5);
+        row.querySelector('.text-body-secondary').textContent = fmtPct(pC) + ' / ' + fmtPct(100 - pC);
+        const bars = row.querySelectorAll('.progress-bar');
+        bars[0].style.width = pC + '%';
+        bars[1].style.width = (100 - pC) + '%';
+        if (mt.key === state.r) { bars[0].classList.add('border', 'border-dark'); bars[1].classList.add('border', 'border-dark'); }
+        box.append(row);
+      });
+
+      const NS = 'http://www.w3.org/2000/svg';
+      const svgV = document.getElementById('chart-valores');
+      svgV.innerHTML = '';
+      const maxM = METALES[METALES.length - 1].valor;
+      METALES.forEach((mt, i) => {
+        const y = 6 + i * 22;
+        const w = (mt.valor / maxM) * 190;
+        const g = document.createElementNS(NS, 'g');
+        const lab = document.createElementNS(NS, 'text');
+        lab.setAttribute('x', 0); lab.setAttribute('y', y + 11);
+        lab.setAttribute('font-size', '11'); lab.setAttribute('fill', 'currentColor');
+        lab.textContent = mt.nombre;
+        const bar = document.createElementNS(NS, 'rect');
+        bar.setAttribute('x', 62); bar.setAttribute('y', y);
+        bar.setAttribute('width', Math.max(2, w)); bar.setAttribute('height', 13);
+        bar.setAttribute('rx', 3);
+        bar.setAttribute('fill', mt.key === state.r ? 'var(--bs-warning)' : 'var(--bs-info)');
+        bar.setAttribute('fill-opacity', mt.key === state.r ? '0.85' : '0.5');
+        bar.setAttribute('stroke', 'currentColor');
+        if (mt.key === state.r) bar.setAttribute('stroke-width', '1.6');
+        const val = document.createElementNS(NS, 'text');
+        val.setAttribute('x', 66 + w); val.setAttribute('y', y + 11);
+        val.setAttribute('font-size', '11'); val.setAttribute('fill', 'currentColor');
+        val.textContent = mt.texto.slice(0, 6);
+        g.append(lab, bar, val);
+        svgV.append(g);
+      });
+
+      const tb = document.getElementById('tabla-comp');
+      tb.innerHTML = '';
+      METALES.forEach((mt) => {
+        const tr = document.createElement('tr');
+        if (mt.key === state.r) tr.className = 'table-warning';
+        const th = document.createElement('th');
+        th.scope = 'row';
+        th.className = 'fw-normal small';
+        th.textContent = mt.emoji + ' ' + mt.nombre;
+        tr.append(th);
+        if (!ok) {
+          ['c', 'l', 't'].forEach(() => { const td = document.createElement('td'); td.className = 'small'; td.textContent = '–'; tr.append(td); });
+        } else {
+          const r = calc(v, t, mt.valor);
+          [r.corto, r.largo, r.total].forEach((x) => {
+            const td = document.createElement('td');
+            td.className = 'small';
+            td.textContent = fmt(x);
+            tr.append(td);
+          });
+        }
+        tb.append(tr);
+      });
+      document.getElementById('comp-leyenda').textContent = ok
+        ? 'Tu medida ' + fmt(v) + ' como ' + t + ', convertida en cada metal.'
+        : 'Ingresá una medida válida para ver la comparación numérica.';
+    }
+
+    function renderVecinos(v, t, ok) {
+      const NS = 'http://www.w3.org/2000/svg';
+      const idx = METALES.findIndex((m) => m.key === state.r);
+      const vecinos = [idx - 1, idx, idx + 1].filter((i) => i >= 0 && i < METALES.length);
+      const vEff = ok ? v : 100;
+      const dims = vecinos.map((mi) => {
+        const trio = calc(vEff, t, METALES[mi].valor);
+        return { mi, w: trio.largo, h: trio.corto };
+      });
+      const svg = document.getElementById('rect-vecinos');
+      svg.innerHTML = '';
+      const maxW = Math.max(...dims.map((d) => d.w));
+      const maxH = Math.max(...dims.map((d) => d.h));
+      const scale = Math.min(300 / maxW, 100 / maxH);
+      const x0 = 8, yB = 128;
+      const dashOf = (mi) => mi === idx ? null : mi < idx ? '2 3' : '7 4';
+      svg.setAttribute('viewBox', '0 0 320 150');
+      vecinos.forEach((mi) => {
+        const mt = METALES[mi];
+        const r = vecinos.indexOf(mi);
+        const lx = 8 + r * 107;
+        const muestra = document.createElementNS(NS, 'line');
+        muestra.setAttribute('x1', lx); muestra.setAttribute('y1', 14);
+        muestra.setAttribute('x2', lx + 24); muestra.setAttribute('y2', 14);
+        muestra.setAttribute('stroke', 'currentColor'); muestra.setAttribute('stroke-width', mi === idx ? '2.6' : '1.6');
+        const dashMuestra = dashOf(mi);
+        if (dashMuestra) muestra.setAttribute('stroke-dasharray', dashMuestra);
+        const lab = document.createElementNS(NS, 'text');
+        lab.setAttribute('x', lx + 28); lab.setAttribute('y', 18);
+        lab.setAttribute('font-size', '11'); lab.setAttribute('fill', 'currentColor');
+        lab.textContent = mt.emoji + ' ' + mt.nombre + (mi === idx ? ' ★' : '');
+        svg.append(muestra, lab);
+      });
+      [...dims].sort((a, b) => (b.w * b.h) - (a.w * a.h)).forEach((d) => {
+        const rect = document.createElementNS(NS, 'rect');
+        rect.setAttribute('x', x0); rect.setAttribute('y', yB - d.h * scale);
+        rect.setAttribute('width', Math.max(1, d.w * scale)); rect.setAttribute('height', Math.max(1, d.h * scale));
+        rect.setAttribute('fill', 'none');
+        rect.setAttribute('stroke', 'currentColor');
+        rect.setAttribute('stroke-width', d.mi === idx ? '2.6' : '1.6');
+        const dash = dashOf(d.mi);
+        if (dash) rect.setAttribute('stroke-dasharray', dash);
+        svg.append(rect);
+      });
+      const punto = document.createElementNS(NS, 'circle');
+      punto.setAttribute('cx', x0); punto.setAttribute('cy', yB);
+      punto.setAttribute('r', '3.5'); punto.setAttribute('fill', 'currentColor');
+      svg.append(punto);
+      const refTxt = t === 'corto' ? 'corto = ' + fmt(vEff) + ' (lado común)'
+        : t === 'largo' ? 'largo = ' + fmt(vEff) + ' (ancho común)'
+        : 'total = ' + fmt(vEff) + ' (igual en los tres)';
+      const pie = document.createElementNS(NS, 'text');
+      pie.setAttribute('x', x0 + 8); pie.setAttribute('y', yB + 14);
+      pie.setAttribute('font-size', '10'); pie.setAttribute('fill', 'currentColor');
+      pie.textContent = refTxt;
+      svg.append(pie);
+      const partes = dims.map((d) => {
+        const mt = METALES[d.mi];
+        return mt.nombre.toLowerCase() + ' ' + fmt(d.h) + '×' + fmt(d.w) + (d.mi === idx ? ' ★' : '');
+      });
+      document.getElementById('leyenda-vecinos').textContent = (ok ? 'Con ' + t + ' = ' + fmt(vEff) : 'Ejemplo con ' + t + ' = 100') +
+        ', cada rectángulo es corto×largo: ' + partes.join(' · ') + '.';
+    }
+
+    function renderTablaOeis() {
+      const tb = document.getElementById('tabla-oeis');
+      tb.innerHTML = '';
+      METALES.forEach((mt) => {
+        const tr = document.createElement('tr');
+        if (mt.key === state.r) tr.className = 'table-warning';
+        const tdN = document.createElement('td');
+        tdN.className = 'small';
+        tdN.textContent = mt.n;
+        const tdM = document.createElement('td');
+        tdM.className = 'small';
+        tdM.textContent = mt.emoji + ' ' + mt.nombre;
+        const tdV = document.createElement('td');
+        tdV.className = 'small';
+        tdV.textContent = mt.texto;
+        const tdO = document.createElement('td');
+        tdO.className = 'small';
+        if (mt.oeis) {
+          const a = document.createElement('a');
+          a.href = 'https://oeis.org/' + mt.oeis;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.textContent = mt.oeis;
+          tdO.append(a);
+        } else {
+          tdO.textContent = '— (= 1)';
+        }
+        const tdS = document.createElement('td');
+        tdS.className = 'small text-body-secondary';
+        const terms = seqTerms(mt.n, 5).join(', ');
+        if (mt.seqOeis) {
+          tdS.innerHTML = '';
+          const a = document.createElement('a');
+          a.href = 'https://oeis.org/' + mt.seqOeis;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.textContent = mt.seqOeis;
+          tdS.append(a);
+          tdS.append(document.createTextNode(': ' + terms + '…'));
+        } else {
+          tdS.textContent = terms + '…';
+        }
+        tr.append(tdN, tdM, tdV, tdO, tdS);
+        tb.append(tr);
+      });
+    }
+
+    function render() {
+      const info = POR_CLAVE[state.r];
+      $ratio.value = state.r;
+      renderTex('tex-hero', info.tex, info.formula);
+      document.getElementById('ratio-valor').textContent = info.texto;
+      const oeisLink = document.getElementById('ratio-oeis');
+      if (info.oeis) {
+        oeisLink.classList.remove('d-none');
+        oeisLink.href = 'https://oeis.org/' + info.oeis;
+        oeisLink.textContent = 'Ver decimal en OEIS: ' + info.oeis;
+      } else {
+        oeisLink.classList.remove('d-none');
+        oeisLink.removeAttribute('href');
+        oeisLink.textContent = 'Vale 1: sin entrada propia en OEIS';
+      }
+      document.getElementById('leyenda-m').textContent = 'm ≈ ' + info.texto.slice(0, 5);
+      document.getElementById('seq-metal').textContent = info.nombre.toLowerCase();
+      renderTex('tex-seq', info.n === 0 ? 'u_{k+1} = u_{k-1}' : info.n === 1 ? 'u_{k+1} = u_k + u_{k-1}' : 'u_{k+1} = ' + info.n + 'u_k + u_{k-1}');
+      const terms = seqTerms(info.n, state.k + 1);
+      const a = terms[state.k], b = terms[state.k + 1];
+      document.getElementById('seq-n').textContent = state.k;
+      document.getElementById('seq-n2').textContent = state.k + 1;
+      document.getElementById('seq-a').textContent = a.toLocaleString('es');
+      document.getElementById('seq-b').textContent = b.toLocaleString('es');
+      document.getElementById('seq-div').textContent = b.toLocaleString('es') + ' / ' + a.toLocaleString('es');
+      if (a === 0) {
+        document.getElementById('seq-coc').textContent = '—';
+        document.getElementById('seq-dif').textContent = '· el platino alterna 0 y 1, sin cociente';
+      } else {
+        const coc = b / a;
+        document.getElementById('seq-coc').textContent = String(Math.round(coc * 100000) / 100000).replace('.', ',');
+        document.getElementById('seq-dif').textContent = '· a ' + String(Math.round(Math.abs(coc - info.valor) * 100000) / 100000).replace('.', ',') + ' de ' + info.simbolo;
+      }
+      const v = parseNum($medida.value);
+      const t = $tipo.value;
+      state.v = $medida.value;
+      state.t = t;
+      const ok = Number.isFinite(v) && v > 0;
+      $error.classList.toggle('d-none', ok);
+      document.getElementById('resultados').style.opacity = ok ? '' : '0.45';
+      if (ok) {
+        const m = info.valor;
+        const r = calc(v, t, m);
+        document.getElementById('r-corto').textContent = fmt(r.corto);
+        document.getElementById('r-largo').textContent = fmt(r.largo);
+        document.getElementById('r-total').textContent = fmt(r.total);
+        document.getElementById('tag-corto').classList.toggle('d-none', t !== 'corto');
+        document.getElementById('tag-largo').classList.toggle('d-none', t !== 'largo');
+        document.getElementById('tag-total').classList.toggle('d-none', t !== 'total');
+        const pC = (r.corto / r.total) * 100;
+        document.getElementById('bar-corto').style.width = pC + '%';
+        document.getElementById('bar-largo').style.width = (100 - pC) + '%';
+        document.getElementById('leyenda-corto').textContent = fmt(r.corto) + ' (' + fmtPct(pC) + ')';
+        document.getElementById('leyenda-largo').textContent = fmt(r.largo) + ' (' + fmtPct(100 - pC) + ')';
+      }
+      renderComparador(v, t, ok);
+      renderVecinos(v, t, ok);
+      renderTablaOeis();
+    }
+
+    function persist() {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ r: state.r, v: state.v, t: state.t, k: state.k })); } catch {}
+    }
+
+    function readStored() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return null;
+        const d = JSON.parse(raw);
+        const r = ALIAS[d.r] || d.r;
+        if (!d || !POR_CLAVE[r] || typeof d.v === 'undefined' || !['corto', 'largo', 'total'].includes(d.t)) return null;
+        d.r = r;
+        return d;
+      } catch { return null; }
+    }
+
+    renderTexEstaticos();
+
+    (function init() {
+      const q = new URLSearchParams(window.location.search);
+      let qr = q.get('r'), qv = q.get('v'), qt = q.get('t');
+      if (qr && ALIAS[qr]) qr = ALIAS[qr];
+      if (qv !== null && POR_CLAVE[qr] && ['corto', 'largo', 'total'].includes(qt)) {
+        fromUrl = true;
+        state.r = qr;
+        $medida.value = qv;
+        $tipo.value = qt;
+        const qk = parseInt(q.get('k') || '', 10);
+        state.k = Number.isFinite(qk) ? Math.min(10, Math.max(2, qk)) : DEFAULTS.k;
+      } else {
+        const s = readStored();
+        state.r = (s && s.r) || DEFAULTS.r;
+        $medida.value = (s && s.v !== undefined) ? s.v : DEFAULTS.v;
+        $tipo.value = (s && s.t) || DEFAULTS.t;
+        state.k = (s && Number.isFinite(s.k)) ? Math.min(10, Math.max(2, s.k)) : DEFAULTS.k;
+        if (!s) persist();
+      }
+      render();
+    })();
+
+    function changed() {
+      if (fromUrl) fromUrl = false;
+      render();
+      persist();
+    }
+
+    $ratio.addEventListener('change', () => { state.r = $ratio.value; changed(); });
+    document.getElementById('metal-prev').addEventListener('click', () => {
+      const i = METALES.findIndex((m) => m.key === state.r);
+      state.r = METALES[(i - 1 + METALES.length) % METALES.length].key;
+      changed();
+    });
+    document.getElementById('metal-next').addEventListener('click', () => {
+      const i = METALES.findIndex((m) => m.key === state.r);
+      state.r = METALES[(i + 1) % METALES.length].key;
+      changed();
+    });
+    $medida.addEventListener('input', changed);
+    $tipo.addEventListener('change', changed);
+
+    document.getElementById('seq-menos').addEventListener('click', () => {
+      state.k = Math.max(2, state.k - 1);
+      if (fromUrl) fromUrl = false;
+      render(); persist();
+    });
+    document.getElementById('seq-mas').addEventListener('click', () => {
+      state.k = Math.min(10, state.k + 1);
+      if (fromUrl) fromUrl = false;
+      render(); persist();
+    });
+
+    document.getElementById('copiar').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const txt = String(POR_CLAVE[state.r].valor);
+      try { await navigator.clipboard.writeText(txt); }
+      catch { const ta = document.createElement('textarea'); ta.value = txt; document.body.append(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+      showNotice('Valor copiado');
+      btn.textContent = '¡Copiado!';
+      setTimeout(() => { btn.textContent = '📋 Copiar'; }, 1500);
+    });
+
+    document.getElementById('eqtex').addEventListener('click', () => {
+      const info = POR_CLAVE[state.r];
+      const url = new URL('../eqtex/', window.location.href);
+      url.searchParams.set('nombre', 'Metal ' + info.nombre + ' (n=' + info.n + ')');
+      url.searchParams.set('latex', info.tex + ' \\approx ' + info.valor.toFixed(6).replace('.', ','));
+      window.open(url.toString(), '_blank', 'noopener');
+    });
+
+    $share.addEventListener('click', async () => {
+      const url = window.location.origin + window.location.pathname + '?r=' + encodeURIComponent(state.r) + '&v=' + encodeURIComponent($medida.value) + '&t=' + encodeURIComponent($tipo.value) + '&k=' + state.k;
+      try { await navigator.clipboard.writeText(url); }
+      catch { const ta = document.createElement('textarea'); ta.value = url; document.body.append(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+      showNotice('Link copiado');
+      $share.textContent = '¡Copiado!';
+      setTimeout(() => { $share.textContent = '🔗 Compartir'; }, 1500);
+    });
+
+    let resetArmada = false, resetTimer;
+    function resetDesarmar() { resetArmada = false; $reset.textContent = '🗑️ Reiniciar'; $reset.classList.remove('btn-danger'); $reset.classList.add('btn-outline-secondary'); }
+    $reset.addEventListener('click', () => {
+      if (!resetArmada) {
+        resetArmada = true;
+        $reset.textContent = '¿Seguro? Tocá de nuevo';
+        $reset.classList.remove('btn-outline-secondary');
+        $reset.classList.add('btn-danger');
+        clearTimeout(resetTimer);
+        resetTimer = setTimeout(resetDesarmar, 5000);
+        return;
+      }
+      clearTimeout(resetTimer);
+      resetDesarmar();
+      try { localStorage.removeItem(STORAGE_KEY); } catch {}
+      Object.assign(state, DEFAULTS);
+      history.replaceState(null, '', window.location.pathname);
+      $medida.value = state.v;
+      $tipo.value = state.t;
+      render();
+      persist();
+      showNotice('Valores restablecidos');
+    });
+
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

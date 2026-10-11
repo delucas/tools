@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f4c4%3B%3C/text%3E%3C/svg%3E">
+  <title>Escáner a PDF</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    #video {
+      width: 100%;
+      max-height: 52vh;
+      object-fit: contain;
+      border-radius: 0.5rem;
+      background: #000;
+    }
+    #capture-btn {
+      min-height: 3.5rem;
+      font-size: 1.15rem;
+    }
+    .pagina-img {
+      width: 100%;
+      aspect-ratio: 3 / 4;
+      object-fit: cover;
+      border-radius: 0.375rem;
+      background: var(--bs-secondary-bg);
+    }
+    .drag-handle {
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
+    }
+    .sortable-ghost {
+      opacity: 0.45;
+    }
+    .barra-captura {
+      position: sticky;
+      bottom: 0;
+      z-index: 1020;
+      background: var(--bs-body-bg);
+      border-top: 1px solid var(--bs-border-color);
+      padding: 0.6rem 0 calc(0.6rem + env(safe-area-inset-bottom, 0px));
+    }
+    #crop-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1060;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .crop-box {
+      background: var(--bs-body-bg);
+      border-radius: 0.5rem;
+      padding: 1rem;
+      max-width: 94vw;
+      max-height: 92vh;
+      overflow: auto;
+    }
+    #crop-stage {
+      position: relative;
+      display: inline-block;
+      touch-action: none;
+      user-select: none;
+      max-width: 100%;
+    }
+    #crop-img {
+      display: block;
+      max-width: 100%;
+      max-height: 55vh;
+    }
+    #crop-sel {
+      position: absolute;
+      border: 2px dashed var(--bs-primary);
+      background: rgba(13, 110, 253, 0.15);
+    }
+    p.signature { font-size: 0.8em; }
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
+    @media (max-width: 576px) {
+      input, textarea, select { font-size: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4" style="max-width: 720px;">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">📄 Escáner a PDF</h1>
+        <p class="text-body-secondary mb-0">Sacá fotos de cada hoja y compilalas en un solo PDF para compartir.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div id="notice" class="alert alert-success py-2 alert-flotante d-none" role="status"></div>
+
+    <section class="card mb-3" aria-label="Cámara">
+      <div class="card-body text-center">
+        <video id="video" class="d-none mb-2" playsinline muted></video>
+        <canvas id="frame" class="d-none"></canvas>
+        <div class="d-flex flex-wrap gap-2 justify-content-center">
+          <button id="cam-start" class="btn btn-primary btn-sm" type="button">📷 Iniciar cámara</button>
+          <button id="cam-stop" class="btn btn-outline-secondary btn-sm d-none" type="button">Detener</button>
+        </div>
+        <select id="cam-select" class="form-select form-select-sm mt-2 d-none" aria-label="Cámara"></select>
+        <div class="d-flex flex-wrap gap-2 justify-content-center mt-2">
+          <button id="cam-torch" class="btn btn-outline-secondary btn-sm d-none" type="button" aria-pressed="false">🔦 Linterna</button>
+        </div>
+        <div id="cam-status" class="text-body-secondary small mt-2" role="status"></div>
+        <div id="cam-error" class="text-danger small mt-2 d-none"></div>
+        <hr>
+        <button id="capture-btn" class="btn btn-success w-100" type="button" disabled>📸 Capturar página</button>
+        <div class="mt-2">
+          <label for="gallery-input" class="btn btn-outline-secondary btn-sm w-100" role="button" tabindex="0">🖼️ O sumar desde la galería</label>
+          <input id="gallery-input" class="d-none" type="file" accept="image/*" multiple>
+        </div>
+      </div>
+    </section>
+
+    <section class="mb-3" aria-label="Páginas capturadas">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+        <h2 class="h6 mb-0">📑 Páginas <span id="count-badge" class="badge text-bg-secondary fw-normal">0</span></h2>
+      </div>
+      <div id="empty-pages" class="alert alert-info py-2" role="note">Todavía no hay páginas. Capturá con la cámara o sumá fotos desde la galería.</div>
+      <div id="grid" class="row row-cols-2 row-cols-sm-3 g-2"></div>
+      <p class="text-body-secondary small mt-2 mb-0">Arrastrá desde ⠿ para reordenar. Las fotos viven solo en esta sesión: si recargás se pierden.</p>
+    </section>
+
+    <section class="card mb-3" id="finalizar" aria-label="Generar y compartir PDF">
+      <div class="card-body">
+        <label for="filename" class="form-label">Nombre del archivo</label>
+        <div class="input-group mb-2">
+          <input id="filename" class="form-control" type="text" maxlength="60" autocomplete="off" value="examen">
+          <span class="input-group-text">.pdf</span>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <button id="gen-btn" class="btn btn-primary" type="button" disabled>📄 Generar PDF</button>
+          <button id="share-btn" class="btn btn-success d-none" type="button">📤 Compartir</button>
+          <button id="download-btn" class="btn btn-outline-secondary d-none" type="button">📥 Descargar</button>
+        </div>
+        <div id="pdf-status" class="text-body-secondary small mt-2" role="status"></div>
+        <div id="share-hint" class="text-body-secondary small mt-1 d-none">Tu navegador no soporta compartir archivos: usá Descargar y envialo desde tu app.</div>
+      </div>
+    </section>
+
+    <div class="barra-captura">
+      <div class="d-flex gap-2">
+        <button id="capture-bar" class="btn btn-success flex-grow-1" type="button" disabled>📸 Capturar</button>
+        <a href="#finalizar" id="goto-pdf" class="btn btn-outline-primary flex-shrink-0" role="button">PDF · <span id="bar-count">0</span></a>
+      </div>
+    </div>
+
+    <div id="crop-overlay" class="d-none" role="dialog" aria-modal="true" aria-label="Recortar página">
+      <div class="crop-box text-center">
+        <p class="fw-semibold mb-2">Arrastrá sobre la foto para elegir el recorte</p>
+        <div id="crop-stage">
+          <img id="crop-img" alt="Página a recortar">
+          <div id="crop-sel" class="d-none"></div>
+        </div>
+        <div class="d-flex flex-wrap gap-2 justify-content-center mt-3">
+          <button id="crop-apply" class="btn btn-primary btn-sm" type="button">✂ Aplicar recorte</button>
+          <button id="crop-cancel" class="btn btn-outline-secondary btn-sm" type="button">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <hr>
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"
+    integrity="sha512-csIng5zcB+XpulRUa+ev1zKo7zRNGpEaVfNB9On1no9KYTEY/rLGAEEpvgdw6nim1WdTuihZY1eqZ31K7/fZjw=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
+    integrity="sha512-qZvrmS2ekKPF2mSznTQsxqPgnpkI4DNTlrdUmTzrDgektczlKNRRhy5X5AAOnx5S09ydFYWWNSfcEqDTTHgtNA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script>
+    (() => {
+      const STORAGE_KEY = 'escaner-pdf';
+      const DEFAULT_NAME = 'examen';
+      const MAX_SIDE = 2000;
+      const JPEG_Q = 0.85;
+
+      const $ = (id) => document.getElementById(id);
+      const video = $('video'), frame = $('frame');
+      const camStart = $('cam-start'), camStop = $('cam-stop'), camSelect = $('cam-select');
+      const camTorch = $('cam-torch'), camStatus = $('cam-status'), camError = $('cam-error');
+      const captureBtn = $('capture-btn'), captureBar = $('capture-bar'), galleryInput = $('gallery-input');
+      const grid = $('grid'), emptyPages = $('empty-pages'), countBadge = $('count-badge'), barCount = $('bar-count');
+      const filenameInput = $('filename'), genBtn = $('gen-btn'), shareBtn = $('share-btn');
+      const downloadBtn = $('download-btn'), pdfStatus = $('pdf-status'), shareHint = $('share-hint');
+      const notice = $('notice');
+
+      let pages = [];
+      let pdfBlob = null, pdfName = '';
+      let stream = null, torchOn = false, wakeLock = null;
+      let cropId = null, cropRect = null, cropStart = null;
+      let fromURL = false;
+      let sortableOK = false;
+
+      function nid() {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+        return `id-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+      }
+
+      function showNotice(text, ms = 2500) {
+        notice.textContent = text;
+        notice.classList.remove('d-none');
+        clearTimeout(showNotice.timer);
+        showNotice.timer = setTimeout(() => notice.classList.add('d-none'), ms);
+      }
+
+      function setStatus(text) { camStatus.textContent = text; }
+      function setError(text) {
+        if (!text) { camError.classList.add('d-none'); return; }
+        camError.textContent = text;
+        camError.classList.remove('d-none');
+      }
+
+      function cleanName(s) {
+        const t = String(s || '').trim().replace(/[\\/:*?"<>|]/g, '').slice(0, 60);
+        return t || DEFAULT_NAME;
+      }
+
+      function persistName() {
+        if (fromURL) return;
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ nombre: cleanName(filenameInput.value) })); } catch {}
+      }
+
+      function initName() {
+        const params = new URLSearchParams(location.search);
+        const q = params.get('n');
+        if (q && q.trim()) {
+          fromURL = true;
+          filenameInput.value = cleanName(q);
+          return;
+        }
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (raw) {
+            const obj = JSON.parse(raw);
+            if (obj && obj.nombre) filenameInput.value = cleanName(obj.nombre);
+          }
+        } catch {}
+      }
+
+      function loadImage(dataURL) {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = reject;
+          img.src = dataURL;
+        });
+      }
+
+      async function fileToJPEG(file) {
+        let bitmap = null;
+        try {
+          try {
+            bitmap = await createImageBitmap(file, { imageOrientation: 'fromImage' });
+          } catch {
+            bitmap = await createImageBitmap(file);
+          }
+        } catch {
+          const dataURL = await new Promise((resolve, reject) => {
+            const r = new FileReader();
+            r.onload = () => resolve(r.result);
+            r.onerror = reject;
+            r.readAsDataURL(file);
+          });
+          const img = await loadImage(dataURL);
+          return drawCapped(img, img.naturalWidth, img.naturalHeight);
+        }
+        const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+        const w = Math.max(1, Math.round(bitmap.width * scale));
+        const h = Math.max(1, Math.round(bitmap.height * scale));
+        frame.width = w;
+        frame.height = h;
+        const ctx = frame.getContext('2d');
+        ctx.drawImage(bitmap, 0, 0, w, h);
+        if (bitmap.close) bitmap.close();
+        return { dataURL: frame.toDataURL('image/jpeg', JPEG_Q), w, h };
+      }
+
+      function drawCapped(img, w, h) {
+        const scale = Math.min(1, MAX_SIDE / Math.max(w, h));
+        const dw = Math.max(1, Math.round(w * scale));
+        const dh = Math.max(1, Math.round(h * scale));
+        frame.width = dw;
+        frame.height = dh;
+        frame.getContext('2d').drawImage(img, 0, 0, dw, dh);
+        return { dataURL: frame.toDataURL('image/jpeg', JPEG_Q), w: dw, h: dh };
+      }
+
+      function addPage(dataURL, w, h) {
+        pages.push({ id: nid(), dataURL, w, h });
+        pdfBlob = null;
+        render();
+        showNotice(`Página ${pages.length} agregada.`);
+        if (navigator.vibrate) { try { navigator.vibrate(40); } catch {} }
+      }
+
+      function capture() {
+        if (!stream || video.videoWidth === 0) return;
+        const vw = video.videoWidth, vh = video.videoHeight;
+        const scale = Math.min(1, MAX_SIDE / Math.max(vw, vh));
+        const w = Math.max(1, Math.round(vw * scale));
+        const h = Math.max(1, Math.round(vh * scale));
+        frame.width = w;
+        frame.height = h;
+        frame.getContext('2d').drawImage(video, 0, 0, w, h);
+        addPage(frame.toDataURL('image/jpeg', JPEG_Q), w, h);
+      }
+
+      function esc(s) {
+        return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      }
+
+      function render() {
+        countBadge.textContent = pages.length;
+        barCount.textContent = pages.length;
+        emptyPages.classList.toggle('d-none', pages.length > 0);
+        const canShoot = !!stream && video.videoWidth > 0;
+        captureBtn.disabled = !canShoot;
+        captureBar.disabled = !canShoot;
+        genBtn.disabled = pages.length === 0;
+        if (pages.length === 0) {
+          pdfBlob = null;
+          shareBtn.classList.add('d-none');
+          downloadBtn.classList.add('d-none');
+          shareHint.classList.add('d-none');
+          pdfStatus.textContent = '';
+        }
+        grid.innerHTML = pages.map((p, i) =>
+          `<div class="col pagina" data-id="${esc(p.id)}">` +
+          `<div class="card h-100"><div class="card-body p-2">` +
+          `<div class="position-relative">` +
+          `<img class="pagina-img" src="${p.dataURL}" alt="Página ${i + 1}">` +
+          `<span class="badge text-bg-dark position-absolute top-0 start-0 m-1">${i + 1}</span>` +
+          `</div>` +
+          `<div class="d-flex gap-1 mt-1">` +
+          `<button type="button" class="btn btn-outline-secondary btn-sm flex-grow-1 drag-handle" title="Arrastrar para reordenar" aria-label="Arrastrar página ${i + 1}">⠿</button>` +
+          `<button type="button" class="btn btn-outline-secondary btn-sm" data-rot="${esc(p.id)}" title="Rotar 90°" aria-label="Rotar página ${i + 1}">⟳</button>` +
+          `<button type="button" class="btn btn-outline-secondary btn-sm" data-crop="${esc(p.id)}" title="Recortar" aria-label="Recortar página ${i + 1}">✂</button>` +
+          `<button type="button" class="btn btn-outline-danger btn-sm" data-del="${esc(p.id)}" title="Borrar" aria-label="Borrar página ${i + 1}">✕</button>` +
+          `</div></div></div></div>`
+        ).join('');
+        initSortable();
+      }
+
+      function initSortable() {
+        if (sortableOK || typeof Sortable === 'undefined') return;
+        sortableOK = true;
+        new Sortable(grid, {
+          animation: 150,
+          draggable: '.pagina',
+          handle: '.drag-handle',
+          ghostClass: 'sortable-ghost',
+          onEnd(event) {
+            if (event.oldIndex === event.newIndex || event.oldIndex === undefined) return;
+            const [item] = pages.splice(event.oldIndex, 1);
+            pages.splice(event.newIndex, 0, item);
+            pdfBlob = null;
+            render();
+          }
+        });
+      }
+
+      grid.addEventListener('click', async (e) => {
+        const del = e.target.closest('[data-del]');
+        if (del) {
+          pages = pages.filter((p) => p.id !== del.dataset.del);
+          pdfBlob = null;
+          render();
+          showNotice('Página borrada.');
+          return;
+        }
+        const rot = e.target.closest('[data-rot]');
+        if (rot) {
+          await rotatePage(rot.dataset.rot);
+          return;
+        }
+        const crop = e.target.closest('[data-crop]');
+        if (crop) {
+          openCrop(crop.dataset.crop);
+        }
+      });
+
+      async function rotatePage(id) {
+        const page = pages.find((p) => p.id === id);
+        if (!page) return;
+        try {
+          const img = await loadImage(page.dataURL);
+          const c = document.createElement('canvas');
+          c.width = img.naturalHeight;
+          c.height = img.naturalWidth;
+          const ctx = c.getContext('2d');
+          ctx.translate(c.width / 2, c.height / 2);
+          ctx.rotate(Math.PI / 2);
+          ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+          page.dataURL = c.toDataURL('image/jpeg', 0.92);
+          page.w = c.width;
+          page.h = c.height;
+          pdfBlob = null;
+          render();
+          showNotice('Página rotada.');
+        } catch {
+          showNotice('No se pudo rotar esa página.');
+        }
+      }
+
+      function openCrop(id) {
+        const page = pages.find((p) => p.id === id);
+        if (!page) return;
+        cropId = id;
+        cropRect = null;
+        cropStart = null;
+        $('crop-sel').classList.add('d-none');
+        $('crop-img').src = page.dataURL;
+        $('crop-overlay').classList.remove('d-none');
+      }
+
+      function closeCrop() {
+        $('crop-overlay').classList.add('d-none');
+        $('crop-img').removeAttribute('src');
+        cropId = null;
+        cropRect = null;
+        cropStart = null;
+      }
+
+      const cropStage = $('crop-stage'), cropImg = $('crop-img'), cropSel = $('crop-sel');
+
+      function stagePos(e) {
+        const r = cropImg.getBoundingClientRect();
+        return {
+          x: Math.min(Math.max(e.clientX - r.left, 0), r.width),
+          y: Math.min(Math.max(e.clientY - r.top, 0), r.height),
+          w: r.width,
+          h: r.height
+        };
+      }
+
+      function paintSel(a, b) {
+        const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y);
+        const w = Math.abs(a.x - b.x), h = Math.abs(a.y - b.y);
+        const r = cropImg.getBoundingClientRect(), s = cropStage.getBoundingClientRect();
+        cropSel.style.left = `${r.left - s.left + x}px`;
+        cropSel.style.top = `${r.top - s.top + y}px`;
+        cropSel.style.width = `${w}px`;
+        cropSel.style.height = `${h}px`;
+        cropSel.classList.remove('d-none');
+        cropRect = { x, y, w, h };
+      }
+
+      cropStage.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        try { cropStage.setPointerCapture(e.pointerId); } catch {}
+        cropStart = stagePos(e);
+        cropRect = null;
+        cropSel.classList.add('d-none');
+      });
+      cropStage.addEventListener('pointermove', (e) => {
+        if (!cropStart) return;
+        paintSel(cropStart, stagePos(e));
+      });
+      cropStage.addEventListener('pointerup', (e) => {
+        if (!cropStart) return;
+        const end = stagePos(e);
+        if (Math.abs(end.x - cropStart.x) > 8 && Math.abs(end.y - cropStart.y) > 8) {
+          paintSel(cropStart, end);
+        }
+        cropStart = null;
+      });
+
+      $('crop-cancel').addEventListener('click', closeCrop);
+      $('crop-apply').addEventListener('click', async () => {
+        const page = pages.find((p) => p.id === cropId);
+        if (!page) { closeCrop(); return; }
+        if (!cropRect || cropRect.w < 10 || cropRect.h < 10) {
+          showNotice('Arrastrá un recuadro sobre la foto primero.');
+          return;
+        }
+        try {
+          const img = await loadImage(page.dataURL);
+          const r = cropImg.getBoundingClientRect();
+          const k = img.naturalWidth / r.width;
+          const sx = Math.round(cropRect.x * k), sy = Math.round(cropRect.y * (img.naturalHeight / r.height));
+          const sw = Math.round(cropRect.w * k), sh = Math.round(cropRect.h * (img.naturalHeight / r.height));
+          const c = document.createElement('canvas');
+          c.width = sw;
+          c.height = sh;
+          c.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+          const capped = drawCapped(await loadImage(c.toDataURL('image/jpeg', 0.92)), sw, sh);
+          page.dataURL = capped.dataURL;
+          page.w = capped.w;
+          page.h = capped.h;
+          pdfBlob = null;
+          render();
+          showNotice('Recorte aplicado.');
+        } catch {
+          showNotice('No se pudo aplicar el recorte.');
+        }
+        closeCrop();
+      });
+
+      function mmFrom(px, dpi, maxMm) {
+        return Math.min((px / dpi) * 25.4, maxMm);
+      }
+
+      async function generarPDF() {
+        if (!pages.length) return;
+        if (typeof window.jspdf === 'undefined') {
+          pdfStatus.textContent = 'No se pudo cargar el generador de PDF (revisá tu conexión).';
+          return;
+        }
+        genBtn.disabled = true;
+        pdfStatus.textContent = 'Generando PDF…';
+        try {
+          const { jsPDF } = window.jspdf;
+          const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+          const PW = 210, PH = 297;
+          for (let i = 0; i < pages.length; i++) {
+            const p = pages[i];
+            const img = await loadImage(p.dataURL);
+            const dpi = 96;
+            let w = mmFrom(img.naturalWidth, dpi, PW);
+            let h = (w / img.naturalWidth) * img.naturalHeight;
+            if (h > PH) {
+              h = PH;
+              w = (h / img.naturalHeight) * img.naturalWidth;
+            }
+            if (i > 0) pdf.addPage();
+            pdf.addImage(img, 'JPEG', (PW - w) / 2, (PH - h) / 2, w, h);
+          }
+          pdfName = `${cleanName(filenameInput.value)}.pdf`;
+          pdfBlob = pdf.output('blob');
+          const mb = (pdfBlob.size / 1048576).toFixed(1);
+          pdfStatus.textContent = `PDF listo: ${pages.length} página(s) · ${mb} MB · ${pdfName}`;
+          downloadBtn.classList.remove('d-none');
+          if (canFileShare()) {
+            shareBtn.classList.remove('d-none');
+            shareHint.classList.add('d-none');
+          } else {
+            shareBtn.classList.add('d-none');
+            shareHint.classList.remove('d-none');
+          }
+          showNotice('PDF generado.');
+          document.getElementById('finalizar').scrollIntoView({ block: 'nearest' });
+        } catch {
+          pdfStatus.textContent = 'Falló la generación del PDF. Probá de nuevo.';
+        }
+        genBtn.disabled = pages.length === 0;
+      }
+
+      function canFileShare() {
+        try {
+          if (!navigator.canShare || !pdfBlob) return false;
+          const f = new File([pdfBlob], pdfName || 'examen.pdf', { type: 'application/pdf' });
+          return navigator.canShare({ files: [f] });
+        } catch {
+          return false;
+        }
+      }
+
+      shareBtn.addEventListener('click', async () => {
+        if (!pdfBlob) return;
+        const file = new File([pdfBlob], pdfName, { type: 'application/pdf' });
+        try {
+          await navigator.share({ files: [file], title: pdfName, text: pdfName });
+        } catch (err) {
+          if (err && err.name === 'AbortError') return;
+          showNotice('No se pudo compartir: usá Descargar.');
+        }
+      });
+
+      downloadBtn.addEventListener('click', () => {
+        if (!pdfBlob) return;
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(pdfBlob);
+        a.download = pdfName;
+        document.body.append(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+        showNotice('PDF descargado.');
+      });
+
+      genBtn.addEventListener('click', generarPDF);
+      captureBtn.addEventListener('click', capture);
+      captureBar.addEventListener('click', capture);
+      filenameInput.addEventListener('input', () => {
+        persistName();
+        if (pdfBlob) {
+          pdfName = `${cleanName(filenameInput.value)}.pdf`;
+          pdfStatus.textContent = `PDF listo: ${pages.length} página(s) · ${pdfName}`;
+        }
+      });
+
+      galleryInput.addEventListener('change', async () => {
+        const files = [...(galleryInput.files || [])].filter((f) => f.type.startsWith('image/'));
+        galleryInput.value = '';
+        for (const f of files) {
+          try {
+            const { dataURL, w, h } = await fileToJPEG(f);
+            addPage(dataURL, w, h);
+          } catch {
+            showNotice('No se pudo leer una imagen.');
+          }
+        }
+      });
+
+      async function requestWakeLock() {
+        try {
+          if ('wakeLock' in navigator && !wakeLock) wakeLock = await navigator.wakeLock.request('screen');
+        } catch {}
+      }
+
+      async function releaseWakeLock() {
+        try {
+          if (wakeLock) { await wakeLock.release(); wakeLock = null; }
+        } catch {}
+      }
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && stream) requestWakeLock();
+      });
+
+      function stopStream() {
+        if (stream) {
+          stream.getTracks().forEach((t) => t.stop());
+          stream = null;
+        }
+        torchOn = false;
+        camTorch.classList.add('d-none');
+        camTorch.setAttribute('aria-pressed', 'false');
+        camTorch.textContent = '🔦 Linterna';
+        video.classList.add('d-none');
+        camStop.classList.add('d-none');
+        camStart.classList.remove('d-none');
+        setStatus('');
+        releaseWakeLock();
+        render();
+      }
+
+      async function startCamera(deviceId) {
+        setError('');
+        stopStream();
+        if (!navigator.mediaDevices?.getUserMedia) {
+          setError('Tu navegador no permite usar la cámara acá. Sumá fotos desde la galería.');
+          return;
+        }
+        try {
+          const constraints = deviceId
+            ? { video: { deviceId: { exact: deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } } }
+            : { video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } };
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch {
+          setError('No se pudo abrir la cámara (permiso denegado o sin cámara). Sumá fotos desde la galería.');
+          return;
+        }
+        video.srcObject = stream;
+        try { await video.play(); } catch {}
+        try {
+          const track = stream.getVideoTracks()[0];
+          const caps = track.getCapabilities ? track.getCapabilities() : {};
+          if (caps.focusMode && caps.focusMode.includes('continuous')) {
+            await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+          }
+          if (caps.torch) camTorch.classList.remove('d-none');
+        } catch {}
+        video.classList.remove('d-none');
+        camStart.classList.add('d-none');
+        camStop.classList.remove('d-none');
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const cams = devices.filter((d) => d.kind === 'videoinput');
+          if (cams.length > 1) {
+            camSelect.innerHTML = cams.map((d, i) =>
+              `<option value="${esc(d.deviceId)}">${esc(d.label || `Cámara ${i + 1}`)}</option>`).join('');
+            if (deviceId) camSelect.value = deviceId;
+            camSelect.classList.remove('d-none');
+          }
+        } catch {}
+        setStatus('Enfocá la hoja y tocá 📸 Capturar por cada página.');
+        requestWakeLock();
+        render();
+      }
+
+      camStart.addEventListener('click', () => startCamera(camSelect.value || null));
+      camStop.addEventListener('click', stopStream);
+      camSelect.addEventListener('change', () => startCamera(camSelect.value || null));
+      camTorch.addEventListener('click', async () => {
+        try {
+          const track = stream?.getVideoTracks()[0];
+          if (!track) return;
+          torchOn = !torchOn;
+          await track.applyConstraints({ advanced: [{ torch: torchOn }] });
+          camTorch.setAttribute('aria-pressed', String(torchOn));
+          camTorch.textContent = torchOn ? '🔦 Apagar' : '🔦 Linterna';
+        } catch {}
+      });
+
+      const resetBtn = $('reset');
+      let resetArmada = false, resetTimer;
+      function resetDesarmar() {
+        resetArmada = false;
+        resetBtn.textContent = '🗑️ Reiniciar';
+        resetBtn.classList.remove('btn-danger');
+        resetBtn.classList.add('btn-outline-secondary');
+      }
+      resetBtn.addEventListener('click', () => {
+        if (!resetArmada) {
+          resetArmada = true;
+          resetBtn.textContent = '¿Seguro? Tocá de nuevo';
+          resetBtn.classList.remove('btn-outline-secondary');
+          resetBtn.classList.add('btn-danger');
+          clearTimeout(resetTimer);
+          resetTimer = setTimeout(resetDesarmar, 5000);
+          return;
+        }
+        clearTimeout(resetTimer);
+        resetDesarmar();
+        pages = [];
+        pdfBlob = null;
+        pdfName = '';
+        fromURL = false;
+        filenameInput.value = DEFAULT_NAME;
+        try { localStorage.removeItem(STORAGE_KEY); } catch {}
+        history.replaceState(null, '', location.pathname);
+        render();
+        showNotice('Listo para el próximo examen.');
+      });
+
+      window.addEventListener('pagehide', () => {
+        stopStream();
+      });
+
+      const root = document.documentElement;
+      const themeBtn = $('theme-toggle');
+      const storedTheme = localStorage.getItem('theme');
+      const initialTheme = storedTheme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const applyTheme = (t) => { root.setAttribute('data-bs-theme', t); themeBtn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      applyTheme(initialTheme);
+      themeBtn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        applyTheme(next);
+      });
+
+      initName();
+      render();
+    })();
+  </script>
+</body>
+</html>

@@ -57,5 +57,6 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`sudoku6`](./sudoku6) | 🔢 Sudoku6: sudoku chico y tranquilo, con anotaciones y partida guardada. |
 | [`clippy`](./clippy) | 📋 Clippy: pegá algo y mirá qué hay adentro del portapapeles. |
 | [`metalicos`](./metalicos) | 🔩 Metálicos: los 10 ratios del platino al plomo, con calculadora y comparador. |
+| [`escaner-pdf`](./escaner-pdf) | 📄 Escáner a PDF: fotos de cada hoja compiladas en un PDF A4 para compartir. |
 
 Cada carpeta tiene su propio `README.md` con el detalle de uso.

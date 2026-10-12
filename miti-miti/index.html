@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x2696%3B%3C/text%3E%3C/svg%3E">
+  <title>Miti-miti — Cuentas entre amigos</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+  <style>
+    [v-cloak] { display: none; }
+    p.signature { font-size: 0.8em; }
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
+    input, select, textarea { font-size: 16px !important; }
+    .saldo-bar { height: .55rem; border-radius: 999px; background: var(--bs-secondary-bg); overflow: hidden; }
+    .saldo-fill-pos { height: 100%; background: var(--bs-success); border-radius: 999px; }
+    .saldo-fill-neg { height: 100%; background: var(--bs-danger); border-radius: 999px; }
+    dialog#dlg { border: none; border-radius: var(--bs-border-radius-lg); padding: 0; max-width: min(94vw, 560px); width: 100%; }
+    dialog#dlg::backdrop { background: rgba(0,0,0,.45); }
+    .part-check { cursor: pointer; }
+  </style>
+</head>
+<body>
+  <main class="container py-4" id="app" style="max-width: 720px;" v-cloak>
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">⚖️ Miti-miti</h1>
+        <p class="text-body-secondary mb-0">Cuentas entre amigos, mitad y mitad.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ shared ? '¡Copiado!' : '🔗 Compartir' }}</button>
+        <button class="btn btn-sm" type="button" @click="reset" :class="resetArmed ? 'btn-danger' : 'btn-outline-secondary'">{{ resetArmed ? '¿Seguro? Tocá de nuevo' : '🗑️ Reiniciar' }}</button>
+        <button class="btn btn-sm" type="button" @click="loadExample" :class="exampleArmed ? 'btn-danger' : 'btn-outline-secondary'">{{ exampleArmed ? '¿Pisar con ejemplo? Tocá de nuevo' : '✨ Ejemplo' }}</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <p class="text-body-secondary small">Inspirado en <a href="https://www.splitwise.com" target="_blank" rel="noopener">Splitwise</a>, pero sin cuentas ni servidores: todo queda en tu navegador.</p>
+
+    <div v-if="notice" class="alert alert-success py-2 alert-flotante" role="status">{{ notice }}</div>
+
+    <div class="d-flex flex-wrap gap-2 mb-3">
+      <button class="btn btn-primary flex-fill" type="button" @click="openDialog(lastKind)">＋ Agregar movimiento</button>
+      <a href="#liquidacion" class="btn btn-outline-primary flex-fill">🧾 Saldar cuentas</a>
+    </div>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <h2 class="h6 mb-2">💰 Saldos</h2>
+        <div v-if="!members.length" class="text-body-secondary small">Sin participantes todavía.</div>
+        <div v-else class="vstack gap-2">
+          <div v-for="m in members" :key="m.id">
+            <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2">
+              <span class="fw-semibold">{{ m.name }}</span>
+              <span class="d-flex align-items-center gap-2">
+                <span class="font-monospace">{{ money(balanceMap[m.id] || 0) }}</span>
+                <span v-if="(balanceMap[m.id] || 0) > 0" class="badge text-bg-success">a favor</span>
+                <span v-else-if="(balanceMap[m.id] || 0) < 0" class="badge text-bg-danger">debe</span>
+                <span v-else class="badge text-bg-secondary">a mano</span>
+              </span>
+            </div>
+            <div class="saldo-bar mt-1" role="img" :aria-label="'Saldo de ' + m.name + ': ' + money(balanceMap[m.id] || 0)">
+              <div :class="(balanceMap[m.id] || 0) > 0 ? 'saldo-fill-pos' : (balanceMap[m.id] || 0) < 0 ? 'saldo-fill-neg' : ''" :style="{ width: barPct(m.id) + '%' }"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card mb-3" id="liquidacion">
+      <div class="card-body">
+        <h2 class="h6 mb-1">🧾 Liquidación</h2>
+        <p class="text-body-secondary small mb-2">Propuesta con la menor cantidad de transferencias. Los gastos y los pagos reales están separados: saldar solo propone, no mueve plata.</p>
+        <div v-if="!settleList.length" class="alert py-2 mb-0" :class="members.length && moves.length ? 'alert-info' : 'alert-secondary'" role="note">{{ members.length && moves.length ? 'Están a mano 🎉 No hay pagos pendientes.' : 'Agregá participantes y movimientos para ver la propuesta.' }}</div>
+        <div v-else class="vstack gap-2">
+          <div v-for="(s, i) in settleList" :key="i" class="border rounded p-2">
+            <div><strong>{{ s.from.name }}</strong> le paga a <strong>{{ s.to.name }}</strong> <span class="font-monospace fw-bold">{{ money(s.cents) }}</span></div>
+            <div v-if="s.to.alias" class="small text-body-secondary">Alias de {{ s.to.name }}: {{ s.to.alias }}</div>
+            <div v-if="!s.to.email" class="small text-body-secondary">Sin email cargado: el mensaje igual queda listo para copiar.</div>
+            <div class="d-flex flex-wrap gap-2 mt-2">
+              <a class="btn btn-outline-secondary btn-sm" :href="mailtoUrl(s)">✉️ Email</a>
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="copySettle(s)">📋 Copiar</button>
+              <button class="btn btn-outline-success btn-sm" type="button" @click="doneSettle(s)">✓ Registrar pago</button>
+              <button class="btn btn-outline-success btn-sm" type="button" @click="openDialog('payment', { from: s.from.id, to: s.to.id, cents: s.cents })">💸 Pago parcial</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <h2 class="h6 mb-2">📝 Movimientos</h2>
+        <div v-if="!moves.length" class="text-body-secondary small">Todavía no hay movimientos. Tocá “Agregar movimiento”.</div>
+        <div v-else class="vstack gap-2">
+          <div v-for="mv in movesReversed" :key="mv.id" class="border rounded p-2">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+              <span><span v-if="mv.kind === 'expense'" class="badge text-bg-primary">🧾 Gasto</span><span v-else class="badge text-bg-success">💸 Pago</span>
+              <span class="ms-1">{{ moveText(mv) }}</span></span>
+              <button class="btn btn-outline-danger btn-sm" type="button" @click="delMove(mv.id)">Borrar</button>
+            </div>
+            <div class="small text-body-secondary">{{ mv.createdAt }}</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <details class="card mb-3">
+      <summary class="card-body py-2 fw-semibold" style="cursor:pointer">👥 Participantes y grupo</summary>
+      <div class="card-body pt-0">
+        <label for="group-name" class="form-label">Nombre del grupo</label>
+        <input id="group-name" class="form-control mb-3" type="text" maxlength="60" autocomplete="off" placeholder="p. ej. Viaje a la costa" v-model="group" @input="save">
+        <div v-if="!members.length" class="text-body-secondary small mb-2">Agregá al menos dos participantes para empezar.</div>
+        <div v-else class="vstack gap-2 mb-2">
+          <div v-for="m in members" :key="m.id" class="border rounded p-2">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+              <input class="form-control form-control-sm fw-semibold" type="text" maxlength="40" v-model="m.name" @change="save" :aria-label="'Nombre del participante'" style="max-width: 12rem;">
+              <button class="btn btn-outline-danger btn-sm" type="button" @click="delMember(m.id)">Borrar</button>
+            </div>
+            <div class="row g-2 mt-1">
+              <div class="col-12 col-sm-6">
+                <input class="form-control form-control-sm" type="email" maxlength="80" placeholder="Email (opcional)" v-model="m.email" @change="save" :aria-label="'Email de ' + m.name">
+              </div>
+              <div class="col-12 col-sm-6">
+                <input class="form-control form-control-sm" type="text" maxlength="80" placeholder="Alias de pago (opcional)" v-model="m.alias" @change="save" :aria-label="'Alias de ' + m.name">
+              </div>
+            </div>
+          </div>
+        </div>
+        <form class="row g-2" @submit.prevent="addMember">
+          <div class="col-12">
+            <label for="m-name" class="form-label">Nuevo participante</label>
+            <input id="m-name" class="form-control" type="text" maxlength="40" autocomplete="off" placeholder="Nombre" v-model="newName">
+          </div>
+          <div class="col-12 col-sm-6">
+            <input class="form-control" type="email" maxlength="80" autocomplete="off" placeholder="Email (opcional)" v-model="newEmail">
+          </div>
+          <div class="col-12 col-sm-6">
+            <input class="form-control" type="text" maxlength="80" autocomplete="off" placeholder="Alias de pago (opcional)" v-model="newAlias">
+          </div>
+          <div class="col-12">
+            <button class="btn btn-outline-primary btn-sm" type="submit" :disabled="!newName.trim()">Agregar participante</button>
+          </div>
+        </form>
+      </div>
+    </details>
+
+    <details class="card mb-3">
+      <summary class="card-body py-2 fw-semibold" style="cursor:pointer">💾 Respaldo del grupo</summary>
+      <div class="card-body pt-0">
+        <p class="text-body-secondary small">Descargá el grupo completo para guardarlo o pasarlo a otro dispositivo. También viaja con el Escritorio del índice.</p>
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="exportGroup">💾 Exportar grupo</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="$refs.importFile.click()">📥 Importar grupo</button>
+          <input ref="importFile" class="d-none" type="file" accept=".json,application/json" @change="importGroup">
+        </div>
+      </div>
+    </details>
+
+    <dialog id="dlg" aria-labelledby="dlg-title">
+      <form method="dialog">
+        <div class="d-flex justify-content-between align-items-center p-3 pb-0">
+          <h2 id="dlg-title" class="h6 mb-0">Agregar movimiento</h2>
+          <button class="btn btn-outline-secondary btn-sm" value="cancel" formnovalidate>✕</button>
+        </div>
+      </form>
+      <div class="p-3 pt-2">
+        <div class="btn-group w-100 mb-3" role="group" aria-label="Tipo de movimiento">
+          <input type="radio" class="btn-check" id="kind-expense" value="expense" v-model="kind">
+          <label class="btn btn-outline-primary" for="kind-expense">🧾 Gasto</label>
+          <input type="radio" class="btn-check" id="kind-payment" value="payment" v-model="kind">
+          <label class="btn btn-outline-primary" for="kind-payment">💸 Pago</label>
+        </div>
+
+        <div v-if="kind === 'expense'">
+          <div class="mb-2">
+            <label for="e-desc" class="form-label">Descripción</label>
+            <input id="e-desc" class="form-control" type="text" maxlength="80" autocomplete="off" placeholder="p. ej. Cena" v-model="eDesc">
+          </div>
+          <div class="row g-2 mb-2">
+            <div class="col-6">
+              <label for="e-amount" class="form-label">Monto ($)</label>
+              <input id="e-amount" class="form-control" type="text" inputmode="decimal" autocomplete="off" placeholder="15000" v-model="eAmount" @input="prefillShares">
+            </div>
+            <div class="col-6">
+              <label for="e-by" class="form-label">Pagó</label>
+              <select id="e-by" class="form-select" v-model="eBy">
+                <option v-for="m in members" :key="m.id" :value="m.id">{{ m.name }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="mb-2">
+            <span class="form-label d-block">Participan</span>
+            <div class="d-flex flex-wrap gap-2">
+              <div v-for="m in members" :key="m.id" class="form-check">
+                <input class="form-check-input" type="checkbox" :id="'part-' + m.id" :value="m.id" v-model="eParts" @change="prefillShares">
+                <label class="form-check-label part-check" :for="'part-' + m.id">{{ m.name }}</label>
+              </div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 mt-2">
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="setParts(true)">Todos</button>
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="setParts(false)">Ninguno</button>
+            </div>
+          </div>
+          <div class="form-check form-switch mb-2">
+            <input id="e-custom" class="form-check-input" type="checkbox" v-model="eCustom" @change="prefillShares">
+            <label for="e-custom" class="form-check-label">Montos individuales (si no, partes iguales)</label>
+          </div>
+          <div v-if="eCustom" class="vstack gap-1 mb-2">
+            <div v-if="!partMembers.length" class="text-body-secondary small">Elegí al menos un participante.</div>
+            <div v-for="m in partMembers" :key="m.id" class="input-group input-group-sm">
+              <span class="input-group-text">{{ m.name }}</span>
+              <input class="form-control" type="text" inputmode="decimal" :placeholder="shareHint(m.id)" v-model="eShares[m.id]">
+            </div>
+          </div>
+          <div v-if="eError" class="alert alert-warning py-2 small" role="note">{{ eError }}</div>
+          <button class="btn btn-primary w-100" type="button" @click="saveExpense">Guardar gasto</button>
+        </div>
+
+        <div v-else>
+          <div class="row g-2 mb-2">
+            <div class="col-6">
+              <label for="p-from" class="form-label">Paga</label>
+              <select id="p-from" class="form-select" v-model="pFrom">
+                <option v-for="m in members" :key="m.id" :value="m.id">{{ m.name }}</option>
+              </select>
+            </div>
+            <div class="col-6">
+              <label for="p-to" class="form-label">Recibe</label>
+              <select id="p-to" class="form-select" v-model="pTo">
+                <option v-for="m in members" :key="m.id" :value="m.id">{{ m.name }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="mb-2">
+            <label for="p-amount" class="form-label">Monto ($, admite parciales)</label>
+            <input id="p-amount" class="form-control" type="text" inputmode="decimal" autocomplete="off" placeholder="5000" v-model="pAmount">
+          </div>
+          <div v-if="pError" class="alert alert-warning py-2 small" role="note">{{ pError }}</div>
+          <button class="btn btn-primary w-100" type="button" @click="savePayment">Guardar pago</button>
+        </div>
+      </div>
+    </dialog>
+
+    <hr>
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.5.42/vue.global.prod.min.js"
+    integrity="sha512-PREsKi18CyKMgwXMJWtvkzinqjiN0znVfDovmVadp7pKiUpyNGtq7bD2fKElDBmdfH4DGJz8pmAdgihN8NZ8TQ=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script>
+    const STORAGE_KEY = 'miti-miti';
+
+    function newId() {
+      return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
+    function todayStr() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+    // Solo dígitos con un separador decimal opcional (coma o punto), sin miles.
+    function parseCentsStrict(raw) {
+      if (typeof raw !== 'string') return null;
+      const s = raw.trim().replace(/\$/g, '').replace(/\s/g, '');
+      if (!/^\d+([.,]\d{1,2})?$/.test(s)) return null;
+      const v = parseFloat(s.replace(',', '.'));
+      if (!Number.isFinite(v) || v <= 0 || v > 999999999) return null;
+      return Math.round(v * 100);
+    }
+    const fmt = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    function money(cents) {
+      return '$ ' + fmt.format(cents / 100);
+    }
+    function centsToInput(cents) {
+      return (cents / 100).toString().replace('.', ',');
+    }
+    function equalShares(cents, ids) {
+      const n = ids.length, base = Math.floor(cents / n);
+      const rest = cents - base * n;
+      const shares = {};
+      ids.forEach((id, i) => { shares[id] = base + (i < rest ? 1 : 0); });
+      return shares;
+    }
+    function balancesFor(members, moves) {
+      const b = {};
+      members.forEach(m => { b[m.id] = 0; });
+      for (const mv of moves) {
+        if (mv.kind === 'expense') {
+          b[mv.by] += mv.cents;
+          for (const [pid, share] of Object.entries(mv.shares)) {
+            if (b[pid] !== undefined) b[pid] -= share;
+          }
+        } else {
+          b[mv.from] += mv.cents;
+          b[mv.to] -= mv.cents;
+        }
+      }
+      return b;
+    }
+    function settlementFor(members, bal) {
+      const cred = [], debt = [];
+      for (const m of members) {
+        const v = bal[m.id] || 0;
+        if (v >= 1) cred.push({ m, v });
+        else if (v <= -1) debt.push({ m, v: -v });
+      }
+      cred.sort((x, y) => y.v - x.v);
+      debt.sort((x, y) => y.v - x.v);
+      const out = [];
+      let i = 0, j = 0;
+      while (i < debt.length && j < cred.length) {
+        const x = Math.min(debt[i].v, cred[j].v);
+        out.push({ from: debt[i].m, to: cred[j].m, cents: x });
+        debt[i].v -= x; cred[j].v -= x;
+        if (debt[i].v <= 0) i++;
+        if (cred[j].v <= 0) j++;
+      }
+      return out;
+    }
+
+    function normalizeMember(m) {
+      if (!m || typeof m.name !== 'string' || !m.name.trim()) return null;
+      return {
+        id: typeof m.id === 'string' ? m.id : newId(),
+        name: m.name.trim().slice(0, 40),
+        email: typeof m.email === 'string' ? m.email.trim().slice(0, 80) : '',
+        alias: typeof m.alias === 'string' ? m.alias.trim().slice(0, 80) : ''
+      };
+    }
+    function normalizeState(v) {
+      try {
+        const p = typeof v === 'string' ? JSON.parse(v) : v;
+        if (!p || typeof p !== 'object') return null;
+        const members = Array.isArray(p.members) ? p.members.map(normalizeMember).filter(Boolean).slice(0, 30) : [];
+        if (!members.length) return null;
+        const ids = new Set(members.map(m => m.id));
+        const moves = (Array.isArray(p.moves) ? p.moves : []).map(m => {
+          if (!m || (m.kind !== 'expense' && m.kind !== 'payment')) return null;
+          const cents = Math.round(Number(m.cents));
+          if (!Number.isFinite(cents) || cents <= 0 || cents > 99999999999) return null;
+          if (m.kind === 'expense') {
+            if (!ids.has(m.by) || typeof m.shares !== 'object') return null;
+            const shares = {};
+            let sum = 0;
+            for (const [k, val] of Object.entries(m.shares)) {
+              if (!ids.has(k)) continue;
+              const sv = Math.round(Number(val));
+              if (!Number.isFinite(sv) || sv < 0) return null;
+              shares[k] = sv; sum += sv;
+            }
+            if (!Object.keys(shares).length || sum !== cents) return null;
+            return { id: typeof m.id === 'string' ? m.id : newId(), kind: 'expense', desc: String(m.desc || '').slice(0, 80), cents, by: m.by, shares, createdAt: String(m.createdAt || todayStr()).slice(0, 10) };
+          }
+          if (!ids.has(m.from) || !ids.has(m.to) || m.from === m.to) return null;
+          return { id: typeof m.id === 'string' ? m.id : newId(), kind: 'payment', desc: '', cents, from: m.from, to: m.to, createdAt: String(m.createdAt || todayStr()).slice(0, 10) };
+        }).filter(Boolean).slice(0, 500);
+        return { group: String(p.group || 'Grupo').slice(0, 60) || 'Grupo', members, moves };
+      } catch { return null; }
+    }
+    function emptyState() {
+      return { group: '', members: [], moves: [] };
+    }
+    function exampleState() {
+      const a = newId(), b = newId(), c = newId();
+      return {
+        group: 'Fin de semana',
+        members: [
+          { id: a, name: 'Ana', email: '', alias: '' },
+          { id: b, name: 'Bruno', email: '', alias: '' },
+          { id: c, name: 'Cami', email: '', alias: '' }
+        ],
+        moves: [
+          { id: newId(), kind: 'expense', desc: 'Cena', cents: 3000000, by: a, shares: { [a]: 1000000, [b]: 1000000, [c]: 1000000 }, createdAt: todayStr() },
+          { id: newId(), kind: 'expense', desc: 'Nafta', cents: 2000000, by: b, shares: { [b]: 1000000, [c]: 1000000 }, createdAt: todayStr() },
+          { id: newId(), kind: 'payment', desc: '', cents: 500000, from: c, to: a, createdAt: todayStr() }
+        ]
+      };
+    }
+    function loadState() {
+      const q = new URLSearchParams(window.location.search).get('data');
+      if (q) {
+        const s = normalizeState(q);
+        if (s) return { state: s, fromUrl: true };
+      }
+      try {
+        const s = normalizeState(localStorage.getItem(STORAGE_KEY));
+        if (s) return { state: s, fromUrl: false };
+      } catch { /* ejemplo */ }
+      return { state: emptyState(), fromUrl: false };
+    }
+
+    let noticeTimer = null;
+    let resetTimer = null;
+    let exampleTimer = null;
+
+    const app = Vue.createApp({
+      data() {
+        const loaded = loadState();
+        return {
+          group: loaded.state.group,
+          members: loaded.state.members,
+          moves: loaded.state.moves,
+          fromUrl: loaded.fromUrl,
+          notice: '',
+          shared: false,
+          resetArmed: false,
+          exampleArmed: false,
+          newName: '', newEmail: '', newAlias: '',
+          // Diálogo (el <dialog> se abre por id en openDialog; nunca se guarda en data).
+          kind: 'expense',
+          lastKind: 'expense',
+          eDesc: '', eAmount: '', eBy: loaded.state.members[0]?.id || '',
+          eParts: loaded.state.members.map(m => m.id),
+          eCustom: false, eShares: {}, eError: '',
+          pFrom: loaded.state.members[0]?.id || '',
+          pTo: loaded.state.members[1]?.id || loaded.state.members[0]?.id || '',
+          pAmount: '', pError: ''
+        };
+      },
+      computed: {
+        balanceMap() {
+          return balancesFor(this.members, this.moves);
+        },
+        maxAbs() {
+          return Math.max(1, ...this.members.map(m => Math.abs(this.balanceMap[m.id] || 0)));
+        },
+        settleList() {
+          return settlementFor(this.members, this.balanceMap);
+        },
+        movesReversed() {
+          return [...this.moves].reverse();
+        },
+        partMembers() {
+          return this.members.filter(m => this.eParts.includes(m.id));
+        }
+      },
+      methods: {
+        money,
+        save() {
+          // Un snapshot por URL no pisa lo guardado; se salta una sola vez y listo.
+          if (this.fromUrl) { this.fromUrl = false; return; }
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ group: this.group, members: this.members, moves: this.moves })); } catch {}
+        },
+        snapshot() {
+          return { group: this.group, members: this.members, moves: this.moves };
+        },
+        showNotice(text, ms = 2200) {
+          this.notice = text;
+          clearTimeout(noticeTimer);
+          noticeTimer = setTimeout(() => { this.notice = ''; }, ms);
+        },
+        barPct(id) {
+          return Math.round(Math.abs(this.balanceMap[id] || 0) / this.maxAbs * 100);
+        },
+        nameOf(id) {
+          return (this.members.find(m => m.id === id) || {}).name || '(¿quién?)';
+        },
+        moveText(mv) {
+          if (mv.kind === 'expense') {
+            const n = Object.keys(mv.shares).length;
+            return `${mv.desc || 'Gasto'} · pagó ${this.nameOf(mv.by)} · ${money(mv.cents)} · ${n} participante(s)`;
+          }
+          return `${this.nameOf(mv.from)} → ${this.nameOf(mv.to)} · ${money(mv.cents)}`;
+        },
+        // ----- Miembros -----
+        addMember() {
+          const name = this.newName.trim();
+          if (!name || this.members.length >= 30) return;
+          this.members.push({ id: newId(), name: name.slice(0, 40), email: this.newEmail.trim().slice(0, 80), alias: this.newAlias.trim().slice(0, 80) });
+          this.eParts.push(this.members[this.members.length - 1].id);
+          this.newName = ''; this.newEmail = ''; this.newAlias = '';
+          this.save();
+          this.showNotice('Participante agregado.');
+        },
+        delMember(id) {
+          const used = this.moves.some(mv => mv.by === id || mv.from === id || mv.to === id || (mv.shares && mv.shares[id] !== undefined));
+          if (used) { this.showNotice('Tiene movimientos: borralos primero.'); return; }
+          this.members = this.members.filter(m => m.id !== id);
+          this.eParts = this.eParts.filter(p => p !== id);
+          this.save();
+          this.showNotice('Participante borrado.');
+        },
+        delMove(id) {
+          this.moves = this.moves.filter(m => m.id !== id);
+          this.save();
+          this.showNotice('Movimiento borrado.');
+        },
+        // ----- Diálogo -----
+        openDialog(kind, preset) {
+          if (this.members.length < 2) { this.showNotice('Agregá al menos dos participantes.'); return; }
+          this.kind = kind;
+          this.lastKind = kind;
+          this.eError = ''; this.pError = '';
+          if (kind === 'expense') {
+            this.eDesc = ''; this.eAmount = '';
+            this.eCustom = false; this.eShares = {};
+            if (!this.members.some(m => m.id === this.eBy)) this.eBy = this.members[0].id;
+            if (!this.eParts.length) this.eParts = this.members.map(m => m.id);
+          } else {
+            this.pAmount = '';
+            this.pFrom = (preset && this.members.some(m => m.id === preset.from)) ? preset.from : (this.members.some(m => m.id === this.pFrom) ? this.pFrom : this.members[0].id);
+            this.pTo = (preset && this.members.some(m => m.id === preset.to)) ? preset.to : (this.members.some(m => m.id === this.pTo) && this.pTo !== this.pFrom ? this.pTo : (this.members.find(m => m.id !== this.pFrom) || {}).id || this.pFrom);
+            if (preset?.cents) this.pAmount = centsToInput(preset.cents);
+          }
+          document.getElementById('dlg').showModal();
+          if (kind === 'payment') this.$nextTick(() => document.getElementById('p-amount')?.select());
+        },
+        setParts(all) {
+          this.eParts = all ? this.members.map(m => m.id) : [];
+          this.prefillShares();
+        },
+        prefillShares() {
+          // Solo rellena casilleros vacíos con el reparto igual: no pisa lo que ya escribiste.
+          if (!this.eCustom) return;
+          const cents = parseCentsStrict(this.eAmount);
+          if (!cents || !this.partMembers.length) return;
+          const eq = equalShares(cents, this.partMembers.map(m => m.id));
+          for (const m of this.partMembers) {
+            if (!String(this.eShares[m.id] ?? '').trim()) this.eShares[m.id] = centsToInput(eq[m.id]);
+          }
+        },
+        shareHint(id) {
+          const cents = parseCentsStrict(this.eAmount);
+          if (!cents || !this.partMembers.length) return '0';
+          return centsToInput(equalShares(cents, this.partMembers.map(m => m.id))[id]);
+        },
+        saveExpense() {
+          const cents = parseCentsStrict(this.eAmount);
+          if (!cents) { this.eError = 'Monto inválido: solo números, con hasta 2 decimales (p. ej. 15000,50).'; return; }
+          if (!this.members.some(m => m.id === this.eBy)) { this.eError = 'Elegí quién pagó.'; return; }
+          if (!this.partMembers.length) { this.eError = 'Elegí al menos un participante.'; return; }
+          let shares;
+          if (this.eCustom) {
+            shares = {};
+            let sum = 0;
+            for (const m of this.partMembers) {
+              const raw = String(this.eShares[m.id] ?? '').trim();
+              const val = raw === '' ? 0 : parseCentsStrict(raw);
+              if (val === null) { this.eError = `Monto inválido para ${m.name}.`; return; }
+              shares[m.id] = val; sum += val;
+            }
+            if (sum !== cents) { this.eError = `Los montos suman ${money(sum)} pero el total es ${money(cents)}.`; return; }
+          } else {
+            shares = equalShares(cents, this.partMembers.map(m => m.id));
+          }
+          this.moves.push({ id: newId(), kind: 'expense', desc: this.eDesc.trim().slice(0, 80) || 'Gasto', cents, by: this.eBy, shares, createdAt: todayStr() });
+          this.save();
+          document.getElementById('dlg').close();
+          this.showNotice('Gasto guardado.');
+        },
+        savePayment() {
+          const cents = parseCentsStrict(this.pAmount);
+          if (!cents) { this.pError = 'Monto inválido: solo números, con hasta 2 decimales.'; return; }
+          if (!this.pFrom || !this.pTo || this.pFrom === this.pTo) { this.pError = 'Elegí dos personas distintas.'; return; }
+          this.moves.push({ id: newId(), kind: 'payment', desc: '', cents, from: this.pFrom, to: this.pTo, createdAt: todayStr() });
+          this.save();
+          document.getElementById('dlg').close();
+          this.showNotice('Pago registrado.');
+        },
+        // ----- Liquidación -----
+        emailSubject(s) {
+          return `Miti-miti · ${this.group}: ${s.from.name} le paga a ${s.to.name} ${money(s.cents)}`;
+        },
+        emailText(s) {
+          return [
+            `Hola ${s.to.name},`,
+            ``,
+            `Según nuestras cuentas de "${this.group}" en Miti-miti, ${s.from.name} le paga a ${s.to.name} ${money(s.cents)}.`,
+            s.to.alias ? `Alias de ${s.to.name}: ${s.to.alias}` : null,
+            ``,
+            `Movimientos a la fecha: ${this.moves.length}. Revisá y avisá cuando esté hecho. ¡Gracias!`
+          ].filter(l => l !== null).join('\n');
+        },
+        mailtoUrl(s) {
+          return `mailto:${encodeURIComponent(s.to.email || '')}?subject=${encodeURIComponent(this.emailSubject(s))}&body=${encodeURIComponent(this.emailText(s))}`;
+        },
+        async copyText(text) {
+          if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
+          return new Promise((res, rej) => {
+            const ta = document.createElement('textarea');
+            ta.value = text; ta.style.position = 'fixed';
+            document.body.append(ta); ta.select();
+            try { document.execCommand('copy') ? res() : rej(new Error('copy')); }
+            catch (e) { rej(e); }
+            ta.remove();
+          });
+        },
+        async copySettle(s) {
+          try { await this.copyText(`${this.emailSubject(s)}\n\n${this.emailText(s)}`); this.showNotice('Mensaje copiado.'); }
+          catch { this.showNotice('No se pudo copiar.'); }
+        },
+        doneSettle(s) {
+          this.moves.push({ id: newId(), kind: 'payment', desc: '', cents: s.cents, from: s.from.id, to: s.to.id, createdAt: todayStr() });
+          this.save();
+          this.showNotice('Pago registrado.');
+        },
+        // ----- Compartir / reset / respaldo -----
+        async share() {
+          const url = new URL(window.location.href);
+          url.search = '';
+          url.searchParams.set('data', JSON.stringify(this.snapshot()));
+          try {
+            await this.copyText(url.toString());
+            this.shared = true;
+            setTimeout(() => { this.shared = false; }, 1500);
+          } catch {
+            window.prompt('Copiá el enlace:', url.toString());
+          }
+        },
+        reset() {
+          if (!this.resetArmed) { this.resetArmed = true; clearTimeout(resetTimer); resetTimer = setTimeout(() => { this.resetArmed = false; }, 5000); return; }
+          clearTimeout(resetTimer); this.resetArmed = false;
+          try { localStorage.removeItem(STORAGE_KEY); } catch {}
+          const d = emptyState();
+          this.group = d.group; this.members = d.members; this.moves = d.moves;
+          this.fromUrl = false;
+          history.replaceState(null, '', window.location.pathname);
+          this.save();
+          this.showNotice('Se borró todo.');
+        },
+        loadExample() {
+          // En blanco entra directo; con datos pide confirmación para no pisarlos sin querer.
+          if (!this.members.length && !this.moves.length) {
+            this.applyExample();
+            return;
+          }
+          if (!this.exampleArmed) { this.exampleArmed = true; clearTimeout(exampleTimer); exampleTimer = setTimeout(() => { this.exampleArmed = false; }, 5000); return; }
+          clearTimeout(exampleTimer); this.exampleArmed = false;
+          this.applyExample();
+        },
+        applyExample() {
+          const d = exampleState();
+          this.group = d.group; this.members = d.members; this.moves = d.moves;
+          this.eParts = d.members.map(m => m.id);
+          this.fromUrl = false;
+          this.save();
+          this.showNotice('Ejemplo cargado.');
+        },
+        exportGroup() {
+          const blob = new Blob([JSON.stringify({ app: 'miti-miti', v: 1, exportedAt: new Date().toISOString(), state: this.snapshot() })], { type: 'application/json' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          const d = new Date();
+          a.download = `miti-miti-${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}.json`;
+          document.body.append(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+          this.showNotice('Grupo exportado.');
+        },
+        importGroup(e) {
+          const f = e.target.files[0];
+          e.target.value = '';
+          if (!f) return;
+          const r = new FileReader();
+          r.onload = () => {
+            try {
+              const data = JSON.parse(r.result);
+              const s = normalizeState(data.state || data);
+              if (!s) { this.showNotice('Archivo inválido.'); return; }
+              this.group = s.group; this.members = s.members; this.moves = s.moves;
+              this.fromUrl = false;
+              this.save();
+              this.showNotice('Grupo importado.');
+            } catch { this.showNotice('No es un JSON válido.'); }
+          };
+          r.readAsText(f);
+        }
+      },
+      mounted() {
+        if (this.fromUrl) this.showNotice('Vista compartida: editá algo para guardarla acá.');
+        else this.save();
+      }
+    });
+
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      app.mount('#app');
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

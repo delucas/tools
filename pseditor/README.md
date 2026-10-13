@@ -13,5 +13,6 @@ Editor de pseudocódigo en español construido con CodeMirror 6. Resalta sintaxi
 7. Creá, renombrá, elegí o eliminá archivos desde la barra lateral. Los archivos de ejemplo y los nuevos usan la extensión `.pse`; todos se guardan en el navegador.
 8. Compartir archivo copia un enlace que contiene el nombre y el contenido del documento seleccionado. Al abrirlo, el archivo compartido tiene prioridad sobre el almacenamiento local.
 9. Asigná un nombre al workspace, por ejemplo `Grafos - Recorrido.workspace`. Guardar workspace descarga `<nombre>.md` con todos los archivos en bloques de código `.pse`; podés leerlo con cualquier editor de texto o volver a abrirlo desde la herramienta.
+10. Usá ⛶ Pantalla completa para mostrar solo el editor al compartir pantalla (también se activa con F11). En ese modo las líneas se ajustan al ancho para no scrollear horizontalmente; para agrandar la letra usá el zoom del navegador. Salí con Esc, con el botón flotante ⛶ Salir o saliendo del fullscreen.
 
 La constante `PSEUDOCODE_CONFIG` de `index.html` reúne las palabras clave, operadores y sustituciones para adaptar la sintaxis sin construir un parser.

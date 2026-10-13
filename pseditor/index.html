@@ -23,6 +23,55 @@
       font-size: 0.95rem;
     }
 
+    /* Modo presentación (botón ⛶ o F11): SOLO se ve el editor de CodeMirror.
+       El ajuste de línea se activa por JS para no scrollear horizontalmente. */
+    body.inmersivo {
+      overflow: hidden;
+    }
+
+    body.inmersivo main {
+      max-width: 100%;
+    }
+
+    body.inmersivo .ocultar-presentando {
+      display: none !important;
+    }
+
+    body.inmersivo #col-archivos {
+      display: none !important;
+    }
+
+    body.inmersivo #col-editor {
+      flex: 0 0 100%;
+      max-width: 100%;
+      width: 100%;
+    }
+
+    body.inmersivo .cm-editor {
+      min-height: 0;
+      height: calc(100vh - 3rem);
+      height: calc(100dvh - 3rem);
+    }
+
+    /* Única excepción visible: salida flotante para táctil (sin tecla Esc). */
+    #salir-presentacion {
+      display: none;
+    }
+
+    body.inmersivo #salir-presentacion {
+      display: block;
+      position: fixed;
+      right: 1rem;
+      bottom: 1rem;
+      z-index: 1050;
+      opacity: 0.4;
+    }
+
+    body.inmersivo #salir-presentacion:hover,
+    body.inmersivo #salir-presentacion:focus-visible {
+      opacity: 1;
+    }
+
     .cm-scroller {
       font-family: var(--bs-font-monospace);
     }
@@ -41,9 +90,9 @@
 </head>
 <body>
   <main class="container py-4">
-    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+    <a href="../" class="ocultar-presentando d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
 
-    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+    <div class="ocultar-presentando d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
       <div>
         <h1 class="h3 mb-1">PSEditor</h1>
         <p class="text-body-secondary mb-0">Editor de pseudocódigo con bloques por indentación.</p>
@@ -57,7 +106,7 @@
 
     <div id="notice" class="alert alert-success py-2 alert-flotante d-none" role="status"></div>
 
-    <div class="mb-4">
+    <div class="ocultar-presentando mb-4">
       <label for="workspace-name" class="form-label">Workspace</label>
       <div class="input-group">
         <input id="workspace-name" class="form-control" type="text" maxlength="100" placeholder="Por ejemplo, Grafos - Recorrido.workspace">
@@ -68,39 +117,42 @@
     </div>
 
     <div class="row g-3">
-      <aside class="col-12 col-md-4 col-lg-3" aria-label="Explorador de archivos">
+      <aside id="col-archivos" class="col-12 col-md-4 col-lg-3" aria-label="Explorador de archivos">
         <div class="d-flex justify-content-between align-items-center mb-2">
           <h2 class="h6 mb-0">Archivos</h2>
           <button id="new-file" class="btn btn-outline-secondary btn-sm" type="button">Nuevo</button>
         </div>
         <div id="file-list" class="list-group"></div>
       </aside>
-      <section class="col-12 col-md-8 col-lg-9">
-        <div class="d-flex flex-wrap align-items-end gap-2 mb-2">
+      <section id="col-editor" class="col-12 col-md-8 col-lg-9">
+        <div class="ocultar-presentando d-flex flex-wrap align-items-end gap-2 mb-2">
           <div class="flex-grow-1">
             <label for="file-name" class="form-label">Nombre del archivo</label>
             <input id="file-name" class="form-control" type="text" maxlength="80">
           </div>
           <button id="delete-file" class="btn btn-outline-danger" type="button">Eliminar</button>
         </div>
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+        <div class="ocultar-presentando d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
           <p id="editor-label" class="form-label mb-0">Pseudocódigo</p>
-          <div class="d-flex flex-wrap align-items-center gap-3">
+          <div class="d-flex flex-wrap align-items-center gap-2">
             <div class="form-check mb-0">
               <input id="show-line-numbers" class="form-check-input" type="checkbox">
               <label for="show-line-numbers" class="form-check-label small">Mostrar números de línea</label>
             </div>
+            <button id="present" class="btn btn-outline-secondary btn-sm" type="button" aria-expanded="false" title="Maximizar el editor para compartir pantalla (Esc para salir)">⛶ Pantalla completa</button>
             <button id="copy-formatted" class="btn btn-outline-secondary btn-sm" type="button">📋 Copiar con formato</button>
           </div>
         </div>
         <div id="editor" aria-labelledby="editor-label"></div>
-        <p id="statistics" class="form-text mb-0"></p>
+        <p id="statistics" class="ocultar-presentando form-text mb-0"></p>
       </section>
     </div>
 
+    <button id="salir-presentacion" class="btn btn-sm btn-secondary" type="button" title="Salir de pantalla completa (Esc)">⛶ Salir</button>
+
     <input id="workspace-file" type="file" accept=".md,text/markdown,text/plain" hidden>
 
-    <details class="mt-4">
+    <details class="ocultar-presentando mt-4">
       <summary class="text-body-secondary">Sintaxis incluida</summary>
       <div class="mt-2 small">
         <p class="mb-2">Los bloques se delimitan solo mediante indentación. Las palabras reservadas se escriben en mayúsculas y los comentarios comienzan con <code>#</code>.</p>
@@ -108,8 +160,8 @@
       </div>
     </details>
 
-    <hr>
-    <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+    <hr class="ocultar-presentando">
+    <p class="signature ocultar-presentando">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
   </main>
 
   <script type="module">
@@ -543,6 +595,7 @@ ALGORITMO SumaDePares
     const themeCompartment = new Compartment();
     const highlightingCompartment = new Compartment();
     const lineNumbersCompartment = new Compartment();
+    const wrapCompartment = new Compartment();
     let noticeTimeout;
     let workspace = readWorkspace();
     let shouldShowLineNumbers = loadShowLineNumbers();
@@ -637,6 +690,8 @@ ALGORITMO SumaDePares
         extensions: [
           history(),
           lineNumbersCompartment.of(shouldShowLineNumbers ? lineNumbers() : []),
+          // En presentación las líneas se ajustan al ancho: con fuente grande no hay scroll horizontal.
+          wrapCompartment.of(document.body.classList.contains('inmersivo') ? EditorView.lineWrapping : []),
           keymap.of([{ key: 'Enter', run: insertNewlineForBlock }, indentWithTab, ...defaultKeymap, ...historyKeymap, ...closeBracketsKeymap]),
           closeBrackets(),
           bracketMatching(),
@@ -704,6 +759,77 @@ ALGORITMO SumaDePares
       persistState();
       editor.dispatch({ effects: lineNumbersCompartment.reconfigure(shouldShowLineNumbers ? lineNumbers() : []) });
     });
+
+    const presentBtn = document.getElementById('present');
+
+    function estaPresentando() {
+      return document.body.classList.contains('inmersivo');
+    }
+
+    // F11 del navegador (como en `tick`): la ventana mide lo mismo que la pantalla.
+    function esF11() {
+      return Math.abs(window.innerHeight - window.screen.height) <= 2;
+    }
+
+    let autoF11 = false;
+
+    function setPresentando(on) {
+      document.body.classList.toggle('inmersivo', on);
+      presentBtn.textContent = on ? '⛶ Salir' : '⛶ Pantalla completa';
+      presentBtn.setAttribute('aria-expanded', String(on));
+      editor.dispatch({ effects: wrapCompartment.reconfigure(on ? EditorView.lineWrapping : []) });
+      if (on) editor.focus();
+    }
+
+    presentBtn.addEventListener('click', alternarPresentacion);
+    document.getElementById('salir-presentacion').addEventListener('click', alternarPresentacion);
+
+    async function alternarPresentacion() {
+      if (!estaPresentando()) {
+        autoF11 = false;
+        setPresentando(true);
+        try {
+          await document.documentElement.requestFullscreen();
+        } catch { /* sin API igual queda maximizado */ }
+      } else {
+        autoF11 = false;
+        try {
+          if (document.fullscreenElement) await document.exitFullscreen();
+        } catch { /* igual se sale del modo presentación */ }
+        setPresentando(false);
+      }
+    }
+
+    // Esc de la API sale solo del fullscreen nativo: hay que salir también del modo presentación.
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement && estaPresentando() && !esF11()) {
+        autoF11 = false;
+        setPresentando(false);
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      const f11 = esF11();
+      if (f11 && !estaPresentando()) {
+        autoF11 = true;
+        setPresentando(true);
+      } else if (!f11 && autoF11 && estaPresentando() && !document.fullscreenElement) {
+        autoF11 = false;
+        setPresentando(false);
+      }
+    });
+
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && estaPresentando() && !document.fullscreenElement && !esF11()) {
+        autoF11 = false;
+        setPresentando(false);
+      }
+    });
+
+    if (esF11()) {
+      autoF11 = true;
+      setPresentando(true);
+    }
 
     document.getElementById('copy-formatted').addEventListener('click', async () => {
       try {

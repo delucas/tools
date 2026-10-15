@@ -36,7 +36,12 @@
       display: flex;
       line-height: 1.5;
       min-height: 1.5em;
-      white-space: pre;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .diff-row > span:last-child {
+      min-width: 0;
     }
 
     .diff-ln {
@@ -56,14 +61,13 @@
       outline-offset: -2px;
     }
 
-    /* El mark de Bootstrap (#fff3cd) es idéntico al fondo warning-subtle de la
-       fila: sin regla propia, el cambio intra-línea queda invisible. Ámbar fijo,
-       legible en modo claro y oscuro. */
+    /* Fila modificada en celeste (estilo Meld): fondo sutil primario de Bootstrap
+       y cambio intra-línea en azul más intenso, legible en claro y oscuro. */
     .diff-row mark {
       padding: 0 0.1em;
       border-radius: 3px;
-      background-color: #ffc107;
-      color: #212529;
+      background-color: var(--bs-primary-border-subtle);
+      color: var(--bs-body-color);
     }
 
     p.signature {
@@ -361,8 +365,8 @@
             htmlR += `<div class="diff-row bg-success-subtle"${h}><span class="diff-ln">${o.b + 1}</span><span>${escapeHtml(rightLines[o.b])}</span></div>`;
           } else {
             const [ra, rb] = skipIntra ? [[], []] : changedRanges(leftLines[o.a], rightLines[o.b]);
-            htmlL += `<div class="diff-row bg-warning-subtle"${h}><span class="diff-ln">${o.a + 1}</span><span>${hl(leftLines[o.a], ra)}</span></div>`;
-            htmlR += `<div class="diff-row bg-warning-subtle"${h}><span class="diff-ln">${o.b + 1}</span><span>${hl(rightLines[o.b], rb)}</span></div>`;
+            htmlL += `<div class="diff-row bg-primary-subtle"${h}><span class="diff-ln">${o.a + 1}</span><span>${hl(leftLines[o.a], ra)}</span></div>`;
+            htmlR += `<div class="diff-row bg-primary-subtle"${h}><span class="diff-ln">${o.b + 1}</span><span>${hl(rightLines[o.b], rb)}</span></div>`;
           }
         });
         if (!ops.length) {

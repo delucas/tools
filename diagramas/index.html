@@ -42,6 +42,7 @@
     @media (max-width: 576px) {
       .canvas-wrap { height: 420px; }
       .editor-panel textarea { font-size: 16px; }
+      #arr-valores, #arr-nombre, #ptr-letra, #ptr-pos { font-size: 16px; }
     }
   </style>
 </head>
@@ -53,7 +54,7 @@
       <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
         <div>
           <h1 class="h3 mb-1">🕸️ Diagramas</h1>
-          <p class="text-body-secondary mb-0">Dibujá estructuras para tus clases: hoy grafos, pronto árboles y arreglos.</p>
+          <p class="text-body-secondary mb-0">Dibujá grafos y arreglos para tus clases (árboles, pronto).</p>
         </div>
         <div class="d-flex flex-wrap gap-2 align-items-center">
           <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ shareCopied ? '¡Copiado!' : '🔗 Compartir' }}</button>
@@ -65,22 +66,21 @@
 
       <div v-if="notice" class="alert alert-success py-2 alert-flotante" role="status">{{ notice }}</div>
 
-      <!-- Modos de estructura: el núcleo (cámara, paleta, exports, estado) es compartido.
-           V1 solo grafo; árbol y arreglo se agregan como modos con su propio
-           parse/layout/render y su lista de exports (ver EXPORTS_POR_MODO). -->
+      <!-- Modos de estructura: el núcleo (paleta, exports, estado) es compartido.
+           Cada modo tiene su propio parse/render y su lista de exports (ver EXPORTS_POR_MODO). -->
       <ul class="nav nav-tabs flex-wrap mb-3">
         <li class="nav-item">
-          <button class="nav-link active" type="button">Grafo</button>
+          <button class="nav-link" :class="{ active: mode === 'grafo' }" type="button" @click="switchMode('grafo')">Grafo</button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" :class="{ active: mode === 'arreglo' }" type="button" @click="switchMode('arreglo')">Arreglo</button>
         </li>
         <li class="nav-item">
           <button class="nav-link disabled" type="button" title="Próximamente">Árbol <span class="badge text-bg-secondary fw-normal">pronto</span></button>
         </li>
-        <li class="nav-item">
-          <button class="nav-link disabled" type="button" title="Próximamente">Arreglo <span class="badge text-bg-secondary fw-normal">pronto</span></button>
-        </li>
       </ul>
 
-      <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+      <div class="d-flex flex-wrap align-items-center gap-2 mb-2" v-if="mode === 'grafo'">
         <button class="btn btn-outline-secondary btn-sm" type="button" @click="toggleDirected" :title="directed ? 'Cambiar a no dirigido' : 'Cambiar a dirigido'">
           {{ directed ? '➡️ Dirigido' : '↔️ No dirigido' }}
         </button>
@@ -98,7 +98,7 @@
         <button class="btn btn-outline-secondary btn-sm" type="button" @click="fitToView(true)" title="Ajustar vista" v-if="nodes.length">🎯</button>
       </div>
 
-      <div class="canvas-wrap border rounded" ref="containerEl">
+      <div class="canvas-wrap border rounded" ref="containerEl" v-if="mode === 'grafo'">
         <svg class="graph" :class="{ painting: paintColor !== null }" @mousedown="onSvgMouseDown" @mousemove="onSvgMouseMove" @mouseup="onSvgMouseUp" @mouseleave="onSvgMouseUp" @wheel.prevent="onSvgWheel">
           <g :transform="`translate(${camera.offsetX},${camera.offsetY}) scale(${camera.scale})`">
             <!-- Solo el grafo, en coordenadas de mundo: esto es lo que se exporta -->
@@ -176,7 +176,79 @@
         </div>
       </div>
 
-      <p class="text-body-secondary small mt-2 mb-0">Arrastrá los nodos para acomodarlos y tocá 🎯 para encuadrar. Las diapositivas PPTX salen con figuras editables: al mover un nodo, sus aristas lo siguen.</p>
+      <p class="text-body-secondary small mt-2 mb-0" v-if="mode === 'grafo'">Arrastrá los nodos para acomodarlos y tocá 🎯 para encuadrar. Las diapositivas PPTX salen con figuras editables: al mover un nodo, sus aristas lo siguen.</p>
+
+      <section v-else aria-label="Editor de arreglos">
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+          <div class="btn-group btn-group-sm" v-if="arrValues.length">
+            <button class="btn btn-outline-secondary" type="button" @click="downloadArrSVG" title="Descargar SVG">⬇️ SVG</button>
+            <button class="btn btn-outline-secondary" type="button" @click="copyArrSVG" :title="copied === 'svg' ? '¡Copiado!' : 'Copiar el SVG al portapapeles'">{{ copied === 'svg' ? '✅' : '📋' }} SVG</button>
+            <button class="btn btn-outline-secondary" type="button" @click="downloadArrPNG" title="Descargar PNG (fondo transparente)">⬇️ PNG</button>
+            <button class="btn btn-outline-secondary" type="button" @click="copyArrPNG" :title="copied === 'png' ? '¡Copiado!' : 'Copiar el PNG al portapapeles (fondo transparente)'">{{ copied === 'png' ? '✅' : '📋' }} PNG</button>
+            <button class="btn btn-outline-secondary" type="button" @click="downloadArrPPTX" title="Diapositiva con figuras editables (PowerPoint / Google Slides)">⬇️ PPTX</button>
+            <button class="btn btn-outline-secondary" type="button" @click="copyArrExcalidraw" :title="copied === 'excal' ? '¡Copiado! Pegalo en excalidraw.com' : 'Copiar para pegar directo en Excalidraw'">{{ copied === 'excal' ? '✅' : '📋' }} Excalidraw</button>
+          </div>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="arrBase = arrBase === 0 ? 1 : 0; persist()" title="Cambiar el primer subíndice">🔢 Base {{ arrBase }}</button>
+        </div>
+
+        <div class="card mb-2">
+          <div class="card-body p-2">
+            <label class="form-label small text-body-secondary mb-1" for="arr-nombre">Nombre del arreglo (opcional).</label>
+            <input id="arr-nombre" class="form-control form-control-sm font-monospace mb-2" v-model="arrName" @change="persist" placeholder="v">
+            <label class="form-label small text-body-secondary mb-1" for="arr-valores">Valores separados por coma o por línea (máximo {{ ARR_MAX }}).</label>
+            <textarea id="arr-valores" class="form-control form-control-sm font-monospace mb-2" rows="2" v-model="arrDraft"></textarea>
+            <button class="btn btn-dark btn-sm w-100" type="button" @click="applyArray">▶ Aplicar</button>
+          </div>
+        </div>
+
+        <div class="card mb-2" v-if="arrValues.length">
+          <div class="card-body p-2 d-flex flex-wrap gap-1 align-items-center">
+            <span class="small text-body-secondary me-1">🎨 Tocá una celda para pintarla:</span>
+            <button v-for="c in NODE_COLORS" :key="c.hex" class="swatch" :class="{ active: paintColor === c.hex }"
+              :style="{ background: c.hex }" :title="`Pintar celdas de ${c.name}`" @click="togglePaint(c.hex)"></button>
+            <button class="swatch bg-body" :class="{ active: paintColor === '' }" title="Quitar color de las celdas" @click="togglePaint('')">✖</button>
+          </div>
+        </div>
+
+        <div class="border rounded p-2 overflow-auto" v-if="arrValues.length">
+          <svg ref="arrSvg" :width="lay.W" :height="lay.H" font-family="Consolas, 'Courier New', monospace" role="img" aria-label="Arreglo dibujado">
+            <text v-if="lay.hasName" :x="lay.nameX" :y="lay.nameY" font-size="16" text-anchor="middle" fill="#1e1e1e">{{ arrName.trim() }}</text>
+            <g v-for="(v, i) in arrValues" :key="i">
+              <rect :x="ARR_PAD + i * ARR_CELL" :y="lay.cellY" :width="ARR_CELL" :height="ARR_CELL" :fill="arrColors[i] || '#ffffff'" stroke="#1e1e1e" stroke-width="1.5" @click="paintCell(i)" style="cursor: pointer;" />
+              <text :x="ARR_PAD + i * ARR_CELL + ARR_CELL / 2" :y="lay.cellY + ARR_CELL / 2" font-size="17" text-anchor="middle" dominant-baseline="central" :fill="arrColors[i] ? textColorOn(arrColors[i]) : '#1e1e1e'" pointer-events="none">{{ v }}</text>
+              <text :x="ARR_PAD + i * ARR_CELL + ARR_CELL / 2" :y="lay.idxBase" font-size="12" text-anchor="middle" fill="#6c757d">{{ arrBase + i }}</text>
+            </g>
+            <g v-for="p in arrPointerMarks" :key="p.id" @pointerdown="onPtrDown($event, p)" style="cursor: grab; touch-action: none;">
+              <title>{{ p.label }} → {{ arrBase + p.pos }} (arrastrá para mover)</title>
+              <rect :x="p.x - 20" :y="lay.glyphMy - 18" width="40" height="62" fill="transparent" />
+              <text :x="p.x" :y="lay.glyphMy" font-size="26" text-anchor="middle" dominant-baseline="central" :fill="p.color" pointer-events="none">⬆</text>
+              <text :x="p.x" :y="lay.labMy" font-size="15" font-style="italic" text-anchor="middle" dominant-baseline="central" :fill="p.color" pointer-events="none">{{ p.label }}</text>
+            </g>
+          </svg>
+        </div>
+        <div class="alert alert-secondary" v-else role="note">Cargá valores con ▶ Aplicar para dibujar el arreglo.</div>
+
+        <div class="card mt-2" v-if="arrValues.length">
+          <div class="card-body p-2">
+            <span class="small fw-semibold">👉 Punteros <span class="fw-normal text-body-secondary">(p. ej. la <code>i</code> de un <code>for</code>)</span></span>
+            <div class="d-flex flex-wrap gap-2 align-items-end mt-1">
+              <div>
+                <label class="form-label small text-body-secondary mb-0" for="ptr-letra">Letra</label>
+                <input id="ptr-letra" class="form-control form-control-sm font-monospace" style="width: 4rem;" maxlength="2" v-model="ptrLabel" placeholder="i">
+              </div>
+              <div>
+                <label class="form-label small text-body-secondary mb-0" for="ptr-pos">Subíndice</label>
+                <input id="ptr-pos" class="form-control form-control-sm font-monospace" style="width: 5rem;" type="number" :min="arrBase" :max="arrBase + arrValues.length - 1" v-model.number="ptrIndex" :placeholder="String(arrBase)">
+              </div>
+              <button class="btn btn-dark btn-sm" type="button" @click="addPointer">＋ Agregar</button>
+            </div>
+            <div class="d-flex flex-wrap gap-1 mt-2">
+              <span v-for="p in arrPointers" :key="p.id" class="badge text-bg-secondary fw-normal d-inline-flex align-items-center">{{ p.label }} → {{ arrBase + p.pos }} <button type="button" class="btn-close btn-close-white ms-1" style="font-size: .55rem;" :title="`Quitar puntero ${p.label}`" @click="removePointer(p.id)"></button></span>
+              <span v-if="!arrPointers.length" class="small text-body-secondary">Sin punteros todavía.</span>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <hr>
       <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
@@ -197,6 +269,26 @@
   const DEFAULT_GRAPH_TEXT = '0-1:7\n0-2:3\n2-1:2\n2-3:8\n1-3:2';
   const DEFAULT_POSITIONS = { 0: { x: -120, y: -90 }, 2: { x: 120, y: -90 }, 1: { x: -120, y: 90 }, 3: { x: 120, y: 90 } };
   const NODE_R = 22;
+  // ── Arreglo: rectángulo dividido en N celdas iguales, valor adentro y subíndice debajo ──
+  const ARR_CELL = 56, ARR_PAD = 8, ARR_IDX_H = 24, ARR_PTR_H = 46;
+  const ARR_MAX = 64;
+  const ARR_DEFAULT = '4, 7, 2, 9, 1';
+  // Colores rotativos para los punteros (cada uno que se agrega usa el siguiente).
+  const ARR_PTR_COLORS = ['#e75454', '#7c6cf0', '#e8930c', '#2fa84f', '#0d8ab5', '#d63384'];
+  // IDs y semillas para el formato del portapapeles de Excalidraw.
+  function exId() { return Math.random().toString(36).slice(2, 11); }
+  function exSeed() { return Math.floor(Math.random() * 2 ** 31); }
+  // Baseline exacto que calcula Excalidraw (getVerticalOffset) con las métricas
+  // reales de cada fuente (2 = Helvetica, 3 = Cascadia Code).
+  // Al pegar, Excalidraw recalcula x/y/ancho/alto con métricas reales pero
+  // NUNCA el baseline: si lo estimamos a ojo, las etiquetas quedan corridas.
+  const EX_FONT_METRICS = { 2: [2048, 1577, -471], 3: [2048, 1900, -480] };
+  function exBaseline(fontSize, lineHeight = 1.25, family = 3) {
+    const [upm, asc, desc] = EX_FONT_METRICS[family] || EX_FONT_METRICS[3];
+    const em = fontSize / upm;
+    const linePx = fontSize * lineHeight;
+    return Math.round((em * asc + (linePx - em * asc + em * desc) / 2) * 100) / 100;
+  }
   // Colores funcionales para pintar nodos (p. ej. marcar visitados en clase).
   const NODE_COLORS = [
     { name: 'celeste', hex: '#8be9fd' }, { name: 'verde', hex: '#50fa7b' }, { name: 'naranja', hex: '#ffb86c' },
@@ -296,6 +388,7 @@
     setup() {
       const PADDING = 50;
 
+      const mode = ref('grafo');
       const nodes = ref([]);
       const edges = ref([]);
       const directed = ref(true);
@@ -379,6 +472,281 @@
         noticeTimer = setTimeout(() => { notice.value = ''; }, ms);
       }
 
+      // ── Arreglo: valores por texto, color por celda y punteros con letra ──
+      const arrDraft = ref(ARR_DEFAULT);
+      const arrName = ref('');
+      const arrValues = ref([]);
+      const arrColors = ref({});
+      const arrPointers = ref([]); // {id, pos, label, color} (pos sin base; se muestra base + pos)
+      const arrBase = ref(0);
+      const ptrLabel = ref('i');
+      const ptrIndex = ref(null);
+      const arrSvg = ref(null);
+      let ptrSeq = 1;
+
+      // Geometría vertical del arreglo: nombre arriba (si hay), celdas,
+      // subíndices, flechas ⬆ y letra debajo (para que no se solapen).
+      const lay = computed(() => {
+        const hasName = arrName.value.trim() !== '';
+        const cellY = ARR_PAD + (hasName ? 28 : 0);
+        const glyphMy = cellY + ARR_CELL + ARR_IDX_H + 16;
+        const labMy = glyphMy + 30;
+        return {
+          hasName, cellY, glyphMy, labMy,
+          nameY: ARR_PAD + 18,
+          nameX: ARR_PAD + (arrValues.value.length * ARR_CELL) / 2,
+          idxBase: cellY + ARR_CELL + 15,
+          W: ARR_PAD * 2 + arrValues.value.length * ARR_CELL + 24,
+          H: labMy + 12 + ARR_PAD,
+        };
+      });
+
+      // Punteros agrupados por celda, solo los que caen dentro del arreglo.
+      function arrPtrGroups() {
+        const byPos = new Map();
+        for (const p of arrPointers.value) {
+          if (!p || p.pos < 0 || p.pos >= arrValues.value.length) continue;
+          if (!byPos.has(p.pos)) byPos.set(p.pos, []);
+          byPos.get(p.pos).push(p);
+        }
+        return byPos;
+      }
+      // Marcas de punteros: glifo ⬆ de color bajo el subíndice, letra debajo.
+      // Si comparten celda se abren en abanico.
+      const arrPointerMarks = computed(() => {
+        const marks = [];
+        for (const [, list] of arrPtrGroups()) {
+          list.forEach((p, k) => {
+            const x = ARR_PAD + p.pos * ARR_CELL + ARR_CELL / 2 + (k - (list.length - 1) / 2) * 20;
+            marks.push({ id: p.id, pos: p.pos, label: p.label, color: p.color || '#1e1e1e', x });
+          });
+        }
+        return marks;
+      });
+
+      function parseArrayText(text) {
+        return text.split(/[\n,]/).map(t => t.trim()).filter(v => v !== '');
+      }
+      function pruneArrayExtras() {
+        const n = arrValues.value.length;
+        const colors = {};
+        for (const [k, v] of Object.entries(arrColors.value)) if (+k >= 0 && +k < n) colors[k] = v;
+        arrColors.value = colors;
+        arrPointers.value = arrPointers.value.filter(p => p && p.pos >= 0 && p.pos < n);
+      }
+      function setArrayValues(vals) {
+        arrValues.value = vals;
+        pruneArrayExtras();
+      }
+      function applyArray() {
+        let vals = parseArrayText(arrDraft.value);
+        if (vals.length > ARR_MAX) {
+          vals = vals.slice(0, ARR_MAX);
+          showNotice(`Arreglo recortado a ${ARR_MAX} valores.`);
+        } else if (!vals.length) {
+          showNotice('Sin valores: separá con comas o líneas.');
+        }
+        setArrayValues(vals);
+        persist();
+      }
+      function paintCell(i) {
+        if (paintColor.value === null) { showNotice('Elegí un color de la paleta primero.'); return; }
+        if (paintColor.value === '') delete arrColors.value[i];
+        else arrColors.value[i] = paintColor.value;
+        persist();
+      }
+      function addPointer() {
+        const label = (ptrLabel.value || '').trim();
+        const pos = Number(ptrIndex.value) - arrBase.value;
+        if (!label) { showNotice('Poné una letra para el puntero.'); return; }
+        if (!Number.isInteger(pos) || pos < 0 || pos >= arrValues.value.length) {
+          showNotice(`Subíndice fuera de rango (${arrBase.value}–${arrBase.value + arrValues.value.length - 1}).`);
+          return;
+        }
+        arrPointers.value.push({ id: ptrSeq++, pos, label, color: ARR_PTR_COLORS[arrPointers.value.length % ARR_PTR_COLORS.length] });
+        ptrIndex.value = null;
+        persist();
+      }
+      function removePointer(id) {
+        arrPointers.value = arrPointers.value.filter(p => p.id !== id);
+        persist();
+      }
+      // ── Arrastrar punteros entre celdas (mouse y táctil; se suelta en la celda más cercana) ──
+      let dragPtr = null;
+      function onPtrDown(e, mark) {
+        dragPtr = { id: mark.id, x0: e.clientX, pos0: mark.pos };
+        try { e.target.setPointerCapture(e.pointerId); } catch { /* sin captura */ }
+        window.addEventListener('pointermove', onPtrMove);
+        window.addEventListener('pointerup', onPtrUp, { once: true });
+      }
+      function onPtrMove(e) {
+        if (!dragPtr || !arrSvg.value) return;
+        const r = arrSvg.value.getBoundingClientRect();
+        const units = lay.value.W / (r.width || 1);
+        const pos = Math.max(0, Math.min(arrValues.value.length - 1, Math.round(dragPtr.pos0 + (e.clientX - dragPtr.x0) * units / ARR_CELL)));
+        const ptr = arrPointers.value.find(p => p.id === dragPtr.id);
+        if (ptr) ptr.pos = pos;
+      }
+      function onPtrUp() {
+        window.removeEventListener('pointermove', onPtrMove);
+        dragPtr = null;
+        persist();
+      }
+      // ── Exports del arreglo (fondo transparente; solo las celdas llevan fondo) ──
+      function arrSVGString() {
+        const el = arrSvg.value;
+        const w = el.getAttribute('width'), h = el.getAttribute('height');
+        return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${el.innerHTML}</svg>`;
+      }
+      function arrPNGBlob() {
+        const svg = arrSVGString();
+        const SCALE = 2;
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = lay.value.W * SCALE;
+            canvas.height = lay.value.H * SCALE;
+            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob(resolve, 'image/png');
+          };
+          img.onerror = reject;
+          img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+        });
+      }
+      function downloadArrSVG() {
+        downloadBlob(new Blob([arrSVGString()], { type: 'image/svg+xml' }), 'arreglo.svg');
+        showNotice('SVG descargado');
+      }
+      function copyArrSVG() {
+        if (!navigator.clipboard?.writeText) { showNotice('Este navegador no deja copiar.'); return; }
+        navigator.clipboard.writeText(arrSVGString()).then(() => flashCopied('svg')).catch(() => showNotice('No se pudo copiar.'));
+      }
+      async function downloadArrPNG() {
+        try { downloadBlob(await arrPNGBlob(), 'arreglo.png'); showNotice('PNG descargado'); }
+        catch { showNotice('No se pudo generar el PNG'); }
+      }
+      function copyArrPNG() {
+        if (!window.ClipboardItem || !navigator.clipboard?.write) { showNotice('Este navegador no deja copiar.'); return; }
+        navigator.clipboard.write([new ClipboardItem({ 'image/png': arrPNGBlob() })])
+          .then(() => flashCopied('png'))
+          .catch(() => showNotice('No se pudo copiar.'));
+      }
+      // ── Excalidraw del arreglo: cuadrados nítidos (roundness null) + textos ──
+      // Sloppiness medio (roughness 1). La ⬆ y la letra van debajo de los
+      // subíndices para no tapar los números.
+      function buildArrExcalidraw() {
+        const now = Date.now();
+        const elements = [];
+        const L = lay.value;
+        const gidAll = exId(); // todo el arreglo se pega como un solo diagrama
+        const eb = () => ({
+          angle: 0, strokeWidth: 1.5, strokeStyle: 'solid', roughness: 1, opacity: 100,
+          groupIds: [], frameId: null, seed: exSeed(), version: 1, versionNonce: exSeed(),
+          isDeleted: false, locked: false, link: null, updated: now,
+        });
+        const exT = (o) => elements.push({
+          ...eb(), type: 'text', backgroundColor: 'transparent', fillStyle: 'solid', roundness: null,
+          textAlign: 'center', fontFamily: 3, autoResize: true, lineHeight: 1.25, boundElements: null,
+          groupIds: [gidAll], index: 'a' + elements.length, ...o,
+        });
+        arrValues.value.forEach((v, i) => {
+          const id = exId(), tid = exId();
+          const x = ARR_PAD + i * ARR_CELL, y = L.cellY;
+          const fill = arrColors.value[i] || 'transparent';
+          elements.push({
+            ...eb(), id, type: 'rectangle', x, y, width: ARR_CELL, height: ARR_CELL,
+            strokeColor: '#1e1e1e', backgroundColor: fill, fillStyle: 'solid', roundness: null,
+            groupIds: [gidAll], index: 'a' + elements.length, boundElements: [{ id: tid, type: 'text' }],
+          });
+          const label = String(v), FS = 17, tw = Math.max(label.length * FS * 0.6, 10), th = FS * 1.25;
+          exT({ id: tid, x: x + ARR_CELL / 2 - tw / 2, y: y + ARR_CELL / 2 - th / 2, width: tw, height: th,
+            strokeColor: fill !== 'transparent' ? textColorOn(fill) : '#1e1e1e', fontSize: FS,
+            verticalAlign: 'middle', containerId: id, text: label, originalText: label, baseline: exBaseline(FS) });
+          const idx = String(arrBase.value + i), iw = Math.max(idx.length * 12 * 0.6, 10);
+          exT({ id: exId(), x: x + ARR_CELL / 2 - iw / 2, y: y + ARR_CELL + 4, width: iw, height: 15,
+            strokeColor: '#6c757d', fontSize: 12, verticalAlign: 'top',
+            containerId: null, text: idx, originalText: idx, baseline: exBaseline(12) });
+        });
+        for (const [pos, list] of arrPtrGroups()) {
+          list.forEach((p, k) => {
+            const cx = ARR_PAD + pos * ARR_CELL + ARR_CELL / 2 + (k - (list.length - 1) / 2) * 20;
+            const color = p.color || '#1e1e1e';
+            const gid = exId(); // flecha + letra agrupadas: se mueven juntas
+            exT({ id: exId(), groupIds: [gidAll, gid], x: cx - 13, y: L.glyphMy - 16, width: 26, height: 32,
+              strokeColor: color, fontSize: 26, verticalAlign: 'top',
+              containerId: null, text: '⬆', originalText: '⬆', baseline: exBaseline(26) });
+            const lab = String(p.label), lw = Math.max(lab.length * 15 * 0.6, 10);
+            exT({ id: exId(), groupIds: [gidAll, gid], x: cx - lw / 2, y: L.labMy - 9, width: lw, height: 18,
+              strokeColor: color, fontSize: 15, verticalAlign: 'middle',
+              containerId: null, text: lab, originalText: lab, baseline: exBaseline(15) });
+          });
+        }
+        if (L.hasName) {
+          const nm = arrName.value.trim(), nw = Math.max(nm.length * 16 * 0.6, 10);
+          exT({ id: exId(), x: L.nameX - nw / 2, y: L.nameY - 16, width: nw, height: 20,
+            strokeColor: '#1e1e1e', fontSize: 16, verticalAlign: 'top',
+            containerId: null, text: nm, originalText: nm, baseline: exBaseline(16) });
+        }
+        for (const el of elements) {
+          for (const k of ['x', 'y', 'width', 'height']) el[k] = Math.round(el[k] * 100) / 100;
+        }
+        return elements;
+      }
+      function copyArrExcalidraw() {
+        const payload = JSON.stringify({ type: 'excalidraw/clipboard', elements: buildArrExcalidraw(), files: {} });
+        if (!navigator.clipboard?.writeText) { showNotice('Este navegador no deja copiar: probá con Chrome'); return; }
+        navigator.clipboard.writeText(payload).then(() => flashCopied('excal')).catch(() => showNotice('No se pudo copiar'));
+      }
+      // ── PPTX del arreglo: celdas, subíndices, flechas y nombre como figuras nativas ──
+      async function downloadArrPPTX() {
+        try { await loadPptxLib(); }
+        catch { showNotice('No se pudo cargar el exportador PPTX (¿sin internet?)'); return; }
+        const hex = c => c.replace('#', '');
+        const SLIDE_W = 13.333, MARGIN = 0.5;
+        const N = arrValues.value.length;
+        const cell = Math.min(0.7, (SLIDE_W - 2 * MARGIN) / N);
+        const ox = (SLIDE_W - cell * N) / 2, y0 = 2.2;
+        const pptx = new PptxGenJS();
+        pptx.layout = 'LAYOUT_WIDE';
+        const slide = pptx.addSlide();
+        if (arrName.value.trim()) {
+          slide.addText(arrName.value.trim(), {
+            x: ox, y: y0 - 0.55, w: cell * N, h: 0.4, margin: 0,
+            align: 'center', valign: 'middle', fontFace: 'Consolas', fontSize: 16, color: '1E1E1E',
+          });
+        }
+        arrValues.value.forEach((v, i) => {
+          const fill = arrColors.value[i];
+          slide.addText(String(v), {
+            shape: pptx.ShapeType.rectangle, x: ox + i * cell, y: y0, w: cell, h: cell, margin: 0,
+            fill: { color: fill ? hex(fill) : 'FFFFFF' }, line: { color: fill ? hex(darken(fill)) : '1E1E1E', width: 1 },
+            align: 'center', valign: 'middle', fontFace: 'Consolas', fontSize: 14,
+            color: hex(fill ? textColorOn(fill) : '#1e1e1e'),
+          });
+          slide.addText(String(arrBase.value + i), {
+            x: ox + i * cell, y: y0 + cell, w: cell, h: 0.25, margin: 0,
+            align: 'center', valign: 'top', fontFace: 'Consolas', fontSize: 10, color: '6C757D',
+          });
+        });
+        for (const [pos, list] of arrPtrGroups()) {
+          list.forEach((p, k) => {
+            const cx = ox + (pos * ARR_CELL + ARR_CELL / 2 + (k - (list.length - 1) / 2) * 20) / ARR_CELL * cell;
+            const color = hex(p.color || '#1e1e1e');
+            slide.addText('⬆', {
+              x: cx - 0.2, y: y0 + cell + 0.26, w: 0.4, h: 0.32, margin: 0,
+              align: 'center', valign: 'middle', fontFace: 'Consolas', fontSize: 20, color,
+            });
+            slide.addText(String(p.label), {
+              x: cx - 0.25, y: y0 + cell + 0.6, w: 0.5, h: 0.2, margin: 0,
+              align: 'center', valign: 'middle', fontFace: 'Consolas', fontSize: 12, italic: true, color,
+            });
+          });
+        }
+        pptx.writeFile({ fileName: 'arreglo.pptx' });
+        showNotice('PPTX descargado');
+      }
+
       // ── Estado: una sola clave `diagramas`. Prioridad URL > localStorage > defecto;
       // si vino por URL no se toca localStorage (un link compartido no pisa lo guardado) ──
       function positionsMap() {
@@ -396,10 +764,16 @@
         for (const e of edges.value) if (e.style !== 'solid') m[edgeStyleKey(e)] = e.style;
         return m;
       }
-      function currentState() {
+      function graphState() {
         return { graphText: graphTextDraft.value, positions: positionsMap(), colors: colorsMap(), styles: stylesMap(), directed: directed.value };
       }
-      function applyState(data) {
+      function arrayState() {
+        return { valuesText: arrDraft.value, name: arrName.value, base: arrBase.value, colors: arrColors.value, pointers: arrPointers.value };
+      }
+      function currentState() {
+        return { mode: mode.value, grafo: graphState(), arreglo: arrayState() };
+      }
+      function applyGraphState(data) {
         graphTextDraft.value = data.graphText ?? graphTextDraft.value;
         directed.value = data.directed ?? directed.value;
         const { nodeLabels, edges: parsedEdges } = parseGraphText(graphTextDraft.value, directed.value);
@@ -409,6 +783,42 @@
         const styles = data.styles ?? stylesMap();
         edges.value = parsedEdges.map(e => ({ ...e, style: styles[edgeStyleKey(e)] || 'solid' }));
       }
+      function applyArrayState(a) {
+        arrDraft.value = (a && typeof a.valuesText === 'string') ? a.valuesText : ARR_DEFAULT;
+        arrBase.value = a && a.base === 1 ? 1 : 0;
+        arrName.value = (a && typeof a.name === 'string') ? a.name : '';
+        setArrayValues(parseArrayText(arrDraft.value));
+        arrColors.value = (a && a.colors && typeof a.colors === 'object') ? a.colors : {};
+        arrPointers.value = (a && Array.isArray(a.pointers))
+          ? a.pointers.filter(p => p && Number.isInteger(p.pos) && typeof p.label === 'string')
+          : [];
+        arrPointers.value.forEach((p, k) => { if (typeof p.color !== 'string') p.color = ARR_PTR_COLORS[k % ARR_PTR_COLORS.length]; });
+        ptrSeq = arrPointers.value.reduce((m, p) => Math.max(m, p.id || 0), 0) + 1;
+        pruneArrayExtras();
+        if (!a || !a.valuesText) {
+          // Ejemplo inicial: arreglo "v" con la "i" de un for sobre el tercer valor.
+          if (!arrName.value) arrName.value = 'v';
+          if (arrValues.value.length > 2) arrPointers.value = [{ id: ptrSeq++, pos: 2, label: 'i', color: ARR_PTR_COLORS[0] }];
+        }
+      }
+      function graphDefaults() {
+        return { graphText: DEFAULT_GRAPH_TEXT, positions: DEFAULT_POSITIONS, colors: {}, styles: {}, directed: true };
+      }
+      function applySharedState(data) {
+        if (data && typeof data === 'object' && data.grafo) {
+          applyGraphState(data.grafo);
+          mode.value = data.mode === 'arreglo' ? 'arreglo' : 'grafo';
+          applyArrayState(data.arreglo || {});
+        } else if (data && typeof data === 'object' && data.graphText !== undefined) {
+          applyGraphState(data); // formato anterior: solo grafo
+          mode.value = 'grafo';
+          applyArrayState({});
+        } else {
+          applyGraphState(graphDefaults());
+          mode.value = 'grafo';
+          applyArrayState({});
+        }
+      }
       function persist() {
         if (fromUrl.value) return;
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(currentState())); } catch { /* modo privado: se sigue sin guardar */ }
@@ -417,16 +827,16 @@
         const q = new URLSearchParams(window.location.search).get('d');
         if (q) {
           try {
-            applyState(JSON.parse(decodeURIComponent(q)));
+            applySharedState(JSON.parse(decodeURIComponent(q)));
             fromUrl.value = true;
             return;
           } catch { /* URL inválida: se sigue con lo guardado */ }
         }
         try {
           const raw = localStorage.getItem(STORAGE_KEY);
-          if (!raw) { applyState({ graphText: DEFAULT_GRAPH_TEXT, positions: DEFAULT_POSITIONS, colors: {}, styles: {}, directed: true }); return; }
-          applyState(JSON.parse(raw));
-        } catch { applyState({ graphText: DEFAULT_GRAPH_TEXT, positions: DEFAULT_POSITIONS, colors: {}, styles: {}, directed: true }); }
+          if (!raw) { applySharedState(null); return; }
+          applySharedState(JSON.parse(raw));
+        } catch { applySharedState(null); }
       }
 
       function share() {
@@ -453,7 +863,9 @@
         fromUrl.value = false;
         try { localStorage.removeItem(STORAGE_KEY); } catch { /* modo privado */ }
         history.replaceState(null, '', window.location.pathname);
-        applyState({ graphText: DEFAULT_GRAPH_TEXT, positions: DEFAULT_POSITIONS, colors: {}, styles: {}, directed: true });
+        mode.value = 'grafo';
+        applyGraphState(graphDefaults());
+        applyArrayState({});
         persist();
         userAdjustedCamera.value = false;
         nextTick(() => fitToView());
@@ -461,13 +873,13 @@
 
       // ── Editar grafo ──
       function applyGraphText() {
-        applyState({ graphText: graphTextDraft.value, positions: positionsMap() });
+        applyGraphState({ graphText: graphTextDraft.value, positions: positionsMap() });
         persist();
         userAdjustedCamera.value = false;
         nextTick(() => fitToView());
       }
       function toggleDirected() {
-        applyState({ ...currentState(), directed: !directed.value });
+        applyGraphState({ ...graphState(), directed: !directed.value });
         persist();
       }
 
@@ -644,8 +1056,6 @@
       // ── Excalidraw: JSON del portapapeles para pegar directo en excalidraw.com ──
       // Nodos como elipse + texto atado, aristas como flechas bindeadas a las elipses
       // (al mover un nodo en Excalidraw, las flechas lo siguen). Siempre paleta clara.
-      function exId() { return Math.random().toString(36).slice(2, 11); }
-      function exSeed() { return Math.floor(Math.random() * 2 ** 31); }
       function buildExcalidraw() {
         const now = Date.now();
         const elements = [];
@@ -675,7 +1085,7 @@
             strokeColor: txt, backgroundColor: 'transparent', fillStyle: 'solid', roundness: null,
             index: 'a' + elements.length, fontSize: FS, fontFamily: 2, textAlign: 'center',
             verticalAlign: 'middle', containerId: id, text: String(n.label), originalText: String(n.label),
-            autoResize: true, lineHeight: 1.25, baseline: Math.round(th - 2), boundElements: null,
+            autoResize: true, lineHeight: 1.25, baseline: exBaseline(FS, 1.25, 2), boundElements: null,
           });
         });
         const EX_DASH = { solid: 'solid', dotted: 'dotted', dashed: 'dashed' };
@@ -720,7 +1130,7 @@
               strokeColor: '#1e1e1e', backgroundColor: 'transparent', fillStyle: 'solid', roundness: null,
               index: 'a' + elements.length, fontSize: WFS, fontFamily: 2, textAlign: 'center',
               verticalAlign: 'middle', containerId: null, text: String(e.w), originalText: String(e.w),
-              autoResize: true, lineHeight: 1.25, baseline: Math.round(wh - 2), boundElements: null,
+              autoResize: true, lineHeight: 1.25, baseline: exBaseline(WFS, 1.25, 2), boundElements: null,
             });
           }
         });
@@ -813,17 +1223,28 @@
 
       // ── Ciclo de vida ──
       const resizeObserver = new ResizeObserver(() => { if (!userAdjustedCamera.value) fitToView(); });
+      function switchMode(m) {
+        mode.value = m;
+        persist();
+        // Al volver al grafo el canvas se remontó: reencuadrar y reobservar.
+        if (m === 'grafo') nextTick(() => { fitToView(); if (containerEl.value) resizeObserver.observe(containerEl.value); });
+      }
       onMounted(() => {
         loadInitialState();
         fitToView();
-        resizeObserver.observe(containerEl.value);
+        // El canvas del grafo puede no existir si se arranca en modo arreglo.
+        if (containerEl.value) resizeObserver.observe(containerEl.value);
       });
       onBeforeUnmount(() => resizeObserver.disconnect());
 
       return {
         NODE_R, NODE_COLORS, textColorOn, darken, paintColor, togglePaint, LINE_STYLES, DASHES, paintStyle, toggleLineStyle,         paintEdge, camera, nodes, edgeShapes, pal, directed, toggleDirected,
         showEditor, graphTextDraft, applyGraphText, showMatrix, matrix,
-        notice, shareCopied, share, resetArmed, resetTool,
+        mode, persist,
+        ARR_CELL, ARR_PAD, ARR_MAX, lay, arrDraft, arrName, arrValues, arrBase, arrColors, arrPointers, arrPointerMarks,
+        ptrLabel, ptrIndex, arrSvg, applyArray, paintCell, addPointer, removePointer, onPtrDown,
+        downloadArrSVG, copyArrSVG, downloadArrPNG, copyArrPNG, downloadArrPPTX, copyArrExcalidraw,
+        notice, shareCopied, share, resetArmed, resetTool, switchMode,
         copied, downloadSVG, downloadPNG, copySVG, copyPNG, copyExcalidraw, downloadDOT, downloadPPTX,
         isDark, toggleTheme, fitToView,
         containerEl, graphEl, onSvgMouseDown, onSvgMouseMove, onSvgMouseUp, onSvgWheel, onNodeMouseDown,

@@ -59,6 +59,6 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`clippy`](./clippy) | 📋 Clippy: pegá algo y mirá qué hay adentro del portapapeles. |
 | [`metalicos`](./metalicos) | 🔩 Metálicos: los 10 ratios del platino al plomo, con calculadora y comparador. |
 | [`escaner-pdf`](./escaner-pdf) | 📄 Escáner a PDF: fotos de cada hoja compiladas en un PDF A4 para compartir. |
-| [`diagramas`](./diagramas) | 🕸️ Diagramas: dibujá grafos para tus clases, con matriz y salida a SVG, PNG, PPTX o DOT. |
+| [`diagramas`](./diagramas) | 🕸️ Diagramas: dibujá grafos y arreglos para tus clases, con matriz y salida a SVG, PNG, PPTX o DOT. |
 
 Cada carpeta tiene su propio `README.md` con el detalle de uso.

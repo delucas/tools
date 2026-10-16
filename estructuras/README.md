@@ -5,7 +5,7 @@ Dibujá matrices, pilas, colas, grafos, árboles y arreglos para tus clases con 
 ## Uso
 
 1. Elegí la pestaña: Arreglo, Matriz, Pila / Cola, Lista, Árbol o Grafo.
-2. Escribí los valores y tocá ▶ Aplicar.
+2. Escribí los valores: el dibujo se actualiza solo a medida que escribís.
    - Matriz: una fila por línea, columnas separadas por coma (las filas pueden tener distinta cantidad: no se rellenan).
    - Pila/cola: lista con coma o por línea (en pila el primero es el tope; en cola van de frente a fin).
    - Lista: valores con coma o por línea; tipo simple, doble o circular, con punteros head y tail opcionales.

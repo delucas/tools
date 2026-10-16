@@ -100,7 +100,7 @@
               <div class="card shadow-sm" style="max-width: 380px;">
                 <div class="card-body text-center">
                   <div class="fs-1">🧱</div>
-                  <p class="mt-2 mb-0 text-body-secondary">Cargá valores con ▶ Aplicar para dibujar.</p>
+                  <p class="mt-2 mb-0 text-body-secondary">Escribí valores para dibujar.</p>
                 </div>
               </div>
             </div>
@@ -142,9 +142,8 @@
                   </div>
                 </div>
               </div>
-              <label class="form-label small text-body-secondary mb-1" for="est-texto">Valores.</label>
-              <textarea id="est-texto" class="form-control form-control-sm font-monospace mb-2" rows="4" v-model="draft" @keydown="onDraftKey"></textarea>
-              <button class="btn btn-dark btn-sm w-100" type="button" @click="applyText">▶ Aplicar</button>
+              <label class="form-label small text-body-secondary mb-1" for="est-texto">Valores (se dibujan al escribir).</label>
+              <textarea id="est-texto" class="form-control form-control-sm font-monospace mb-2" rows="4" v-model="est().text" @input="onType" @keydown="onDraftKey"></textarea>
             </div>
           </div>
         </div>
@@ -176,7 +175,7 @@
   const DASHES = { solid: null, dotted: '1 4', dashed: '8 5' };
 
   // Convención de indicadores: glifos direccionales (no líneas dibujadas).
-  // Se usan para punteros (tope/frente/fin) y a futuro en arreglos, etc.
+  // Se usan para punteros e indicadores (tope/frente/fin, head/tail, subíndices).
   const FLECHAS = { arriba: '⬆', abajo: '⬇', izquierda: '⬅', derecha: '➡' };
   function escXml(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -341,10 +340,9 @@
         for (const [, list] of byPos) {
           list.forEach((p, k) => {
             const cx = p.pos * CELL + CELL / 2 + (k - (list.length - 1) / 2) * 20;
-            const color = NODE_COLORS[p.n % NODE_COLORS.length].hex;
             const gid = `g-p${p.n}`;
-            shapes.push({ id: `ap-${p.n}`, kind: 'text', rol: null, grupo: gid, x: cx, y: gy, size: 24, fill: color, anchor: 'middle', base: 'central', label: FLECHAS.arriba });
-            shapes.push({ id: `ap-${p.n}-t`, kind: 'text', rol: null, grupo: gid, x: cx, y: gy + 26, size: 14, fill: color, anchor: 'middle', base: 'central', label: p.label, italic: true });
+            shapes.push({ id: `ap-${p.n}`, kind: 'text', rol: null, grupo: gid, x: cx, y: gy, size: 24, fill: INK, anchor: 'middle', base: 'central', label: FLECHAS.arriba });
+            shapes.push({ id: `ap-${p.n}-t`, kind: 'text', rol: null, grupo: gid, x: cx, y: gy + 26, size: 14, fill: INK, anchor: 'middle', base: 'central', label: p.label, italic: true });
             // Área de toque para arrastrar (los textos no reciben mouse).
             shapes.push({ id: `ap-${p.n}-hit`, kind: 'rect', rol: null, ghost: true, drag: `p${p.n}`, x: cx - 16, y: gy - 20, w: 32, h: 66, fill: 'transparent', stroke: 'none', sw: 0 });
           });
@@ -368,7 +366,7 @@
     },
     {
       slug: 'matriz', nombre: 'Matriz',
-      hint: 'Una fila por línea, columnas separadas por coma. Las filas cortas se rellenan.',
+      hint: 'Una fila por línea, columnas separadas por coma. Acepta filas de distinto largo.',
       ejemplo: '1, 2, 3\n4, 5, 6\n7, 8, 9',
       opciones: [
         { key: 'nombre', etiqueta: 'Nombre', tipo: 'texto', defecto: '' },
@@ -656,13 +654,26 @@
       },
     },
   ];
-  const SPEC = (slug) => SPECS.find(s => s.slug === slug) || SPECS[0];
+  const SPEC = (slug) => SPECS.find(s => s.slug === slug) || SPEC('matriz');
 
   function freshState(slug) {
     const spec = SPEC(slug);
     const opts = {};
     for (const o of spec.opciones) opts[o.key] = o.defecto;
     return { text: spec.ejemplo, colors: {}, dashes: {}, opts };
+  }
+  // Blindaje: lo guardado (localStorage o URL) puede traer slugs con forma
+  // vieja o rota; se rellena con el estado fresco sin pisar lo que anda.
+  // Los extras propios de cada spec (p. ej. pos del grafo) se conservan.
+  function normalizarEstado(slug, raw) {
+    const st = (raw && typeof raw === 'object') ? raw : {};
+    const fresco = freshState(slug);
+    if (typeof st.text !== 'string') st.text = fresco.text;
+    if (!st.colors || typeof st.colors !== 'object') st.colors = {};
+    if (!st.dashes || typeof st.dashes !== 'object') st.dashes = {};
+    if (!st.opts || typeof st.opts !== 'object') st.opts = {};
+    for (const o of (SPEC(slug).opciones || [])) if (st.opts[o.key] === undefined) st.opts[o.key] = o.defecto;
+    return st;
   }
 
   // ── Emisor SVG genérico desde shapes[] ──
@@ -750,7 +761,7 @@
           ...eb(), id: exId(), type: isArrow ? 'arrow' : 'line',
           x: s.x1, y: s.y1, width: Math.abs(s.x2 - s.x1), height: Math.abs(s.y2 - s.y1),
           strokeColor: s.stroke, backgroundColor: 'transparent', fillStyle: 'solid',
-          strokeStyle: 'solid', roundness: { type: 2 }, groupIds: grupoDe(s.grupo), index: 'a' + elements.length,
+          strokeStyle: s.dashName || 'solid', roundness: { type: 2 }, groupIds: grupoDe(s.grupo), index: 'a' + elements.length,
           points: [[0, 0], [s.x2 - s.x1, s.y2 - s.y1]], startBinding: null, endBinding: null,
           startArrowhead: null, endArrowhead: isArrow ? 'arrow' : null, elbowed: false,
         });
@@ -828,7 +839,6 @@
       const PADDING = 50;
       const tab = ref('matriz');
       const estados = ref({});
-      const draft = ref('');
       const paintColor = ref(null);
       const paintStyle = ref(null);
       const copied = ref('');
@@ -844,7 +854,7 @@
 
       const spec = computed(() => SPEC(tab.value));
       function est(slug = tab.value) {
-        if (!estados.value[slug]) estados.value[slug] = freshState(slug);
+        estados.value[slug] = normalizarEstado(slug, estados.value[slug]);
         return estados.value[slug];
       }
 
@@ -916,17 +926,23 @@
         }
       }
 
-      function applyText() {
-        est().text = draft.value;
-        if (modelo.value.recortado) showNotice('Entrada recortada al máximo.');
+      // Dibujo en vivo: cada tecla persiste y re-renderiza (sin botón Aplicar).
+      // El aviso de recorte sale una vez por racha (no en cada tecla de más).
+      let avisadoRecorte = false;
+      function onType() {
         persist();
+        if (modelo.value.recortado) {
+          if (!avisadoRecorte) { avisadoRecorte = true; showNotice('Entrada recortada al máximo.'); }
+        } else {
+          avisadoRecorte = false;
+        }
       }
       // Tab en el textarea mete sangría (specs con tabIndent, como el árbol); Shift+Tab la saca.
       function onDraftKey(e) {
         if (!spec.value.tabIndent || e.key !== 'Tab') return;
         e.preventDefault();
-        const ta = e.target, s = ta.selectionStart ?? 0, t = ta.selectionEnd ?? 0, v = draft.value;
-        const place = (txt, pos) => { draft.value = txt; nextTick(() => { ta.selectionStart = ta.selectionEnd = pos; }); };
+        const ta = e.target, s = ta.selectionStart ?? 0, t = ta.selectionEnd ?? 0, v = est().text;
+        const place = (txt, pos) => { est().text = txt; persist(); nextTick(() => { ta.selectionStart = ta.selectionEnd = pos; }); };
         if (e.shiftKey) {
           const ls = v.lastIndexOf('\n', s - 1) + 1;
           let rm = 0;
@@ -938,7 +954,7 @@
       }
       function switchTab(slug) {
         tab.value = slug;
-        draft.value = est(slug).text;
+        avisadoRecorte = false;
         persist();
         nextTick(() => fit());
       }
@@ -952,7 +968,7 @@
         estados.value = ok ? data.estados : {};
         const slugs = SPECS.map(s => s.slug);
         tab.value = (ok && slugs.includes(data.tab)) ? data.tab : 'matriz';
-        draft.value = est().text;
+        est();
       }
       function persist() {
         if (fromUrl.value) return;
@@ -970,8 +986,8 @@
         try {
           const raw = localStorage.getItem(STORAGE_KEY);
           if (raw) applyState(JSON.parse(raw));
-          else { draft.value = est().text; }
-        } catch { draft.value = est().text; }
+          else est();
+        } catch { est(); }
       }
 
       function share() {
@@ -999,7 +1015,7 @@
         history.replaceState(null, '', window.location.pathname);
         estados.value = {};
         tab.value = 'matriz';
-        draft.value = est().text;
+        est();
         persist();
       }
 
@@ -1113,8 +1129,8 @@
                 slide.addShape(isCircle ? pptx.shapes.OVAL : pptx.shapes.RECTANGLE, opts);
               }
             } else if (s.kind === 'line' || s.kind === 'arrow') {
-            const x1 = X(s.x1), y1 = Y(s.y1), x2 = X(s.x2), y2 = Y(s.y2);
-            slide.addShape(pptx.shapes.LINE, {
+              const x1 = X(s.x1), y1 = Y(s.y1), x2 = X(s.x2), y2 = Y(s.y2);
+              slide.addShape(pptx.shapes.LINE, {
                 x: Math.min(x1, x2), y: Math.min(y1, y2), w: Math.abs(x2 - x1) || 0.01, h: Math.abs(y2 - y1) || 0.01,
                 flipH: x2 < x1, flipV: y2 < y1,
                 line: { color: hex(s.stroke), width: Math.max(0.75, s.sw * k * 72), dashType: PPTX_DASH[s.dashName] || 'solid', endArrowType: s.kind === 'arrow' ? 'triangle' : 'none' },
@@ -1178,7 +1194,7 @@
       onBeforeUnmount(() => resizeObserver.disconnect());
 
       return {
-        SPECS, spec, tab, switchTab, estados, est, draft, applyText, onDraftKey, modelo, persist,
+        SPECS, spec, tab, switchTab, estados, est, onType, onDraftKey, modelo, persist,
         NODE_COLORS, LINE_STYLES, DASHES, paintColor, paintStyle, togglePaint, toggleLineStyle, pintando, onShapeDown,
         clearArmed, clearFormats,
         copied, downloadSVG, downloadPNG, copySVG, copyPNG, copyExcalidraw, downloadPPTX,

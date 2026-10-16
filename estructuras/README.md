@@ -1,6 +1,6 @@
 # Estructuras
 
-Dibujá matrices, pilas, colas, grafos, árboles y arreglos para tus clases con un motor compartido: cada estructura es una especificación (texto + opciones) sobre el mismo canvas, paleta y exports.
+Dibujá arreglos, matrices, pilas, colas, listas, árboles y grafos para tus clases con un motor compartido: cada estructura es una especificación (texto + opciones) sobre el mismo canvas, paleta y exports.
 
 ## Uso
 
@@ -25,9 +25,14 @@ Todo lo que necesita una estructura nueva:
 - `slug`, `nombre`, `hint`, `ejemplo`.
 - `opciones`: `[{ key, etiqueta, tipo: texto|select|check, defecto }]` (el formulario se genera solo).
 - `dibujar(estado) -> { shapes, W, H }` con formas `{rect, circle, line, arrow, text}` e ids estables (los colores persisten por id).
-- Roles de pintura: `celda`/`nodo` (relleno), `linea` (trazo); `grupo` para flecha + cartel.
+- Roles de pintura: `celda`/`nodo` (relleno), `linea` (trazo); `grupo` para lo que viaja junto (flecha + cartel, nodo + punteros). Las formas del mismo `grupo` van consecutivas en `shapes`.
 - Opcional: `drag` en una forma + `onDrag(estado, clave, x, y)` para arrastrar (el motor convierte a coordenadas de mundo); `ghost: true` para áreas de toque invisibles (no salen en los exports, con `pinta` redirigen el pintado); `tabIndent: true` para que Tab maneje sangría en el textarea.
 
 El motor (canvas, paleta, SVG/PNG/PPTX/Excalidraw, estado y links) no se toca.
 
 Convención: los indicadores usan glifos direccionales (⬆ ⬅ ⬇ ➡) en vez de líneas dibujadas — p. ej. ➡ para el tope y ⬆ para frente/fin. Vale también para arreglos y futuras estructuras.
+
+## Próximo
+
+- Tabla hash: arreglo de buckets con cajitas encadenadas (sale del motor tal cual está).
+- Heap / ABB con layout por niveles.

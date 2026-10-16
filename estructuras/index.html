@@ -71,6 +71,7 @@
           <button class="btn btn-outline-secondary" type="button" @click="downloadPNG" title="Descargar PNG (fondo transparente)">⬇️ PNG</button>
           <button class="btn btn-outline-secondary" type="button" @click="copyPNG" :title="copied === 'png' ? '¡Copiado!' : 'Copiar el PNG al portapapeles (fondo transparente)'">{{ copied === 'png' ? '✅' : '📋' }} PNG</button>
           <button class="btn btn-outline-secondary" type="button" @click="copyExcalidraw" :title="copied === 'excal' ? '¡Copiado! Pegalo en excalidraw.com' : 'Copiar para pegar directo en Excalidraw'">{{ copied === 'excal' ? '✅' : '📋' }} Excalidraw</button>
+          <button class="btn btn-outline-secondary" type="button" @click="downloadPPTX" title="Diapositiva con figuras editables (PowerPoint / Google Slides)">⬇️ PPTX</button>
         </div>
         <button class="btn btn-outline-secondary btn-sm" type="button" @click="fit(true)" title="Ajustar vista" v-if="modelo.shapes.length">🎯</button>
       </div>
@@ -128,8 +129,8 @@
                 <div v-for="o in spec.opciones" :key="o.key" :class="o.tipo === 'texto' ? 'flex-grow-1' : ''">
                   <label class="form-label small text-body-secondary mb-0" :for="'est-' + o.key">{{ o.etiqueta }}</label>
                   <input v-if="o.tipo === 'texto'" :id="'est-' + o.key" class="form-control form-control-sm font-monospace" v-model="est().opts[o.key]" @change="persist" :placeholder="o.ejemplo || ''">
-                  <select v-else-if="o.tipo === 'select'" :id="'est-' + o.key" class="form-select form-select-sm" v-model.number="est().opts[o.key]" @change="persist">
-                    <option v-for="v in o.valores" :key="v" :value="v">{{ v }}</option>
+                  <select v-else-if="o.tipo === 'select'" :id="'est-' + o.key" class="form-select form-select-sm" v-model="est().opts[o.key]" @change="persist">
+                    <option v-for="v in o.valores" :key="v" :value="v">{{ (o.etiquetas && o.etiquetas[v]) || v }}</option>
                   </select>
                   <div v-else-if="o.tipo === 'check'" class="form-check form-switch">
                     <input :id="'est-' + o.key" class="form-check-input" type="checkbox" role="switch" v-model="est().opts[o.key]" @change="persist">
@@ -169,6 +170,9 @@
   const LINE_STYLES = { solid: 'normal', dotted: 'punteada', dashed: 'de guiones' };
   const DASHES = { solid: null, dotted: '1 4', dashed: '8 5' };
 
+  // Convención de indicadores: glifos direccionales (no líneas dibujadas).
+  // Se usan para punteros (tope/frente/fin) y a futuro en arreglos, etc.
+  const FLECHAS = { arriba: '⬆', abajo: '⬇', izquierda: '⬅', derecha: '➡' };
   function escXml(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
@@ -176,11 +180,6 @@
     const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
       .map(c => c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
     return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.179 ? '#282a36' : '#f8f8f2';
-  }
-  // Punta de flecha en (x2, y2) apuntando según el ángulo de llegada.
-  function arrowHead(x2, y2, ang, size = 10) {
-    const b1 = ang + Math.PI - 0.42, b2 = ang + Math.PI + 0.42;
-    return `${x2},${y2} ${x2 + Math.cos(b1) * size},${y2 + Math.sin(b1) * size} ${x2 + Math.cos(b2) * size},${y2 + Math.sin(b2) * size}`;
   }
 
   // ── Specs: cada estructura declara hint, ejemplo, opciones y dibujar() ──
@@ -192,9 +191,9 @@
       hint: 'Una fila por línea, columnas separadas por coma. Las filas cortas se rellenan.',
       ejemplo: '1, 2, 3\n4, 5, 6\n7, 8, 9',
       opciones: [
-        { key: 'nombre', etiqueta: 'Nombre', tipo: 'texto', defecto: '', ejemplo: 'A' },
+        { key: 'nombre', etiqueta: 'Nombre', tipo: 'texto', defecto: '' },
         { key: 'base', etiqueta: 'Base', tipo: 'select', valores: [0, 1], defecto: 0 },
-        { key: 'indices', etiqueta: 'Mostrar índices', tipo: 'check', defecto: true },
+        { key: 'indices', etiqueta: 'Índices', tipo: 'select', valores: ['fuera', 'dentro', 'no'], etiquetas: { fuera: 'Debajo', dentro: 'Dentro', no: 'Ocultos' }, defecto: 'fuera' },
       ],
       dibujar(st) {
         const MAX_R = 20, MAX_C = 12;
@@ -203,25 +202,34 @@
         if (rows.length > MAX_R) { rows = rows.slice(0, MAX_R); recortado = true; }
         if (rows.some(r => r.length > MAX_C)) recortado = true;
         rows = rows.map(r => r.slice(0, MAX_C));
+        // Sin relleno: cada fila dibuja solo sus celdas (matrices irregulares).
         const ncols = Math.max(0, ...rows.map(r => r.length));
         const name = (st.opts.nombre || '').trim();
         const nameH = name ? 30 : 0;
-        const base = st.opts.base === 1 ? 1 : 0;
-        const conIdx = st.opts.indices && rows.length > 0;
+        const base = Number(st.opts.base) === 1 ? 1 : 0;
+        // Booleano viejo (true/false) migra a 'fuera'/'no'.
+        const idxOpt = st.opts.indices;
+        const idxMode = idxOpt === 'dentro' ? 'dentro' : (idxOpt === 'no' || idxOpt === false) ? 'no' : 'fuera';
+        const conIdx = idxMode === 'fuera';
         const gap = conIdx ? 24 : 8; // banda para el subíndice, sin invadir la fila de abajo
-        const FS = 17;
+        const FS = 17, FS_IDX = 10;
         const shapes = [];
         rows.forEach((row, i) => {
-          for (let j = 0; j < ncols; j++) {
-            const v = row[j] ?? '';
+          for (let j = 0; j < row.length; j++) {
+            const v = row[j];
             const x = j * CELL, y = nameH + i * (CELL + gap);
             const id = `m-${i}-${j}`;
             const fill = st.colors[id] || PAPER;
             shapes.push({ id, kind: 'rect', rol: 'celda', x, y, w: CELL, h: CELL, fill, stroke: INK, sw: 1.5 });
             shapes.push({ id: `mt-${i}-${j}`, kind: 'text', rol: null, x: x + CELL / 2, y: y + CELL / 2, size: FS, fill: fill !== PAPER ? textColorOn(fill) : INK, anchor: 'middle', base: 'central', label: v });
-            if (conIdx) {
+            if (idxMode !== 'no') {
               const idx = `(${base + i},${base + j})`;
-              shapes.push({ id: `mi-${i}-${j}`, kind: 'text', rol: null, x: x + CELL / 2, y: y + CELL + 13, size: 11, fill: MUTED, anchor: 'middle', base: null, label: idx });
+              if (idxMode === 'dentro') {
+                const iw = Math.max(idx.length * FS_IDX * 0.6, 8);
+                shapes.push({ id: `mi-${i}-${j}`, kind: 'text', rol: null, x: x + CELL - 4 - iw / 2, y: y + CELL - 4 - (FS_IDX * 1.25) / 2, size: FS_IDX, fill: fill !== PAPER ? textColorOn(fill) : MUTED, anchor: 'middle', base: 'central', label: idx });
+              } else {
+                shapes.push({ id: `mi-${i}-${j}`, kind: 'text', rol: null, x: x + CELL / 2, y: y + CELL + 13, size: 11, fill: MUTED, anchor: 'middle', base: null, label: idx });
+              }
             }
           }
         });
@@ -258,19 +266,19 @@
           shapes.push({ id, kind: 'rect', rol: 'celda', x, y, w: CW, h: CH, fill, stroke: INK, sw: 1.5 });
           shapes.push({ id: `pt-${i}`, kind: 'text', rol: null, x: x + CW / 2, y: y + CH / 2, size: FS, fill: fill !== PAPER ? textColorOn(fill) : INK, anchor: 'middle', base: 'central', label: v });
         });
-        const flecha = (x1, y1, x2, y2, id, etiqueta, lx, ly) => {
-          const ang = Math.atan2(y2 - y1, x2 - x1);
-          shapes.push({ id, kind: 'arrow', rol: 'linea', x1, y1, x2, y2, head: arrowHead(x2, y2, ang), stroke: INK, sw: 2 });
-          shapes.push({ id: id + '-t', kind: 'text', rol: null, x: lx, y: ly, size: 14, fill: INK, anchor: 'middle', base: 'central', label: etiqueta, italic: true });
+        const flecha = (cx, cy, dir, id, etiqueta, lx, ly) => {
+          const gid = 'g-' + id; // flecha + cartel agrupados en los exports
+          shapes.push({ id, kind: 'text', rol: null, grupo: gid, x: cx, y: cy, size: 24, fill: INK, anchor: 'middle', base: 'central', label: FLECHAS[dir] });
+          shapes.push({ id: id + '-t', kind: 'text', rol: null, grupo: gid, x: lx, y: ly, size: 14, fill: INK, anchor: 'middle', base: 'central', label: etiqueta, italic: true });
         };
         if (vals.length) {
           if (vertical) {
             const cy = nameH + CH / 2;
-            flecha(28, cy, 56, cy, 'p-tope', 'tope', 30, cy + 18);
+            flecha(42, cy, 'derecha', 'p-tope', 'tope', 42, cy + 24);
           } else {
             const mk = (i, etiqueta) => {
               const cx = i * CELL + CELL / 2, top = nameH + CELL + 6;
-              flecha(cx, top + 28, cx, top + 4, `p-${etiqueta}`, etiqueta, cx, top + 28 + 16);
+              flecha(cx, top + 16, 'arriba', `p-${etiqueta}`, etiqueta, cx, top + 16 + 24);
             };
             mk(0, 'frente');
             if (vals.length > 1) mk(vals.length - 1, 'fin');
@@ -280,7 +288,7 @@
           shapes.push({ id: 'p-name', kind: 'text', rol: null, x: (vertical ? 60 + CW / 2 : vals.length * CELL / 2), y: 18, size: 16, fill: INK, anchor: 'middle', base: null, label: name });
         }
         const W = vertical ? 60 + CW + 8 : Math.max(vals.length * CELL, 1);
-        const H = nameH + (vertical ? vals.length * CH : CELL + (vals.length ? 62 : 8));
+        const H = nameH + (vertical ? vals.length * CH + (vals.length ? 34 : 8) : CELL + (vals.length ? 62 : 8));
         if (recortado) shapes.recortado = true;
         return { shapes, W, H, recortado };
       },
@@ -298,13 +306,25 @@
   // ── Emisor SVG genérico desde shapes[] ──
   const r2 = (v) => String(Math.round(v * 100) / 100);
   function shapesToSVG(shapes, W, H) {
-    const body = shapes.map(s => {
+    const one = (s) => {
       if (s.kind === 'rect') return `<rect x="${r2(s.x)}" y="${r2(s.y)}" width="${r2(s.w)}" height="${r2(s.h)}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.sw}"/>`;
       if (s.kind === 'circle') return `<circle cx="${r2(s.cx)}" cy="${r2(s.cy)}" r="${r2(s.r)}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.sw}"/>`;
       if (s.kind === 'line') return `<line x1="${r2(s.x1)}" y1="${r2(s.y1)}" x2="${r2(s.x2)}" y2="${r2(s.y2)}" stroke="${s.stroke}" stroke-width="${s.sw}" stroke-linecap="round"${s.dasharray ? ` stroke-dasharray="${s.dasharray}"` : ''}/>`;
       if (s.kind === 'arrow') return `<line x1="${r2(s.x1)}" y1="${r2(s.y1)}" x2="${r2(s.x2)}" y2="${r2(s.y2)}" stroke="${s.stroke}" stroke-width="${s.sw}" stroke-linecap="round"${s.dasharray ? ` stroke-dasharray="${s.dasharray}"` : ''}/><polygon points="${s.head}" fill="${s.stroke}"/>`;
       return `<text x="${r2(s.x)}" y="${r2(s.y)}" font-size="${s.size}" fill="${s.fill}" text-anchor="${s.anchor || 'middle'}"${s.base ? ` dominant-baseline="${s.base}"` : ''}${s.italic ? ' font-style="italic"' : ''}>${escXml(s.label)}</text>`;
-    }).join('');
+    };
+    // Formas con el mismo `grupo` salen envueltas en un <g> (flecha + cartel, etc.).
+    let body = '', open = null;
+    for (const s of shapes) {
+      const g = s.grupo || null;
+      if (g !== open) {
+        if (open) body += '</g>';
+        open = g;
+        if (g) body += '<g>';
+      }
+      body += one(s);
+    }
+    if (open) body += '</g>';
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${r2(W)}" height="${r2(H)}" viewBox="0 0 ${r2(W)} ${r2(H)}" font-family="Consolas, 'Courier New', monospace">${body}</svg>`;
   }
 
@@ -324,11 +344,17 @@
 
   // ── Emisor Excalidraw genérico desde shapes[] ──
   // Cuadrados nítidos (roundness null), textos atados a su celda cuando caen
-  // adentro, y todo el dibujo en un solo grupo.
+  // adentro, flecha + cartel en subgrupo anidado, y todo en un grupo exterior.
   function buildExcalidraw(shapes) {
     const now = Date.now();
     const elements = [];
     const gidAll = exId();
+    const subgrupos = new Map();
+    const grupoDe = (g) => {
+      if (!g) return [gidAll];
+      if (!subgrupos.has(g)) subgrupos.set(g, exId());
+      return [gidAll, subgrupos.get(g)];
+    };
     const eb = () => ({
       angle: 0, strokeWidth: 1.5, strokeStyle: 'solid', roughness: 1, opacity: 100,
       groupIds: [gidAll], frameId: null, seed: exSeed(), version: 1, versionNonce: exSeed(),
@@ -349,7 +375,7 @@
           x: isCircle ? s.cx - s.r : s.x, y: isCircle ? s.cy - s.r : s.y,
           width: isCircle ? s.r * 2 : s.w, height: isCircle ? s.r * 2 : s.h,
           strokeColor: s.stroke, backgroundColor: s.fill && s.fill !== 'transparent' ? s.fill : 'transparent',
-          fillStyle: 'solid', roundness: isCircle ? { type: 2 } : null,
+          fillStyle: 'solid', roundness: isCircle ? { type: 2 } : null, groupIds: grupoDe(s.grupo),
           index: 'a' + elements.length, boundElements: [],
         };
         elements.push(el);
@@ -360,14 +386,14 @@
           ...eb(), id: exId(), type: isArrow ? 'arrow' : 'line',
           x: s.x1, y: s.y1, width: Math.abs(s.x2 - s.x1), height: Math.abs(s.y2 - s.y1),
           strokeColor: s.stroke, backgroundColor: 'transparent', fillStyle: 'solid',
-          strokeStyle: 'solid', roundness: { type: 2 }, index: 'a' + elements.length,
+          strokeStyle: 'solid', roundness: { type: 2 }, groupIds: grupoDe(s.grupo), index: 'a' + elements.length,
           points: [[0, 0], [s.x2 - s.x1, s.y2 - s.y1]], startBinding: null, endBinding: null,
           startArrowhead: null, endArrowhead: isArrow ? 'arrow' : null, elbowed: false,
         });
       } else {
         const w = Math.max(String(s.label).length * s.size * 0.6, 10), h = s.size * 1.25;
         const central = s.base === 'central';
-        exT({ id: exId(), x: s.x - w / 2, y: central ? s.y - h / 2 : s.y - s.size, width: w, height: h,
+        exT({ id: exId(), groupIds: grupoDe(s.grupo), x: s.x - w / 2, y: central ? s.y - h / 2 : s.y - s.size, width: w, height: h,
           strokeColor: s.fill, fontSize: s.size, verticalAlign: central ? 'middle' : 'top',
           containerId: null, text: String(s.label), originalText: String(s.label), baseline: central ? exBaseline(s.size) : s.size });
       }
@@ -441,7 +467,10 @@
         const st = est();
         const out = spec.value.dibujar(st);
         for (const s of out.shapes) {
-          if (s.rol === 'linea' && st.dashes[s.id]) s.dasharray = DASHES[st.dashes[s.id]] || null;
+          if (s.rol === 'linea' && st.dashes[s.id]) {
+            s.dashName = st.dashes[s.id];
+            s.dasharray = DASHES[s.dashName] || null;
+          }
         }
         return out;
       });
@@ -587,6 +616,86 @@
         navigator.clipboard.writeText(payload).then(() => flashCopied('excal')).catch(() => showNotice('No se pudo copiar'));
       }
 
+      // ── PPTX genérico desde shapes[]: figuras nativas editables ──
+      let pptxLib = null;
+      function loadPptxLib() {
+        return pptxLib ??= new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://cdn.jsdelivr.net/npm/pptxgenjs@4.0.1/dist/pptxgen.bundle.js';
+          script.onload = resolve;
+          script.onerror = () => { pptxLib = null; reject(new Error('No se pudo cargar PptxGenJS')); };
+          document.head.appendChild(script);
+        });
+      }
+      const PPTX_DASH = { solid: 'solid', dotted: 'sysDot', dashed: 'dash' };
+      async function downloadPPTX() {
+        try { await loadPptxLib(); }
+        catch { showNotice('No se pudo cargar el exportador PPTX (¿sin internet?)'); return; }
+        try {
+          if (typeof PptxGenJS === 'undefined') throw new Error('librería no disponible');
+          const { shapes, W, H } = modelo.value;
+          const SLIDE_W = 13.333, SLIDE_H = 7.5, MARGIN = 0.5;
+          const k = Math.min((SLIDE_W - 2 * MARGIN) / Math.max(W, 1), (SLIDE_H - 2 * MARGIN) / Math.max(H, 1));
+          const ox = (SLIDE_W - W * k) / 2, oy = (SLIDE_H - H * k) / 2;
+          const X = x => ox + x * k, Y = y => oy + y * k;
+          const hex = c => c.replace('#', '').toUpperCase();
+          const pptx = new PptxGenJS();
+          pptx.layout = 'LAYOUT_WIDE';
+          const slide = pptx.addSlide();
+          const hosted = new Set();
+          const hostOf = (s) => {
+            // Texto centrado dentro de una figura: va como texto DE la figura (se mueven juntos).
+            if (s.kind !== 'rect' && s.kind !== 'circle') return null;
+            const bx = s.kind === 'circle' ? s.cx - s.r : s.x, by = s.kind === 'circle' ? s.cy - s.r : s.y;
+            const bw = s.kind === 'circle' ? s.r * 2 : s.w, bh = s.kind === 'circle' ? s.r * 2 : s.h;
+            const t = shapes.find(t => t.kind === 'text' && t.base === 'central' && !hosted.has(t)
+              && t.x >= bx && t.x <= bx + bw && t.y >= by && t.y <= by + bh);
+            if (t) hosted.add(t);
+            return t || null;
+          };
+          for (const s of shapes) {
+            if (s.kind === 'rect' || s.kind === 'circle') {
+              const isCircle = s.kind === 'circle';
+              const t = hostOf(s);
+              const opts = {
+                x: X(isCircle ? s.cx - s.r : s.x), y: Y(isCircle ? s.cy - s.r : s.y),
+                w: (isCircle ? s.r * 2 : s.w) * k, h: (isCircle ? s.r * 2 : s.h) * k, margin: 0,
+                fill: { color: hex(s.fill) }, line: { color: hex(s.stroke), width: Math.max(0.75, s.sw * k * 72) },
+              };
+              if (t) {
+                slide.addText(String(t.label), {
+                  ...opts, shape: isCircle ? pptx.shapes.OVAL : pptx.shapes.RECTANGLE,
+                  align: 'center', valign: 'middle', fontFace: 'Consolas', fontSize: t.size * k * 72,
+                  italic: !!t.italic, color: hex(t.fill),
+                });
+              } else {
+                slide.addShape(isCircle ? pptx.shapes.OVAL : pptx.shapes.RECTANGLE, opts);
+              }
+            } else if (s.kind === 'line' || s.kind === 'arrow') {
+            const x1 = X(s.x1), y1 = Y(s.y1), x2 = X(s.x2), y2 = Y(s.y2);
+            slide.addShape(pptx.shapes.LINE, {
+                x: Math.min(x1, x2), y: Math.min(y1, y2), w: Math.abs(x2 - x1) || 0.01, h: Math.abs(y2 - y1) || 0.01,
+                flipH: x2 < x1, flipV: y2 < y1,
+                line: { color: hex(s.stroke), width: Math.max(0.75, s.sw * k * 72), dashType: PPTX_DASH[s.dashName] || 'solid', endArrowType: s.kind === 'arrow' ? 'triangle' : 'none' },
+              });
+            } else if (!hosted.has(s)) {
+              const tw = Math.max(String(s.label).length * s.size * 0.6, 10) * 1.3, th = s.size * 1.25;
+              const central = s.base === 'central';
+              slide.addText(String(s.label), {
+                x: X(s.x) - tw * k / 2, y: central ? Y(s.y) - th * k / 2 : Y(s.y) - s.size * k, w: tw * k, h: th * k, margin: 0,
+                align: s.anchor === 'start' ? 'left' : 'center', valign: 'middle',
+                fontFace: 'Consolas', fontSize: s.size * k * 72,
+                italic: !!s.italic, color: hex(s.fill),
+              });
+            }
+          }
+          pptx.writeFile({ fileName: 'estructura.pptx' });
+          showNotice('PPTX descargado');
+        } catch (e) {
+          showNotice('No se pudo generar el PPTX (' + ((e && e.message) || 'error') + ')');
+        }
+      }
+
       // ── Exports SVG/PNG desde shapes[] ──
       function downloadSVG() {
         const { shapes, W, H } = modelo.value;
@@ -630,7 +739,7 @@
       return {
         SPECS, spec, tab, switchTab, estados, est, draft, applyText, modelo, persist,
         NODE_COLORS, LINE_STYLES, DASHES, paintColor, paintStyle, togglePaint, toggleLineStyle, onShapeDown,
-        copied, downloadSVG, downloadPNG, copySVG, copyPNG, copyExcalidraw,
+        copied, downloadSVG, downloadPNG, copySVG, copyPNG, copyExcalidraw, downloadPPTX,
         notice, shareCopied, share, resetArmed, resetTool,
         camera, containerEl, onBgDown, onSvgMove, onSvgUp, onWheel, fit,
         isDark, toggleTheme,

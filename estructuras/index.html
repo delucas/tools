@@ -46,7 +46,7 @@
       <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
         <div>
           <h1 class="h3 mb-1">🧱 Estructuras</h1>
-          <p class="text-body-secondary mb-0">Dibujá matrices, pilas y colas para tus clases.</p>
+          <p class="text-body-secondary mb-0">Dibujá arreglos, matrices, pilas, colas, listas, árboles y grafos para tus clases.</p>
         </div>
         <div class="d-flex flex-wrap gap-2 align-items-center">
           <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ shareCopied ? '¡Copiado!' : '🔗 Compartir' }}</button>
@@ -82,7 +82,7 @@
             <svg class="stage" @mousedown="onBgDown" @mousemove="onSvgMove" @mouseup="onSvgUp" @mouseleave="onSvgUp" @wheel.prevent="onWheel">
               <g :transform="`translate(${camera.offsetX},${camera.offsetY}) scale(${camera.scale})`">
                 <g font-family="Consolas, 'Courier New', monospace" text-anchor="middle">
-                  <g v-for="s in modelo.shapes" :key="s.id" @mousedown="onShapeDown($event, s)" :style="pintando && s.rol ? 'cursor: pointer;' : ''">
+                    <g v-for="s in modelo.shapes" :key="s.id" @mousedown="onShapeDown($event, s)" :style="pintando(s) ? 'cursor: pointer;' : (s.drag ? 'cursor: grab;' : '')">
                     <rect v-if="s.kind === 'rect'" :x="s.x" :y="s.y" :width="s.w" :height="s.h" :fill="s.fill" :stroke="s.stroke" :stroke-width="s.sw" />
                     <circle v-else-if="s.kind === 'circle'" :cx="s.cx" :cy="s.cy" :r="s.r" :fill="s.fill" :stroke="s.stroke" :stroke-width="s.sw" />
                     <line v-else-if="s.kind === 'line'" :x1="s.x1" :y1="s.y1" :x2="s.x2" :y2="s.y2" :stroke="s.stroke" :stroke-width="s.sw" stroke-linecap="round" :stroke-dasharray="s.dasharray || null" />
@@ -109,16 +109,21 @@
 
         <div class="col-12 col-lg-4">
           <div class="card mb-2">
-            <div class="card-body p-2 d-flex flex-wrap gap-1 align-items-center">
-              <span class="small text-body-secondary me-1">🎨 Tocá una forma para pintarla:</span>
-              <button v-for="c in NODE_COLORS" :key="c.hex" class="swatch" :class="{ active: paintColor === c.hex }"
-                :style="{ background: c.hex }" :title="`Pintar de ${c.name}`" @click="togglePaint(c.hex)"></button>
-              <button class="swatch bg-body" :class="{ active: paintColor === '' }" title="Quitar color" @click="togglePaint('')">✖</button>
-              <div class="vr mx-1"></div>
-              <button v-for="(name, st) in LINE_STYLES" :key="st" class="btn btn-sm btn-outline-secondary line-btn" :class="{ active: paintStyle === st }"
-                :title="`Línea ${name}`" @click="toggleLineStyle(st)">
-                <svg width="28" height="10"><line x1="3" y1="5" x2="25" y2="5" stroke="currentColor" stroke-width="2" stroke-linecap="round" :stroke-dasharray="DASHES[st]" /></svg>
-              </button>
+            <div class="card-body p-2">
+              <p class="small text-body-secondary mb-1">🎨 Tocá una forma para pintarla:</p>
+              <div class="d-flex gap-1 align-items-center mb-1">
+                <button v-for="c in NODE_COLORS" :key="c.hex" class="swatch" :class="{ active: paintColor === c.hex }"
+                  :style="{ background: c.hex }" :title="`Pintar de ${c.name}`" @click="togglePaint(c.hex)"></button>
+                <button class="swatch bg-body" :class="{ active: paintColor === '' }" title="Quitar color" @click="togglePaint('')">✖</button>
+              </div>
+              <div class="d-flex flex-wrap gap-1 align-items-center">
+                <button v-for="(name, st) in LINE_STYLES" :key="st" class="btn btn-sm btn-outline-secondary line-btn" :class="{ active: paintStyle === st }"
+                  :title="`Línea ${name}`" @click="toggleLineStyle(st)">
+                  <svg width="28" height="10"><line x1="3" y1="5" x2="25" y2="5" stroke="currentColor" stroke-width="2" stroke-linecap="round" :stroke-dasharray="DASHES[st]" /></svg>
+                </button>
+                <button class="btn btn-sm ms-auto" type="button" @click="clearFormats" :class="clearArmed ? 'btn-danger' : 'btn-outline-secondary'"
+                  :title="clearArmed ? 'Tocá de nuevo para confirmar' : 'Quitar colores y trazos del tab actual'">{{ clearArmed ? '¿Seguro? Tocá de nuevo' : '🧹 Sin formato' }}</button>
+              </div>
             </div>
           </div>
 
@@ -138,7 +143,7 @@
                 </div>
               </div>
               <label class="form-label small text-body-secondary mb-1" for="est-texto">Valores.</label>
-              <textarea id="est-texto" class="form-control form-control-sm font-monospace mb-2" rows="4" v-model="draft"></textarea>
+              <textarea id="est-texto" class="form-control form-control-sm font-monospace mb-2" rows="4" v-model="draft" @keydown="onDraftKey"></textarea>
               <button class="btn btn-dark btn-sm w-100" type="button" @click="applyText">▶ Aplicar</button>
             </div>
           </div>
@@ -161,7 +166,7 @@
   const CELL = 56;
   const INK = '#1e1e1e', PAPER = '#ffffff', MUTED = '#6c757d';
 
-  // Paleta funcional (misma que diagramas, para material consistente).
+  // Paleta funcional para material consistente en clase.
   const NODE_COLORS = [
     { name: 'celeste', hex: '#8be9fd' }, { name: 'verde', hex: '#50fa7b' }, { name: 'naranja', hex: '#ffb86c' },
     { name: 'rosa', hex: '#ff79c6' }, { name: 'violeta', hex: '#bd93f9' }, { name: 'rojo', hex: '#ff5555' },
@@ -182,10 +187,185 @@
     return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.179 ? '#282a36' : '#f8f8f2';
   }
 
+  // ── Ayudas para grafos y árboles (specs grafo y arbol) ──
+  const NODE_R = 22, GRAPH_R = 160;
+  function edgeKeyG(a, b, dirigido) { return dirigido ? `${a}>${b}` : [a, b].sort().join('|'); }
+  // Parseo del grafo: "A-B:3" declara una arista con costo "3" (texto libre,
+  // opcional), "G" sola declara un nodo aislado. Sin bucles.
+  function parseGraph(text, dirigido) {
+    const tokens = String(text).split(/[\n,]/).map(t => t.trim()).filter(Boolean);
+    const nodeLabels = [], nodeSet = new Set(), edgeSet = new Set(), edges = [];
+    const addNode = (label) => { if (!nodeSet.has(label)) { nodeSet.add(label); nodeLabels.push(label); } };
+    for (const tok of tokens) {
+      const [edgePart, weightPart = ''] = tok.split(':').map(s => s.trim());
+      const parts = edgePart.split('-').map(s => s.trim()).filter(Boolean);
+      if (parts.length >= 2) {
+        const [a, b] = parts;
+        addNode(a); addNode(b);
+        if (a === b) continue;
+        const key = edgeKeyG(a, b, dirigido);
+        if (!edgeSet.has(key)) { edgeSet.add(key); edges.push({ a, b, w: weightPart, key }); }
+      } else if (parts.length === 1) {
+        addNode(parts[0]);
+      }
+    }
+    return { nodeLabels, edges };
+  }
+  // Layout circular que conserva las posiciones conocidas (las guarda el arrastre en st.pos).
+  function circlePos(labels, known) {
+    const pos = {};
+    labels.forEach((label, i) => {
+      if (known[label]) { pos[label] = known[label]; return; }
+      const ang = (i / labels.length) * Math.PI * 2 - Math.PI / 2;
+      pos[label] = { x: Math.cos(ang) * GRAPH_R, y: Math.sin(ang) * GRAPH_R };
+    });
+    return pos;
+  }
+  // Punta de flecha recta: tip en (x2,y2), de 11x5.
+  function arrowHead(x1, y1, x2, y2) {
+    const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len, uy = dy / len, bx = x2 - ux * 11, by = y2 - uy * 11;
+    return `${r2(x2)},${r2(y2)} ${r2(bx - uy * 5)},${r2(by + ux * 5)} ${r2(bx + uy * 5)},${r2(by - ux * 5)}`;
+  }
+  // Árbol: parseo por bloques indentados (tabs o espacios).
+  function parseTree(text) {
+    const roots = [], stack = [];
+    let id = 0;
+    for (const raw of String(text).split('\n')) {
+      const line = raw.replace(/\t/g, '  ');
+      const m = line.match(/^(\s*)(.*)$/);
+      const label = m[2].trim();
+      if (!label) continue;
+      const node = { id: id++, label, children: [] };
+      const indent = m[1].length;
+      while (stack.length && stack[stack.length - 1].indent >= indent) stack.pop();
+      if (stack.length) stack[stack.length - 1].node.children.push(node);
+      else roots.push(node);
+      stack.push({ indent, node });
+    }
+    return roots;
+  }
+  // Árbol: layout compacto por profundidad, con padres centrados sobre sus hijos.
+  function layoutTree(roots) {
+    const UX = NODE_R * 2 + 26, UY = NODE_R * 2 + 52;
+    const pos = new Map();
+    let cursor = 0, minX = 0, maxX = 0;
+    function walk(node, depth) {
+      if (!node.children.length) {
+        pos.set(node, { x: cursor * UX, y: depth * UY });
+        minX = Math.min(minX, cursor * UX); maxX = Math.max(maxX, cursor * UX);
+        cursor++;
+      } else {
+        node.children.forEach(ch => walk(ch, depth + 1));
+        const xs = node.children.map(ch => pos.get(ch).x);
+        const x = (Math.min(...xs) + Math.max(...xs)) / 2;
+        pos.set(node, { x, y: depth * UY });
+        minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+      }
+    }
+    roots.forEach(r => { walk(r, 0); cursor += 1; });
+    const shift = -(minX + maxX) / 2;
+    for (const p of pos.values()) p.x += shift;
+    return pos;
+  }
+  // Posiciones + recentrado del grafo (lo comparten dibujar() y onDrag()).
+  // El recentrado se congela por versión del texto: al arrastrar un nodo, el
+  // resto del dibujo no se mueve (el nodo sigue al cursor 1:1).
+  function grafoModelo(st) {
+    const dirigido = (st.opts.tipo || 'dirigido') === 'dirigido';
+    const { nodeLabels, edges } = parseGraph(st.text, dirigido);
+    if (!st.pos) st.pos = {};
+    const pos = circlePos(nodeLabels, st.pos);
+    const PAD = 28;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const l of nodeLabels) {
+      const p = pos[l];
+      x0 = Math.min(x0, p.x - NODE_R); y0 = Math.min(y0, p.y - NODE_R);
+      x1 = Math.max(x1, p.x + NODE_R); y1 = Math.max(y1, p.y + NODE_R);
+    }
+    if (!st.org || st._t !== st.text) {
+      st.org = nodeLabels.length ? { x: PAD - x0, y: PAD - y0 } : { x: 0, y: 0 };
+      st._t = st.text;
+    }
+    return { dirigido, nodeLabels, edges, pos,
+      ox: st.org.x, oy: st.org.y,
+      W: nodeLabels.length ? (x1 - x0 + PAD * 2) : 1, H: nodeLabels.length ? (y1 - y0 + PAD * 2) : 1 };
+  }
+  // Punteros del arreglo: "letra:índice-visible" separados por coma (p. ej. "i:2, j:0").
+  function parsePtrs(str, base, n) {
+    const ptrs = [];
+    for (const tok of String(str || '').split(/[\n,]/).map(t => t.trim()).filter(Boolean)) {
+      const m = tok.match(/^(.+?)\s*:\s*(-?\d+)$/);
+      if (!m) continue;
+      const p = Number(m[2]) - base;
+      if (p >= 0 && p < n) ptrs.push({ label: m[1].trim(), pos: p });
+    }
+    return ptrs;
+  }
+
   // ── Specs: cada estructura declara hint, ejemplo, opciones y dibujar() ──
   // dibujar(estado) -> { shapes, W, H }: formas en coordenadas locales (0,0).
   // roles de pintura: 'celda' (relleno), 'linea' (trazo).
   const SPECS = [
+    {
+      slug: 'arreglo', nombre: 'Arreglo',
+      hint: 'Valores separados por coma o por línea. Punteros como i:2 (letra:índice visible), separados por coma. Arrastrá ⬆ para moverlos.',
+      ejemplo: '4, 7, 2, 9, 1',
+      opciones: [
+        { key: 'nombre', etiqueta: 'Nombre', tipo: 'texto', defecto: 'v' },
+        { key: 'base', etiqueta: 'Base', tipo: 'select', valores: [0, 1], defecto: 0 },
+        { key: 'punteros', etiqueta: 'Punteros', tipo: 'texto', defecto: 'i:2' },
+      ],
+      dibujar(st) {
+        const MAX_N = 64;
+        let vals = String(st.text).split(/[\n,]/).map(t => t.trim()).filter(v => v !== '');
+        let recortado = false;
+        if (vals.length > MAX_N) { vals = vals.slice(0, MAX_N); recortado = true; }
+        const name = (st.opts.nombre || '').trim();
+        const nameH = name ? 30 : 0;
+        const base = Number(st.opts.base) === 1 ? 1 : 0;
+        const ptrs = parsePtrs(st.opts.punteros, base, vals.length);
+        const FS = 17;
+        const shapes = [];
+        vals.forEach((v, i) => {
+          const x = i * CELL, y = nameH, id = `a-${i}`;
+          const fill = st.colors[id] || PAPER;
+          shapes.push({ id, kind: 'rect', rol: 'celda', x, y, w: CELL, h: CELL, fill, stroke: INK, sw: 1.5 });
+          shapes.push({ id: `at-${i}`, kind: 'text', rol: null, x: x + CELL / 2, y: y + CELL / 2, size: FS, fill: fill !== PAPER ? textColorOn(fill) : INK, anchor: 'middle', base: 'central', label: v });
+          shapes.push({ id: `ai-${i}`, kind: 'text', rol: null, x: x + CELL / 2, y: y + CELL + 13, size: 11, fill: MUTED, anchor: 'middle', base: null, label: String(base + i) });
+        });
+        // Punteros agrupados por celda; si comparten se abren en abanico.
+        const byPos = new Map();
+        ptrs.forEach((p, n) => { p.n = n; if (!byPos.has(p.pos)) byPos.set(p.pos, []); byPos.get(p.pos).push(p); });
+        const gy = nameH + CELL + 13 + 18;
+        for (const [, list] of byPos) {
+          list.forEach((p, k) => {
+            const cx = p.pos * CELL + CELL / 2 + (k - (list.length - 1) / 2) * 20;
+            const color = NODE_COLORS[p.n % NODE_COLORS.length].hex;
+            const gid = `g-p${p.n}`;
+            shapes.push({ id: `ap-${p.n}`, kind: 'text', rol: null, grupo: gid, x: cx, y: gy, size: 24, fill: color, anchor: 'middle', base: 'central', label: FLECHAS.arriba });
+            shapes.push({ id: `ap-${p.n}-t`, kind: 'text', rol: null, grupo: gid, x: cx, y: gy + 26, size: 14, fill: color, anchor: 'middle', base: 'central', label: p.label, italic: true });
+            // Área de toque para arrastrar (los textos no reciben mouse).
+            shapes.push({ id: `ap-${p.n}-hit`, kind: 'rect', rol: null, ghost: true, drag: `p${p.n}`, x: cx - 16, y: gy - 20, w: 32, h: 66, fill: 'transparent', stroke: 'none', sw: 0 });
+          });
+        }
+        if (name) {
+          shapes.push({ id: 'a-name', kind: 'text', rol: null, x: vals.length * CELL / 2, y: 18, size: 16, fill: INK, anchor: 'middle', base: null, label: name });
+        }
+        const W = Math.max(vals.length * CELL, 1);
+        const H = nameH + CELL + 8 + (vals.length ? 24 : 0) + (ptrs.length ? 61 : 0);
+        return { shapes, W, H, recortado };
+      },
+      onDrag(st, key, x) {
+        const n = Number(key.slice(1));
+        const base = Number(st.opts.base) === 1 ? 1 : 0;
+        const vals = String(st.text).split(/[\n,]/).map(t => t.trim()).filter(v => v !== '');
+        const list = parsePtrs(st.opts.punteros, base, vals.length);
+        if (!list[n]) return;
+        list[n].pos = Math.max(0, Math.min(vals.length - 1, Math.round(x / CELL - 0.5)));
+        st.opts.punteros = list.map(p => `${p.label}:${p.pos + base}`).join(', ');
+      },
+    },
     {
       slug: 'matriz', nombre: 'Matriz',
       hint: 'Una fila por línea, columnas separadas por coma. Las filas cortas se rellenan.',
@@ -293,6 +473,188 @@
         return { shapes, W, H, recortado };
       },
     },
+    {
+      slug: 'lista', nombre: 'Lista',
+      hint: 'Valores separados por coma o por línea. Elegí el tipo y qué punteros mostrar.',
+      ejemplo: '5, 10, 15, 20',
+      opciones: [
+        { key: 'nombre', etiqueta: 'Nombre', tipo: 'texto', defecto: '' },
+        { key: 'tipo', etiqueta: 'Tipo', tipo: 'select', valores: ['simple', 'doble', 'circular'], defecto: 'simple' },
+        { key: 'head', etiqueta: 'Head', tipo: 'check', defecto: true },
+        { key: 'tail', etiqueta: 'Tail', tipo: 'check', defecto: false },
+      ],
+      dibujar(st) {
+        const MAX_N = 12;
+        let vals = String(st.text).split(/[\n,]/).map(t => t.trim()).filter(v => v !== '');
+        let recortado = false;
+        if (vals.length > MAX_N) { vals = vals.slice(0, MAX_N); recortado = true; }
+        const name = (st.opts.nombre || '').trim();
+        const nameH = name ? 30 : 0;
+        const doble = (st.opts.tipo || 'simple') === 'doble', circ = (st.opts.tipo || 'simple') === 'circular';
+        const conHead = st.opts.head !== false, conTail = st.opts.tail === true;
+        const conPtr = vals.length > 0 && (conHead || conTail);
+        const labelY = nameH + 12, gy = labelY + 24;
+        const nodeY = conPtr ? gy + 22 : nameH;
+        const DW = 56, DH = 56, PW = 28, GAP = 44;
+        const nodeW = doble ? PW + DW + PW : DW + PW;
+        const X = (i) => i * (nodeW + GAP);
+        const dataX = (i) => X(i) + (doble ? PW : 0);
+        const dataCX = (i) => dataX(i) + DW / 2;
+        const midY = nodeY + DH / 2;
+        const FS = 17;
+        const shapes = [];
+        vals.forEach((v, i) => {
+          const id = `l-${i}`, fill = st.colors[id] || PAPER;
+          const gid = `g-n${i}`; // dato + punteros viajan juntos en los exports
+          shapes.push({ id, kind: 'rect', rol: 'celda', grupo: gid, x: dataX(i), y: nodeY, w: DW, h: DH, fill, stroke: INK, sw: 1.5 });
+          shapes.push({ id: `lt-${i}`, kind: 'text', rol: null, grupo: gid, x: dataCX(i), y: midY, size: FS, fill: fill !== PAPER ? textColorOn(fill) : INK, anchor: 'middle', base: 'central', label: v });
+          // Cuadradito puntero: hereda el color del dato (no se pinta aparte).
+          shapes.push({ id: `ln-${i}`, kind: 'rect', rol: null, grupo: gid, x: dataX(i) + DW, y: nodeY, w: PW, h: DH, fill, stroke: INK, sw: 1.5 });
+          if (doble) {
+            shapes.push({ id: `lp-${i}`, kind: 'rect', rol: null, grupo: gid, x: X(i), y: nodeY, w: PW, h: DH, fill, stroke: INK, sw: 1.5 });
+          }
+        });
+        const flecha = (x1, y1, x2, y2, eid, gid) => {
+          shapes.push({ id: eid, kind: 'arrow', rol: 'linea', grupo: gid, x1, y1, x2, y2, stroke: MUTED, sw: 2, head: arrowHead(x1, y1, x2, y2) });
+          shapes.push({ id: eid + '-hit', kind: 'line', rol: 'linea', ghost: true, pinta: eid, x1, y1, x2, y2, stroke: 'transparent', sw: 14 });
+        };
+        const cruz = (x, y, eid, gid) => {
+          const m = 7;
+          shapes.push({ id: eid + '-a', kind: 'line', rol: null, grupo: gid, x1: x + m, y1: y + m, x2: x + PW - m, y2: y + DH - m, stroke: INK, sw: 2 });
+          shapes.push({ id: eid + '-b', kind: 'line', rol: null, grupo: gid, x1: x + PW - m, y1: y + m, x2: x + m, y2: y + DH - m, stroke: INK, sw: 2 });
+        };
+        for (let i = 0; i + 1 < vals.length; i++) {
+          // Las flechas salen desde adentro del cuadradito puntero.
+          const fy = doble ? midY + 9 : midY;
+          flecha(dataX(i) + DW + PW / 2, fy, dataX(i + 1) - (doble ? PW : 0), fy, `l-e${i}`, `g-e${i}`);
+          if (doble) {
+            const by = midY - 9;
+            flecha(dataX(i + 1) - PW / 2, by, dataX(i) + DW + PW, by, `l-b${i}`, `g-b${i}`);
+          }
+        }
+        if (vals.length && !circ) {
+          cruz(dataX(vals.length - 1) + DW, nodeY, 'l-xlast', 'g-xlast');
+        }
+        if (vals.length && doble) {
+          cruz(X(0), nodeY, 'l-xfirst', 'g-xfirst');
+        }
+        if (vals.length && circ) {
+          // Retorno por debajo: baja desde el último puntero, cruza y sube
+          // con punta al medio del primer nodo.
+          const ex = dataX(vals.length - 1) + DW + PW / 2, fx = dataX(0) + DW / 2;
+          const retY = nodeY + DH + 44, gid = 'g-ret';
+          shapes.push({ id: 'l-ret1', kind: 'line', rol: 'linea', grupo: gid, x1: ex, y1: midY, x2: ex, y2: retY, stroke: MUTED, sw: 2 });
+          shapes.push({ id: 'l-ret2', kind: 'line', rol: 'linea', grupo: gid, x1: ex, y1: retY, x2: fx, y2: retY, stroke: MUTED, sw: 2 });
+          shapes.push({ id: 'l-ret3', kind: 'arrow', rol: 'linea', grupo: gid, x1: fx, y1: retY, x2: fx, y2: nodeY + DH, stroke: MUTED, sw: 2, head: arrowHead(fx, retY, fx, nodeY + DH) });
+        }
+        if (conPtr) {
+          const marca = (cx, etiqueta, gid, id) => {
+            shapes.push({ id: id + '-t', kind: 'text', rol: null, grupo: gid, x: cx, y: labelY, size: 14, fill: INK, anchor: 'middle', base: null, label: etiqueta, italic: true });
+            shapes.push({ id, kind: 'text', rol: null, grupo: gid, x: cx, y: gy, size: 24, fill: INK, anchor: 'middle', base: 'central', label: FLECHAS.abajo });
+          };
+          if (conHead) marca(dataCX(0), 'head', 'g-head', 'l-head');
+          if (conTail) marca(dataCX(vals.length - 1), 'tail', 'g-tail', 'l-tail');
+        }
+        const totalW = vals.length ? X(vals.length - 1) + nodeW : 0;
+        if (name && vals.length) {
+          shapes.push({ id: 'l-name', kind: 'text', rol: null, x: totalW / 2, y: 18, size: 16, fill: INK, anchor: 'middle', base: null, label: name });
+        }
+        const W = Math.max(totalW, 1);
+        const H = (vals.length ? (circ ? nodeY + DH + 44 : nodeY + DH) : 0) + 8;
+        return { shapes, W, H, recortado };
+      },
+    },
+    {
+      slug: 'arbol', nombre: 'Árbol',
+      hint: 'Un nodo por línea, con sangría para los hijos (Tab mete 2 espacios). El layout es automático.',
+      ejemplo: 'raiz\n  hijoa\n  hijob\n    hijo1deb\n    hijo2deb',
+      tabIndent: true,
+      opciones: [],
+      dibujar(st) {
+        const roots = parseTree(st.text);
+        const order = [];
+        const collect = (n) => { order.push(n); n.children.forEach(collect); };
+        roots.forEach(collect);
+        const pos = layoutTree(roots);
+        const FS = 16, PAD = 28;
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const n of order) {
+          const p = pos.get(n);
+          x0 = Math.min(x0, p.x - NODE_R); y0 = Math.min(y0, p.y - NODE_R);
+          x1 = Math.max(x1, p.x + NODE_R); y1 = Math.max(y1, p.y + NODE_R);
+        }
+        const ox = order.length ? PAD - x0 : 0, oy = order.length ? PAD - y0 : 0;
+        const shapes = [];
+        const idxOf = new Map(order.map((n, i) => [n, i]));
+        let k = 0;
+        const link = (n) => {
+          n.children.forEach(ch => {
+            const p1 = pos.get(n), p2 = pos.get(ch);
+            const dx = p2.x - p1.x, dy = p2.y - p1.y, len = Math.hypot(dx, dy) || 1;
+            const ux = dx / len, uy = dy / len;
+            const ax1 = p1.x + ox + ux * NODE_R, ay1 = p1.y + oy + uy * NODE_R;
+            const ax2 = p2.x + ox - ux * NODE_R, ay2 = p2.y + oy - uy * NODE_R;
+            const eid = `e-${n.label}>${ch.label}#${k++}`, gid = `g-t${idxOf.get(n)}-${idxOf.get(ch)}`;
+            shapes.push({ id: eid, kind: 'arrow', rol: 'linea', grupo: gid, x1: ax1, y1: ay1, x2: ax2, y2: ay2, stroke: MUTED, sw: 2, head: arrowHead(ax1, ay1, ax2, ay2) });
+            shapes.push({ id: eid + '-hit', kind: 'line', rol: 'linea', ghost: true, pinta: eid, x1: ax1, y1: ay1, x2: ax2, y2: ay2, stroke: 'transparent', sw: 14 });
+            link(ch);
+          });
+        };
+        roots.forEach(link);
+        order.forEach((n, i) => {
+          const p = pos.get(n), nid = 't-' + i;
+          const fill = st.colors[nid] || PAPER;
+          shapes.push({ id: nid, kind: 'circle', rol: 'nodo', cx: p.x + ox, cy: p.y + oy, r: NODE_R, fill, stroke: INK, sw: 1.5 });
+          shapes.push({ id: nid + '-t', kind: 'text', rol: null, x: p.x + ox, y: p.y + oy, size: FS, fill: fill !== PAPER ? textColorOn(fill) : INK, anchor: 'middle', base: 'central', label: n.label });
+        });
+        const W = order.length ? (x1 - x0 + PAD * 2) : 1;
+        const H = order.length ? (y1 - y0 + PAD * 2) : 1;
+        return { shapes, W, H };
+      },
+    },
+    {
+      slug: 'grafo', nombre: 'Grafo',
+      hint: 'Una arista por token (coma o línea): A-B:3 declara costo 3, G sola es un nodo aislado. Arrastrá los nodos para acomodarlos.',
+      ejemplo: '0-1:7\n0-2:3\n2-1:2\n2-3:8\n1-3:2',
+      opciones: [
+        { key: 'tipo', etiqueta: 'Tipo', tipo: 'select', valores: ['dirigido', 'no dirigido'], defecto: 'dirigido' },
+      ],
+      dibujar(st) {
+        const m = grafoModelo(st);
+        const FS = 16;
+        const keys = new Set(m.edges.map(e => e.key));
+        const shapes = [];
+        for (const e of m.edges) {
+          const p1 = m.pos[e.a], p2 = m.pos[e.b];
+          const dx = p2.x - p1.x, dy = p2.y - p1.y, len = Math.hypot(dx, dy) || 1;
+          const ux = dx / len, uy = dy / len;
+          // Ida y vuelta se corren a lados opuestos para no superponerse.
+          const off = (m.dirigido && keys.has(edgeKeyG(e.b, e.a, true))) ? 9 : 0;
+          const ax1 = p1.x + m.ox - uy * off + ux * NODE_R, ay1 = p1.y + m.oy + ux * off + uy * NODE_R;
+          const ax2 = p2.x + m.ox - uy * off - ux * NODE_R, ay2 = p2.y + m.oy + ux * off - uy * NODE_R;
+          const eid = 'e-' + e.key, gid = 'g-' + e.key;
+          const edge = { id: eid, kind: m.dirigido ? 'arrow' : 'line', rol: 'linea', grupo: gid, x1: ax1, y1: ay1, x2: ax2, y2: ay2, stroke: MUTED, sw: 2 };
+          if (m.dirigido) edge.head = arrowHead(ax1, ay1, ax2, ay2);
+          shapes.push(edge);
+          // Área de toque ancha para pintar el trazo sin puntería.
+          shapes.push({ id: eid + '-hit', kind: 'line', rol: 'linea', ghost: true, pinta: eid, x1: ax1, y1: ay1, x2: ax2, y2: ay2, stroke: 'transparent', sw: 14 });
+          if (e.w) {
+            shapes.push({ id: eid + '-w', kind: 'text', rol: null, grupo: gid, x: (ax1 + ax2) / 2 - uy * 13, y: (ay1 + ay2) / 2 + ux * 13, size: 13, fill: MUTED, anchor: 'middle', base: 'central', label: e.w });
+          }
+        }
+        for (const l of m.nodeLabels) {
+          const p = m.pos[l], nid = 'n-' + l;
+          const fill = st.colors[nid] || PAPER;
+          shapes.push({ id: nid, kind: 'circle', rol: 'nodo', drag: l, cx: p.x + m.ox, cy: p.y + m.oy, r: NODE_R, fill, stroke: INK, sw: 1.5 });
+          shapes.push({ id: nid + '-t', kind: 'text', rol: null, x: p.x + m.ox, y: p.y + m.oy, size: FS, fill: fill !== PAPER ? textColorOn(fill) : INK, anchor: 'middle', base: 'central', label: l });
+        }
+        return { shapes, W: m.W, H: m.H };
+      },
+      onDrag(st, key, x, y) {
+        const m = grafoModelo(st);
+        st.pos[key] = { x: Math.round((x - m.ox) * 10) / 10, y: Math.round((y - m.oy) * 10) / 10 };
+      },
+    },
   ];
   const SPEC = (slug) => SPECS.find(s => s.slug === slug) || SPECS[0];
 
@@ -306,6 +668,7 @@
   // ── Emisor SVG genérico desde shapes[] ──
   const r2 = (v) => String(Math.round(v * 100) / 100);
   function shapesToSVG(shapes, W, H) {
+    shapes = shapes.filter(s => !s.ghost); // áreas de toque: solo pantalla
     const one = (s) => {
       if (s.kind === 'rect') return `<rect x="${r2(s.x)}" y="${r2(s.y)}" width="${r2(s.w)}" height="${r2(s.h)}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.sw}"/>`;
       if (s.kind === 'circle') return `<circle cx="${r2(s.cx)}" cy="${r2(s.cy)}" r="${r2(s.r)}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${s.sw}"/>`;
@@ -367,6 +730,7 @@
     });
     const rects = [];
     for (const s of shapes) {
+      if (s.ghost) continue; // áreas de toque: solo pantalla
       if (s.kind === 'rect' || s.kind === 'circle') {
         const id = exId();
         const isCircle = s.kind === 'circle';
@@ -407,6 +771,28 @@
         t.verticalAlign = 'middle';
         host.boundElements.push({ id: t.id, type: 'text' });
       }
+    }
+    // Flechas atadas a sus nodos: al mover un nodo en Excalidraw, lo siguen.
+    // Círculos por borde (grafos/árboles); rectángulos por contenido (listas:
+    // la flecha nace adentro del cuadradito y muere en el borde del dato).
+    const ellipses = elements.filter(e => e.type === 'ellipse' && e.width === e.height);
+    const boxes = elements.filter(e => e.type === 'rectangle');
+    const EPS = 1; // los puntos vienen redondeados a 2 decimales
+    const contiene = (wx, wy, r) => wx >= r.x - EPS && wx <= r.x + r.width + EPS && wy >= r.y - EPS && wy <= r.y + r.height + EPS;
+    for (const a of elements.filter(e => e.type === 'arrow')) {
+      const ata = (px, py, cual) => {
+        const wx = a.x + px, wy = a.y + py;
+        const circ = ellipses.find(c => Math.abs(Math.hypot(wx - (c.x + c.width / 2), wy - (c.y + c.height / 2)) - c.width / 2) < 4);
+        const box = boxes.filter(r => contiene(wx, wy, r)).sort((p, q) => (p.width * p.height) - (q.width * q.height))[0];
+        const host = circ || box;
+        if (!host) return;
+        a[cual] = { elementId: host.id, mode: 'orbit',
+          fixedPoint: [+((wx - host.x) / host.width).toFixed(4), +((wy - host.y) / host.height).toFixed(4)] };
+        host.boundElements.push({ id: a.id, type: 'arrow' });
+      };
+      const [[sx, sy], [ex, ey]] = a.points;
+      ata(sx, sy, 'startBinding');
+      ata(ex, ey, 'endBinding');
     }
     for (const el of elements) {
       for (const k of ['x', 'y', 'width', 'height']) el[k] = Math.round(el[k] * 100) / 100;
@@ -488,16 +874,45 @@
 
       function togglePaint(hex) { paintStyle.value = null; paintColor.value = paintColor.value === hex ? null : hex; }
       function toggleLineStyle(s) { paintColor.value = null; paintStyle.value = paintStyle.value === s ? null : s; }
+      // ── Sin formato en dos toques: quita colores y trazos del tab actual ──
+      const clearArmed = ref(false);
+      let clearTimer;
+      function clearFormats() {
+        if (!clearArmed.value) {
+          clearArmed.value = true;
+          clearTimeout(clearTimer);
+          clearTimer = setTimeout(() => { clearArmed.value = false; }, 5000);
+          return;
+        }
+        clearTimeout(clearTimer);
+        clearArmed.value = false;
+        est().colors = {};
+        est().dashes = {};
+        persist();
+        showNotice('Formatos quitados');
+      }
+      function pintando(s) {
+        return (paintColor.value !== null && (s.rol === 'celda' || s.rol === 'nodo'))
+          || (paintStyle.value !== null && s.rol === 'linea');
+      }
       function onShapeDown(e, s) {
+        // `pinta` redirige el pintado a otra forma (áreas de toque invisibles).
+        const pid = s.pinta || s.id;
         if (paintColor.value !== null && (s.rol === 'celda' || s.rol === 'nodo')) {
           e.stopPropagation();
-          if (paintColor.value === '') delete est().colors[s.id];
-          else est().colors[s.id] = paintColor.value;
+          if (paintColor.value === '') delete est().colors[pid];
+          else est().colors[pid] = paintColor.value;
           persist();
         } else if (paintStyle.value !== null && s.rol === 'linea') {
           e.stopPropagation();
-          est().dashes[s.id] = paintStyle.value;
+          est().dashes[pid] = paintStyle.value;
           persist();
+        } else if (s.drag && spec.value.onDrag) {
+          // Arrastre del spec (nodos del grafo, punteros del arreglo): el spec
+          // recibe coordenadas de mundo y guarda la nueva posición en su estado.
+          e.stopPropagation();
+          dragging = s.drag;
+          dragMove(e);
         }
       }
 
@@ -505,6 +920,21 @@
         est().text = draft.value;
         if (modelo.value.recortado) showNotice('Entrada recortada al máximo.');
         persist();
+      }
+      // Tab en el textarea mete sangría (specs con tabIndent, como el árbol); Shift+Tab la saca.
+      function onDraftKey(e) {
+        if (!spec.value.tabIndent || e.key !== 'Tab') return;
+        e.preventDefault();
+        const ta = e.target, s = ta.selectionStart ?? 0, t = ta.selectionEnd ?? 0, v = draft.value;
+        const place = (txt, pos) => { draft.value = txt; nextTick(() => { ta.selectionStart = ta.selectionEnd = pos; }); };
+        if (e.shiftKey) {
+          const ls = v.lastIndexOf('\n', s - 1) + 1;
+          let rm = 0;
+          while (rm < 2 && v[ls + rm] === ' ') rm++;
+          if (rm) place(v.slice(0, ls) + v.slice(ls + rm), s - rm);
+        } else {
+          place(v.slice(0, s) + '  ' + v.slice(t), s + 2);
+        }
       }
       function switchTab(slug) {
         tab.value = slug;
@@ -581,18 +1011,28 @@
         const rect = containerEl.value.getBoundingClientRect();
         return { x: e.clientX - rect.left, y: e.clientY - rect.top };
       }
-      let panning = null;
+      let panning = null, dragging = null;
       function onBgDown(e) {
         const m = mousePos(e);
         panning = { x: m.x, y: m.y, offsetX: camera.offsetX, offsetY: camera.offsetY };
       }
+      function dragMove(e) {
+        if (!dragging || !spec.value.onDrag) return false;
+        const m = mousePos(e), w = screenToWorld(m.x, m.y);
+        spec.value.onDrag(est(), dragging, w.x, w.y);
+        return true;
+      }
       function onSvgMove(e) {
+        if (dragMove(e)) return;
         if (!panning) return;
         const m = mousePos(e);
         camera.offsetX = panning.offsetX + (m.x - panning.x);
         camera.offsetY = panning.offsetY + (m.y - panning.y);
       }
-      function onSvgUp() { panning = null; }
+      function onSvgUp() {
+        if (dragging) { dragging = null; persist(); }
+        panning = null;
+      }
       function onWheel(e) {
         const m = mousePos(e);
         const before = screenToWorld(m.x, m.y);
@@ -654,6 +1094,7 @@
             return t || null;
           };
           for (const s of shapes) {
+            if (s.ghost) continue; // áreas de toque: solo pantalla
             if (s.kind === 'rect' || s.kind === 'circle') {
               const isCircle = s.kind === 'circle';
               const t = hostOf(s);
@@ -737,8 +1178,9 @@
       onBeforeUnmount(() => resizeObserver.disconnect());
 
       return {
-        SPECS, spec, tab, switchTab, estados, est, draft, applyText, modelo, persist,
-        NODE_COLORS, LINE_STYLES, DASHES, paintColor, paintStyle, togglePaint, toggleLineStyle, onShapeDown,
+        SPECS, spec, tab, switchTab, estados, est, draft, applyText, onDraftKey, modelo, persist,
+        NODE_COLORS, LINE_STYLES, DASHES, paintColor, paintStyle, togglePaint, toggleLineStyle, pintando, onShapeDown,
+        clearArmed, clearFormats,
         copied, downloadSVG, downloadPNG, copySVG, copyPNG, copyExcalidraw, downloadPPTX,
         notice, shareCopied, share, resetArmed, resetTool,
         camera, containerEl, onBgDown, onSvgMove, onSvgUp, onWheel, fit,

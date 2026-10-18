@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%F0%9F%93%90%3C/text%3E%3C/svg%3E">
+  <title>Papeles — Tamaños de papel ISO</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+  <style>
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
+    p.signature { font-size: 0.8em; }
+    .grafico { max-width: 100%; height: auto; display: block; }
+    #gramaje { font-size: 16px; }
+    #tabla-serie tbody tr { cursor: pointer; }
+    .dato-valor { font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body>
+  <main class="container py-4" style="max-width: 640px;">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">📐 Papeles</h1>
+        <p class="text-body-secondary mb-0">Los tamaños de papel ISO 216 y 269: series A, B y C, con medidas, píxeles, peso y sobres.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="share" class="btn btn-outline-secondary btn-sm" type="button">🔗 Compartir</button>
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div id="notice" class="alert alert-success py-2 alert-flotante d-none" role="status"></div>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+      <div class="btn-group" role="group" aria-label="Serie de papel">
+        <input type="radio" class="btn-check" name="serie" id="serie-A" value="A" autocomplete="off">
+        <label class="btn btn-outline-primary btn-sm" for="serie-A">Serie A</label>
+        <input type="radio" class="btn-check" name="serie" id="serie-B" value="B" autocomplete="off">
+        <label class="btn btn-outline-primary btn-sm" for="serie-B">Serie B</label>
+        <input type="radio" class="btn-check" name="serie" id="serie-C" value="C" autocomplete="off">
+        <label class="btn btn-outline-primary btn-sm" for="serie-C">Serie C</label>
+      </div>
+      <span id="serie-desc" class="small text-body-secondary"></span>
+    </div>
+
+    <div class="input-group input-group-lg mb-3">
+      <button id="tam-prev" class="btn btn-outline-secondary" type="button" title="Tamaño anterior">‹</button>
+      <select id="tam" class="form-select" aria-label="Tamaño de papel"></select>
+      <button id="tam-next" class="btn btn-outline-secondary" type="button" title="Tamaño siguiente">›</button>
+    </div>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <svg id="hoja" class="grafico w-100" viewBox="0 0 360 300" role="img" aria-label="Hoja de papel a escala con su nombre y medidas"></svg>
+        <p id="hoja-pie" class="form-text mb-0 text-center"></p>
+      </div>
+    </section>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <h2 id="ficha-titulo" class="h5 mb-3">A4</h2>
+        <dl class="row mb-0 small">
+          <dt class="col-5 col-sm-4 text-body-secondary fw-normal">Medidas de norma</dt>
+          <dd class="col-7 col-sm-8 mb-2 dato-valor" id="f-mm"></dd>
+          <dt class="col-5 col-sm-4 text-body-secondary fw-normal">Exactas (calculadas)</dt>
+          <dd class="col-7 col-sm-8 mb-2 dato-valor" id="f-exactas"></dd>
+          <dt class="col-5 col-sm-4 text-body-secondary fw-normal">En centímetros</dt>
+          <dd class="col-7 col-sm-8 mb-2 dato-valor" id="f-cm"></dd>
+          <dt class="col-5 col-sm-4 text-body-secondary fw-normal">En pulgadas</dt>
+          <dd class="col-7 col-sm-8 mb-2 dato-valor" id="f-in"></dd>
+          <dt class="col-5 col-sm-4 text-body-secondary fw-normal">Proporción (alto / ancho)</dt>
+          <dd class="col-7 col-sm-8 mb-2 dato-valor" id="f-ratio"></dd>
+          <dt class="col-5 col-sm-4 text-body-secondary fw-normal">Área</dt>
+          <dd class="col-7 col-sm-8 mb-2 dato-valor" id="f-area"></dd>
+          <dt class="col-5 col-sm-4 text-body-secondary fw-normal">Orientación</dt>
+          <dd class="col-7 col-sm-8 mb-0" id="f-orient"></dd>
+        </dl>
+      </div>
+    </section>
+
+    <h2 class="h5">Tabla de la <span id="tabla-serie-nombre">serie A</span></h2>
+    <p class="text-body-secondary small">Tocá una fila para ver esa medida en detalle.</p>
+    <div class="table-responsive mb-3">
+      <table class="table table-sm table-hover align-middle mb-0" id="tabla-serie">
+        <thead>
+          <tr>
+            <th scope="col">Tamaño</th>
+            <th scope="col" class="text-end">Ancho (mm)</th>
+            <th scope="col" class="text-end">Alto (mm)</th>
+            <th scope="col" class="text-end">Proporción</th>
+            <th scope="col" class="text-end">Área (cm²)</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="form-text">Ancho y alto en milímetros; proporción = alto / ancho (≈ 1,4142, o sea 1:√2); área en centímetros cuadrados.</p>
+
+    <h2 class="h5 mt-4">Píxeles a distintas resoluciones</h2>
+    <div class="table-responsive mb-3">
+      <table class="table table-sm align-middle mb-0">
+        <thead><tr><th scope="col">Resolución</th><th scope="col" class="text-end">Ancho (px)</th><th scope="col" class="text-end">Alto (px)</th></tr></thead>
+        <tbody id="tabla-dpi"></tbody>
+      </table>
+    </div>
+
+    <h2 class="h5 mt-4">Peso del papel</h2>
+    <div class="row g-2 align-items-end">
+      <div class="col-6 col-sm-5">
+        <label for="gramaje" class="form-label">Gramaje (g/m²)</label>
+        <input id="gramaje" type="text" class="form-control form-control-lg" inputmode="decimal" autocomplete="off" value="80">
+      </div>
+      <div class="col-12 col-sm-7">
+        <ul class="list-group small">
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span>Una hoja <span id="peso-tam" class="text-body-secondary"></span></span>
+            <strong id="peso-hoja" class="dato-valor">—</strong>
+          </li>
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span>Una resma (500 hojas)</span>
+            <strong id="peso-resma" class="dato-valor">—</strong>
+          </li>
+        </ul>
+      </div>
+    </div>
+    <p class="form-text">El gramaje es el peso de un metro cuadrado. El papel de oficina típico es de 75 u 80 g/m².</p>
+
+    <h2 class="h5 mt-4">Sobre que le entra</h2>
+    <div class="alert alert-secondary mb-0" role="note">
+      <span id="sobre-texto"></span>
+    </div>
+
+    <hr>
+    <h2 class="h5">Trivia</h2>
+    <ul class="small">
+      <li>La idea nació en <strong>1786</strong>, en una carta del físico alemán <strong>Georg Christoph Lichtenberg</strong>: una serie de hojas con proporción √2 en la que cada tamaño es la mitad del anterior. Se adoptó como norma <strong>DIN 476</strong> en <strong>1922</strong> (obra de Walter Porstmann) y pasó a <strong>ISO 216</strong> en 1975.</li>
+      <li>El truco del √2 ≈ 1,4142: al doblar una hoja por la mitad se vuelve a obtener un rectángulo con la misma proporción. Por eso A3 es exactamente <strong>dos A4</strong> y A4 son <strong>dos A5</strong>.</li>
+      <li><strong>A0 mide exactamente 1 m²</strong> (841 × 1189 mm). Cada paso hacia abajo divide el área por la mitad: A4 = 1/16 m² = 625 cm². El “4” de A4 cuenta los cuatro dobleces (2⁴ = 16 hojas A4 en un A0).</li>
+      <li>La <strong>serie A</strong> es de uso general; la <strong>serie B</strong> cae justo entre dos tamaños A y se usa en libros, pósters y pasaportes; la <strong>serie C</strong> son sobres: Cn es la <em>media geométrica</em> de An y Bn, así que una hoja An entra plana en un sobre Cn.</li>
+      <li>El tamaño de papel más usado del mundo es el <strong>A4</strong> (210 × 297 mm), adoptado por casi todos los países salvo Estados Unidos, Canadá y algunos de América Latina, que usan <strong>Letter</strong> (216 × 279 mm, “carta”) o <strong>Legal</strong> (216 × 356 mm, “oficio”).</li>
+      <li>Con papel de <strong>80 g/m²</strong>, una hoja A4 pesa unos <strong>5 g</strong> y una resma de 500 hojas ≈ <strong>2,5 kg</strong>.</li>
+      <li>Las normas admiten una tolerancia de fabricación de alrededor de <strong>± 1,5 mm</strong> en cada medida.</li>
+      <li>Para imprenta existen los formatos “sin recortar” <strong>RA</strong> (≈ 6% más grande) y <strong>SRA</strong> (≈ 10% más), con sangrado de sobra; y <strong>2A0</strong> y <strong>4A0</strong> (1,5 y 3 m²) para pósters grandes.</li>
+      <li>El sobre más común para una A4 doblada en tres es el <strong>DL</strong> (110 × 220 mm), que no pertenece a la serie C pero es de los más vendidos.</li>
+    </ul>
+
+    <h2 class="h5 mt-4">Fuentes</h2>
+    <ul class="small">
+      <li><a href="https://www.iso.org/standard/36631.html" target="_blank" rel="noopener">ISO 216:2007</a>: papel de escribir, series A y B (norma vigente).</li>
+      <li><a href="https://www.iso.org/standard/4178.html" target="_blank" rel="noopener">ISO 269:1985</a>: sobres de correspondencia, serie C.</li>
+      <li><a href="https://es.wikipedia.org/wiki/ISO_216" target="_blank" rel="noopener">Wikipedia: ISO 216</a> y <a href="https://es.wikipedia.org/wiki/Tama%C3%B1o_de_papel" target="_blank" rel="noopener">tamaño de papel</a>.</li>
+    </ul>
+
+    <hr>
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script>
+    const STORAGE_KEY = 'papeles';
+    const DEFAULTS = { s: 'A', n: 4, g: '80' };
+    const SQRT2 = Math.SQRT2;
+    const SERIES = {
+      A: { desc: 'Uso general: papelería, impresión y oficina.', areaBase: 1 },
+      B: { desc: 'Entre dos A consecutivos: libros, pósters, pasaportes.', areaBase: SQRT2 },
+      C: { desc: 'Sobres: envuelven las hojas A y B.', areaBase: Math.pow(2, 0.25) },
+    };
+    const SIZES = {
+      A: [[841, 1189], [594, 841], [420, 594], [297, 420], [210, 297], [148, 210], [105, 148], [74, 105], [52, 74], [37, 52], [26, 37]],
+      B: [[1000, 1414], [707, 1000], [500, 707], [353, 500], [250, 353], [176, 250], [125, 176], [88, 125], [62, 88], [44, 62], [31, 44]],
+      C: [[917, 1297], [648, 917], [458, 648], [324, 458], [229, 324], [162, 229], [114, 162], [81, 114], [57, 81], [40, 57], [28, 40]],
+    };
+    const DPIS = [72, 96, 150, 300];
+    const $ = (id) => document.getElementById(id);
+
+    const svgHoja = $('hoja'), hojaPie = $('hoja-pie'), fichaTitulo = $('ficha-titulo'),
+      serieDesc = $('serie-desc'), selectTam = $('tam'), tablaSerie = $('tabla-serie').querySelector('tbody'),
+      tablaDpi = $('tabla-dpi'), sobreTexto = $('sobre-texto'), tablaSerieNombre = $('tabla-serie-nombre'),
+      gramaje = $('gramaje'), notice = $('notice');
+
+    let state = { ...DEFAULTS };
+    let fromUrl = false;
+    let noticeTimer;
+
+    // ---------- Datos ----------
+
+    function nombreTam(s, n) { return s + n; }
+    function dims(s, n) { return SIZES[s][n]; }
+    function areaM2(s, n) { return SERIES[s].areaBase / Math.pow(2, n); }
+    function exactas(s, n) {
+      const a = areaM2(s, n) * 1e6; // mm²
+      const w = Math.sqrt(a / SQRT2);
+      return { w, h: w * SQRT2 };
+    }
+
+    // ---------- Formato ----------
+
+    const num = (x, d) => Number(x).toFixed(d).replace('.', ',');
+    const mil = (x, d) => Number(x).toLocaleString('es-AR', { minimumFractionDigits: d || 0, maximumFractionDigits: d || 0 });
+
+    function mostrar(texto, ms) {
+      notice.textContent = texto;
+      notice.classList.remove('d-none');
+      clearTimeout(noticeTimer);
+      noticeTimer = setTimeout(() => notice.classList.add('d-none'), ms || 2000);
+    }
+
+    // ---------- Hoja (SVG) ----------
+
+    function dibujarHoja() {
+      const s = state.s, n = state.n;
+      const [w, h] = dims(s, n);
+      const sobre = sobreQueEntra(s, n);
+      svgHoja.innerHTML = '';
+      const W = 360, H = 300, m = 34;
+      const esc = Math.min((W - 2 * m) / w, (H - 2 * m) / h);
+      const rw = w * esc, rh = h * esc;
+      const x = (W - rw) / 2, y = (H - rh) / 2;
+      const cx = x + rw / 2, cy = y + rh / 2;
+      const NS = 'http://www.w3.org/2000/svg';
+      const crea = (tag, attrs) => {
+        const el = document.createElementNS(NS, tag);
+        for (const k in attrs) el.setAttribute(k, attrs[k]);
+        return el;
+      };
+
+      if (sobre) {
+        const ew = sobre.w * esc, eh = sobre.h * esc;
+        svgHoja.append(crea('rect', {
+          x: (cx - ew / 2).toFixed(1), y: (cy - eh / 2).toFixed(1),
+          width: ew.toFixed(1), height: eh.toFixed(1), rx: 4,
+          fill: 'none', stroke: 'var(--bs-secondary-color)', 'stroke-width': 1.5, 'stroke-dasharray': '6 4',
+        }));
+      }
+
+      svgHoja.append(crea('rect', {
+        x: x.toFixed(1), y: y.toFixed(1), width: rw.toFixed(1), height: rh.toFixed(1), rx: 4,
+        fill: 'var(--bs-primary)', 'fill-opacity': 0.12, stroke: 'var(--bs-primary)', 'stroke-width': 2,
+      }));
+
+      const titulo = crea('text', {
+        x: cx.toFixed(1), y: cy.toFixed(1), 'text-anchor': 'middle', 'dominant-baseline': 'central',
+        'font-size': Math.min(48, rw * 0.42).toFixed(1), 'font-weight': '700', fill: 'var(--bs-primary)',
+      });
+      titulo.textContent = nombreTam(s, n);
+      svgHoja.append(titulo);
+
+      // Cota de ancho (abajo)
+      const by = y + rh + 14;
+      svgHoja.append(crea('line', { x1: x.toFixed(1), y1: by, x2: (x + rw).toFixed(1), y2: by, stroke: 'currentColor', 'stroke-width': 1 }));
+      svgHoja.append(crea('line', { x1: x.toFixed(1), y1: by - 4, x2: x.toFixed(1), y2: by + 4, stroke: 'currentColor', 'stroke-width': 1 }));
+      svgHoja.append(crea('line', { x1: (x + rw).toFixed(1), y1: by - 4, x2: (x + rw).toFixed(1), y2: by + 4, stroke: 'currentColor', 'stroke-width': 1 }));
+      const tw = crea('text', { x: cx.toFixed(1), y: (by + 13).toFixed(1), 'text-anchor': 'middle', 'font-size': '11', fill: 'currentColor' });
+      tw.textContent = w + ' mm';
+      svgHoja.append(tw);
+
+      // Cota de alto (derecha)
+      const rx = x + rw + 14;
+      svgHoja.append(crea('line', { x1: rx, y1: y.toFixed(1), x2: rx, y2: (y + rh).toFixed(1), stroke: 'currentColor', 'stroke-width': 1 }));
+      svgHoja.append(crea('line', { x1: rx - 4, y1: y.toFixed(1), x2: rx + 4, y2: y.toFixed(1), stroke: 'currentColor', 'stroke-width': 1 }));
+      svgHoja.append(crea('line', { x1: rx - 4, y1: (y + rh).toFixed(1), x2: rx + 4, y2: (y + rh).toFixed(1), stroke: 'currentColor', 'stroke-width': 1 }));
+      const th = crea('text', { 'text-anchor': 'middle', 'font-size': '11', fill: 'currentColor', transform: `translate(${(rx + 12).toFixed(1)},${cy.toFixed(1)}) rotate(-90)` });
+      th.textContent = h + ' mm';
+      svgHoja.append(th);
+
+      let pie = `${nombreTam(s, n)} · ${w} × ${h} mm`;
+      if (sobre) pie += ` · dentro de un sobre ${sobre.nombre} (${sobre.w} × ${sobre.h} mm, punteado)`;
+      hojaPie.textContent = pie;
+    }
+
+    // ---------- Sobre que contiene / le entra ----------
+
+    function contiene(envW, envH, w, h) { return envW >= w && envH >= h; }
+
+    // Para una hoja A/B, el sobre C más chico que la contiene.
+    function sobreQueEntra(s, n) {
+      if (s === 'C') return null;
+      const [w, h] = dims(s, n);
+      for (let i = SIZES.C.length - 1; i >= 0; i--) {
+        const [cw, ch] = SIZES.C[i];
+        if (contiene(cw, ch, w, h)) return { nombre: 'C' + i, w: cw, h: ch, i };
+      }
+      return null;
+    }
+
+    // Para un sobre C, la hoja A o B más grande que le entra.
+    function hojaQueEntra(s, n) {
+      const [cw, ch] = dims(s, n);
+      const busca = (ser) => {
+        for (let i = 0; i < SIZES[ser].length; i++) {
+          const [w, h] = SIZES[ser][i];
+          if (contiene(cw, ch, w, h)) return { nombre: ser + i, w, h, i };
+        }
+        return null;
+      };
+      return { A: busca('A'), B: busca('B') };
+    }
+
+    // ---------- Ficha ----------
+
+    function pintarFicha() {
+      const s = state.s, n = state.n;
+      const [w, h] = dims(s, n);
+      const ex = exactas(s, n);
+      const ratio = h / w;
+      fichaTitulo.textContent = nombreTam(s, n);
+      $('f-mm').textContent = `${w} × ${h} mm`;
+      $('f-exactas').textContent = `${num(ex.w, 1)} × ${num(ex.h, 1)} mm`;
+      $('f-cm').textContent = `${num(w / 10, 1)} × ${num(h / 10, 1)} cm`;
+      $('f-in').textContent = `${num(w / 25.4, 2)} × ${num(h / 25.4, 2)} in`;
+      const dif = Math.abs(ratio / SQRT2 - 1) * 100;
+      $('f-ratio').textContent = `${num(ratio, 4)} · √2 = ${num(SQRT2, 4)}${dif < 0.01 ? ' (exacto)' : ` (${num(dif, 2)}% de diferencia)`}`;
+      const areaCm = areaM2(s, n) * 1e4;
+      const areaM = areaM2(s, n);
+      $('f-area').textContent = `${mil(areaCm, 1)} cm² · ${num(areaM, 4)} m² · 1/${Math.pow(2, n)} de ${s}0`;
+      $('f-orient').textContent = h > w ? 'Vertical (retrato)' : 'Horizontal (apaisado)';
+    }
+
+    // ---------- Tabla de la serie ----------
+
+    function pintarTabla() {
+      const s = state.s;
+      tablaSerieNombre.textContent = 'serie ' + s;
+      serieDesc.textContent = SERIES[s].desc;
+      tablaSerie.innerHTML = '';
+      SIZES[s].forEach(([w, h], i) => {
+        const tr = document.createElement('tr');
+        if (i === state.n) tr.className = 'table-warning';
+        const th = document.createElement('th');
+        th.scope = 'row';
+        th.textContent = nombreTam(s, i);
+        tr.append(th);
+        const celdas = [`${w}`, `${h}`, num(h / w, 3), mil(areaM2(s, i) * 1e4, 1)];
+        celdas.forEach((txt, j) => {
+          const td = document.createElement('td');
+          td.className = 'text-end' + (j >= 1 ? ' dato-valor' : '');
+          td.textContent = txt;
+          tr.append(td);
+        });
+        tr.addEventListener('click', () => seleccionar(s, i));
+        tablaSerie.append(tr);
+      });
+    }
+
+    // ---------- Píxeles ----------
+
+    function pintarDpi() {
+      const [w, h] = dims(state.s, state.n);
+      tablaDpi.innerHTML = '';
+      DPIS.forEach((dpi) => {
+        const px = (mm) => Math.round((mm / 25.4) * dpi);
+        const tr = document.createElement('tr');
+        const th = document.createElement('th');
+        th.scope = 'row';
+        th.textContent = dpi + ' DPI';
+        tr.append(th);
+        [`${px(w)}`, `${px(h)}`].forEach((t) => {
+          const td = document.createElement('td');
+          td.className = 'text-end dato-valor';
+          td.textContent = t;
+          tr.append(td);
+        });
+        tablaDpi.append(tr);
+      });
+    }
+
+    // ---------- Peso ----------
+
+    function pintarPeso() {
+      const areaM = areaM2(state.s, state.n);
+      const g = parseFloat(String(gramaje.value).trim().replace(',', '.'));
+      const ok = Number.isFinite(g) && g > 0;
+      $('peso-tam').textContent = '(' + nombreTam(state.s, state.n) + ')';
+      $('peso-hoja').textContent = ok ? `${num(areaM * g, 2)} g` : '—';
+      $('peso-resma').textContent = ok ? `${num(areaM * g * 500 / 1000, 2)} kg` : '—';
+    }
+
+    // ---------- Sobre ----------
+
+    function pintarSobre() {
+      const s = state.s, n = state.n;
+      if (s !== 'C') {
+        const [w, h] = dims(s, n);
+        const sobre = sobreQueEntra(s, n);
+        if (sobre) {
+          const margenW = sobre.w - w, margenH = sobre.h - h;
+          sobreTexto.textContent = `Una hoja ${nombreTam(s, n)} (${w} × ${h} mm) entra plana en un sobre ${sobre.nombre} (${sobre.w} × ${sobre.h} mm), con ${margenW} mm de margen a lo ancho y ${margenH} mm a lo alto.`;
+        } else {
+          sobreTexto.textContent = `No hay sobre de la serie C estándar que contenga una hoja ${nombreTam(s, n)} sin doblarla.`;
+        }
+        return;
+      }
+      const [cw, ch] = dims(s, n);
+      const dentro = hojaQueEntra(s, n);
+      const partes = [];
+      if (dentro.A) partes.push(`una ${dentro.A.nombre} (${dentro.A.w} × ${dentro.A.h} mm)`);
+      if (dentro.B) partes.push(`una ${dentro.B.nombre} (${dentro.B.w} × ${dentro.B.h} mm)`);
+      sobreTexto.textContent = partes.length
+        ? `En un sobre ${nombreTam(s, n)} (${cw} × ${ch} mm) entra la hoja más grande de las series A y B: ${partes.join(' o ')}.`
+        : `El sobre ${nombreTam(s, n)} (${cw} × ${ch} mm) es chico para las hojas estándar, pero sirve para tarjetas y papelería pequeña.`;
+    }
+
+    // ---------- Render ----------
+
+    function render() {
+      document.querySelectorAll('input[name="serie"]').forEach((r) => { r.checked = r.value === state.s; });
+      selectTam.innerHTML = '';
+      SIZES[state.s].forEach(([w, h], i) => {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = `${nombreTam(state.s, i)} · ${w} × ${h} mm`;
+        selectTam.append(opt);
+      });
+      selectTam.value = state.n;
+      dibujarHoja();
+      pintarFicha();
+      pintarTabla();
+      pintarDpi();
+      pintarPeso();
+      pintarSobre();
+    }
+
+    // ---------- Estado ----------
+
+    function persistir() {
+      if (fromUrl) return;
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
+    }
+
+    function valido(s) {
+      return s && SERIES[s.s] && Number.isInteger(s.n) && s.n >= 0 && s.n < SIZES[s.s].length;
+    }
+
+    function leerEstado() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return null;
+        const d = JSON.parse(raw);
+        if (valido(d)) return { s: d.s, n: d.n, g: typeof d.g === 'string' ? d.g : DEFAULTS.g };
+      } catch {}
+      return null;
+    }
+
+    function seleccionar(s, n, silencioso) {
+      fromUrl = false;
+      state.s = s;
+      state.n = n;
+      render();
+      if (!silencioso) persistir();
+    }
+
+    function cambiarSeries(s) {
+      state.s = s;
+      state.n = Math.min(state.n, SIZES[s].length - 1);
+      render();
+      persistir();
+    }
+
+    // ---------- Init ----------
+
+    (function init() {
+      const q = new URLSearchParams(location.search);
+      const qs = q.get('s'), qn = parseInt(q.get('n'), 10);
+      if (SERIES[qs] && Number.isInteger(qn) && qn >= 0 && qn < SIZES[qs].length) {
+        fromUrl = true;
+        state = { s: qs, n: qn, g: q.get('g') || DEFAULTS.g };
+        gramaje.value = state.g;
+        render();
+        return;
+      }
+      const stored = leerEstado();
+      state = stored || { ...DEFAULTS };
+      gramaje.value = state.g;
+      if (!stored) persistir();
+      render();
+    })();
+
+    // ---------- Eventos ----------
+
+    document.querySelectorAll('input[name="serie"]').forEach((r) => {
+      r.addEventListener('change', () => { if (fromUrl) fromUrl = false; cambiarSeries(r.value); });
+    });
+    selectTam.addEventListener('change', () => {
+      if (fromUrl) fromUrl = false;
+      seleccionar(state.s, parseInt(selectTam.value, 10));
+    });
+    $('tam-prev').addEventListener('click', () => {
+      if (fromUrl) fromUrl = false;
+      seleccionar(state.s, (state.n - 1 + SIZES[state.s].length) % SIZES[state.s].length);
+    });
+    $('tam-next').addEventListener('click', () => {
+      if (fromUrl) fromUrl = false;
+      seleccionar(state.s, (state.n + 1) % SIZES[state.s].length);
+    });
+    gramaje.addEventListener('input', () => {
+      if (fromUrl) fromUrl = false;
+      state.g = gramaje.value;
+      pintarPeso();
+      persistir();
+    });
+
+    $('share').addEventListener('click', () => {
+      const url = location.origin + location.pathname
+        + '?s=' + encodeURIComponent(state.s) + '&n=' + state.n + '&g=' + encodeURIComponent(state.g);
+      const listo = () => { $('share').textContent = '¡Copiado!'; mostrar('Link copiado'); setTimeout(() => { $('share').textContent = '🔗 Compartir'; }, 1500); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(listo).catch(() => window.prompt('Copiá el link:', url));
+      } else {
+        window.prompt('Copiá el link:', url);
+      }
+    });
+
+    const resetBtn = $('reset');
+    let resetArmada = false, resetTimer;
+    function resetDesarmar() {
+      resetArmada = false;
+      resetBtn.textContent = '🗑️ Reiniciar';
+      resetBtn.classList.remove('btn-danger');
+      resetBtn.classList.add('btn-outline-secondary');
+    }
+    resetBtn.addEventListener('click', () => {
+      if (resetArmada) {
+        clearTimeout(resetTimer);
+        resetDesarmar();
+        try { localStorage.removeItem(STORAGE_KEY); } catch {}
+        state = { ...DEFAULTS };
+        gramaje.value = state.g;
+        history.replaceState(null, '', location.pathname);
+        render();
+        persistir();
+        mostrar('Valores restablecidos');
+        return;
+      }
+      resetArmada = true;
+      resetBtn.textContent = '¿Seguro? Tocá de nuevo';
+      resetBtn.classList.remove('btn-outline-secondary');
+      resetBtn.classList.add('btn-danger');
+      clearTimeout(resetTimer);
+      resetTimer = setTimeout(resetDesarmar, 5000);
+    });
+
+    (() => {
+      const root = document.documentElement;
+      const btn = $('theme-toggle');
+      const leer = () => { try { return localStorage.getItem('theme'); } catch { return null; } };
+      const guardar = (t) => { try { localStorage.setItem('theme', t); } catch {} };
+      const initial = leer() || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        guardar(next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

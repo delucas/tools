@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x265f%3B%3C/text%3E%3C/svg%3E">
+  <title>Gardner — Ajedrez 5×5</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    #tablero {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      width: min(92vw, 460px);
+      margin: 0 auto;
+      border: 2px solid var(--bs-border-color);
+      border-radius: .375rem;
+      overflow: hidden;
+    }
+    #tablero button {
+      aspect-ratio: 1;
+      min-width: 0;
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      font-size: clamp(1.6rem, 8.5vw, 2.7rem);
+      position: relative;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .casilla-clara { background: var(--bs-secondary-bg); }
+    .casilla-oscura { background: color-mix(in srgb, var(--bs-secondary-bg), var(--bs-body-color) 22%); }
+    #tablero .pieza { pointer-events: none; }
+    #tablero .pieza.blanca { color: #fff; -webkit-text-stroke: 1.5px #2b2b2b; }
+    #tablero .pieza.negra { color: #1a1a1a; -webkit-text-stroke: 1.5px #f2f2f2; }
+    #tablero .coord {
+      position: absolute;
+      font-size: .6rem;
+      line-height: 1;
+      font-weight: 600;
+      pointer-events: none;
+      color: var(--bs-body-color);
+      opacity: .5;
+    }
+    #tablero .coord.archivo { right: .18rem; bottom: .16rem; }
+    #tablero .coord.fila { left: .18rem; top: .16rem; }
+    #tablero button.sel { outline: 3px solid var(--bs-primary); outline-offset: -3px; }
+    #tablero button.destino::after {
+      content: '';
+      position: absolute;
+      width: 26%;
+      height: 26%;
+      border-radius: 50%;
+      background: var(--bs-primary);
+      opacity: .55;
+    }
+    #tablero button.destino.ocupado::after {
+      width: 84%;
+      height: 84%;
+      background: transparent;
+      border: 4px solid var(--bs-primary);
+      opacity: .7;
+    }
+    #tablero button.jaque { box-shadow: inset 0 0 0 3px var(--bs-danger); }
+    #promo button { font-size: 1.1rem; }
+    #historial { display: flex; flex-wrap: wrap; gap: .15rem 1rem; max-height: 9rem; overflow-y: auto; }
+    #historial .mv-par { display: inline-flex; align-items: baseline; gap: .35rem; }
+    #historial .mv-num { color: var(--bs-secondary-color); }
+    #historial .mv { cursor: pointer; border-radius: .25rem; padding: 0 .15rem; font-variant-numeric: tabular-nums; }
+    #historial .mv:hover, #historial .mv:focus-visible { background: var(--bs-secondary-bg); outline: 0; }
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
+    p.signature { font-size: 0.8em; }
+
+    /* Pantalla completa del tablero (pensado para celular) */
+    body.pantalla-completa { overflow: hidden; }
+    body.pantalla-completa #panel {
+      position: fixed;
+      inset: 0;
+      z-index: 1040;
+      margin: 0;
+      border: 0;
+      border-radius: 0;
+      background: var(--bs-body-bg);
+    }
+    body.pantalla-completa #panel > .card-body {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: .5rem;
+      width: 100%;
+      max-width: 620px;
+      height: 100%;
+      margin: 0 auto;
+      padding-top: max(1rem, env(safe-area-inset-top));
+      padding-bottom: max(1rem, env(safe-area-inset-bottom));
+    }
+    body.pantalla-completa #panel .ayuda { display: none; }
+    body.pantalla-completa #panel > .card-body > * { flex: 0 0 auto; }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4" style="max-width: 620px;">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">♟️ Gardner</h1>
+        <p class="text-body-secondary mb-0">Ajedrez 5×5 para dos jugadores en el mismo celular.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="share" class="btn btn-outline-secondary btn-sm" type="button">🔗 Compartir</button>
+        <button id="completo" class="btn btn-outline-secondary btn-sm" type="button">⛶ Pantalla completa</button>
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
+        <a class="btn btn-outline-secondary btn-sm" href="https://varichess.org/play/gardner" target="_blank" rel="noopener">🤖 Contra la máquina</a>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div id="notice" class="alert alert-success py-2 alert-flotante d-none" role="status"></div>
+
+    <section id="panel" class="card mb-3">
+      <div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+          <span id="turno" class="fw-semibold">Turno de las blancas</span>
+          <span class="d-flex align-items-center gap-2">
+            <span id="jugada" class="text-body-secondary small">Jugada 1</span>
+            <button id="salir-completo" class="btn btn-outline-secondary btn-sm d-none" type="button">✕ Salir</button>
+          </span>
+        </div>
+        <div id="tablero" role="grid" aria-label="Tablero de ajedrez 5 por 5"></div>
+        <div id="promo" class="alert alert-secondary mt-2 mb-0 d-none" role="group" aria-label="Elegí la pieza de promoción">
+          <span class="small">El peón corona: elegí la pieza.</span>
+          <div class="d-flex flex-wrap gap-2 mt-2"></div>
+        </div>
+        <p id="ultimo" class="form-text mt-2 mb-0">&nbsp;</p>
+        <p class="form-text mt-1 mb-0 ayuda">Tocá una pieza y después su casilla de destino. Los puntos marcan los movimientos legales.</p>
+      </div>
+    </section>
+
+    <section id="resultado" class="card mb-3 border-success d-none">
+      <div class="card-body">
+        <h2 id="resultado-titulo" class="h6"></h2>
+        <p id="resultado-texto" class="mb-2 small"></p>
+        <button id="otra" class="btn btn-primary btn-sm" type="button">Jugar de nuevo</button>
+      </div>
+    </section>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <h2 class="h6 mb-2">📜 Movimientos</h2>
+        <div id="historial" class="small"></div>
+        <p id="historial-vacio" class="text-body-secondary small mb-0">Todavía no hay movimientos.</p>
+        <p class="form-text mt-2 mb-0">Notación en español (R rey, D dama, T torre, A alfil, C caballo); tocá un movimiento para ver qué pieza es.</p>
+      </div>
+    </section>
+
+    <div class="alert alert-info small mb-0" role="note">
+      ♟️ <strong>Gardner minichess:</strong> tablero de 5×5 con rey, dama, torre, alfil, caballo y cinco peones por bando. Sin enroque, sin doble paso de peón ni captura al paso; los peones coronan en la última fila. Gana el jaque mate; ahogado, material insuficiente, triple repetición y 50 jugadas son tablas. Para jugar contra la máquina, <a href="https://varichess.org/play/gardner" target="_blank" rel="noopener">abrí Gardner en varichess</a>.
+    </div>
+
+    <hr>
+
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script>
+    const STORAGE_KEY = 'gardner';
+    const INICIAL = 'RNBQKPPPPP.....ppppprnbqk';
+    const GLIFO = {
+      // Blancas: piezas normales (Miscellaneous Symbols).
+      w: { k: '\u2654', q: '\u2655', r: '\u2656', b: '\u2657', n: '\u2658', p: '\u2659' },
+      // Negras: versiones giradas 180° (Chess Symbols, U+1FA24–U+1FA29) para que miren a quien juega arriba.
+      b: { k: '\u{1FA24}', q: '\u{1FA25}', r: '\u{1FA26}', b: '\u{1FA27}', n: '\u{1FA28}', p: '\u{1FA29}' },
+    };
+    const LETRA = { k: 'R', q: 'D', r: 'T', b: 'A', n: 'C', p: '' };
+    const NOMBRE = { k: 'Rey', q: 'Dama', r: 'Torre', b: 'Alfil', n: 'Caballo', p: 'Peón' };
+    const GENERO = { k: 'm', q: 'f', r: 'f', b: 'm', n: 'm', p: 'm' };
+    const DIRS = {
+      r: [[1, 0], [-1, 0], [0, 1], [0, -1]],
+      b: [[1, 1], [1, -1], [-1, 1], [-1, -1]],
+      q: [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]],
+      k: [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]],
+    };
+    const SALTOS = [[1, 2], [2, 1], [-1, 2], [-2, 1], [1, -2], [2, -1], [-1, -2], [-2, -1]];
+    const ARCHIVOS = 'abcde';
+
+    const inb = (r, c) => r >= 0 && r < 5 && c >= 0 && c < 5;
+    const colorDe = (p) => (p === '.' ? null : (p === p.toUpperCase() ? 'w' : 'b'));
+    const tipoDe = (p) => (p === '.' ? null : p.toLowerCase());
+    const opuesto = (c) => (c === 'w' ? 'b' : 'w');
+    const filaMeta = (c) => (c === 'w' ? 4 : 0);
+    const casilla = (i) => ARCHIVOS[i % 5] + (Math.floor(i / 5) + 1);
+    const $ = (id) => document.getElementById(id);
+
+    const tablero = $('tablero'), turnoEl = $('turno'), jugadaEl = $('jugada'),
+      ultimoEl = $('ultimo'), promoEl = $('promo'), notice = $('notice'),
+      resultado = $('resultado'), resultadoTitulo = $('resultado-titulo'),
+      resultadoTexto = $('resultado-texto'), historialEl = $('historial'),
+      historialVacio = $('historial-vacio');
+
+    let state;
+    let sel = -1;
+    let dests = [];
+    let promoPend = null;
+    let fromUrl = false;
+    let noticeTimer;
+
+    // ---------- Reglas ----------
+
+    function atacado(b, r, c, por) {
+      const pr = por === 'w' ? r - 1 : r + 1;
+      for (const dc of [-1, 1]) {
+        if (inb(pr, c + dc)) {
+          const p = b[pr * 5 + c + dc];
+          if (p !== '.' && colorDe(p) === por && tipoDe(p) === 'p') return true;
+        }
+      }
+      for (const [dr, dc] of SALTOS) {
+        if (inb(r + dr, c + dc)) {
+          const p = b[(r + dr) * 5 + c + dc];
+          if (p !== '.' && colorDe(p) === por && tipoDe(p) === 'n') return true;
+        }
+      }
+      for (const [dr, dc] of DIRS.k) {
+        if (inb(r + dr, c + dc)) {
+          const p = b[(r + dr) * 5 + c + dc];
+          if (p !== '.' && colorDe(p) === por && tipoDe(p) === 'k') return true;
+        }
+      }
+      for (const cl of ['r', 'b']) {
+        for (const [dr, dc] of DIRS[cl]) {
+          let rr = r + dr, cc = c + dc;
+          while (inb(rr, cc)) {
+            const p = b[rr * 5 + cc];
+            if (p !== '.') {
+              if (colorDe(p) === por && (tipoDe(p) === cl || tipoDe(p) === 'q')) return true;
+              break;
+            }
+            rr += dr; cc += dc;
+          }
+        }
+      }
+      return false;
+    }
+
+    function reyDe(b, color) {
+      return b.indexOf(color === 'w' ? 'K' : 'k');
+    }
+
+    function enJaque(b, color) {
+      const k = reyDe(b, color);
+      return atacado(b, Math.floor(k / 5), k % 5, opuesto(color));
+    }
+
+    function pseudo(b, from) {
+      const p = b[from], c = colorDe(p), t = tipoDe(p);
+      const r = Math.floor(from / 5), col = from % 5;
+      const out = [];
+      const mete = (rr, cc) => {
+        if (!inb(rr, cc)) return;
+        const q = b[rr * 5 + cc];
+        if (q === '.' || colorDe(q) !== c) out.push(rr * 5 + cc);
+      };
+      if (t === 'p') {
+        const d = c === 'w' ? 1 : -1;
+        if (inb(r + d, col) && b[(r + d) * 5 + col] === '.') out.push((r + d) * 5 + col);
+        for (const dc of [-1, 1]) {
+          if (!inb(r + d, col + dc)) continue;
+          const q = b[(r + d) * 5 + col + dc];
+          if (q !== '.' && colorDe(q) !== c) out.push((r + d) * 5 + col + dc);
+        }
+      } else if (t === 'n') {
+        for (const [dr, dc] of SALTOS) mete(r + dr, col + dc);
+      } else if (t === 'k') {
+        for (const [dr, dc] of DIRS.k) mete(r + dr, col + dc);
+      } else {
+        const dirs = t === 'r' ? DIRS.r : t === 'b' ? DIRS.b : DIRS.q;
+        for (const [dr, dc] of dirs) {
+          let rr = r + dr, cc = col + dc;
+          while (inb(rr, cc)) {
+            const q = b[rr * 5 + cc];
+            if (q === '.') out.push(rr * 5 + cc);
+            else { if (colorDe(q) !== c) out.push(rr * 5 + cc); break; }
+            rr += dr; cc += dc;
+          }
+        }
+      }
+      return out;
+    }
+
+    function aplica(b, from, to, promo) {
+      const nb = b.split('');
+      const p = nb[from], c = colorDe(p), t = tipoDe(p);
+      let np = p;
+      if (t === 'p' && Math.floor(to / 5) === filaMeta(c)) {
+        np = promo ? (c === 'w' ? promo.toUpperCase() : promo) : (c === 'w' ? 'Q' : 'q');
+      }
+      nb[to] = np;
+      nb[from] = '.';
+      return nb.join('');
+    }
+
+    function destinos(b, from) {
+      const c = colorDe(b[from]);
+      return pseudo(b, from).filter((to) => !enJaque(aplica(b, from, to), c));
+    }
+
+    function legales(b, color) {
+      const out = [];
+      for (let i = 0; i < 25; i++) {
+        const p = b[i];
+        if (p === '.' || colorDe(p) !== color) continue;
+        for (const to of pseudo(b, i)) {
+          if (!enJaque(aplica(b, i, to), color)) out.push({ from: i, to });
+        }
+      }
+      return out;
+    }
+
+    function insuficiente(b) {
+      const cuenta = {};
+      for (const p of b) {
+        if (p === '.') continue;
+        const t = tipoDe(p);
+        if (t !== 'k') cuenta[t] = (cuenta[t] || 0) + 1;
+      }
+      const tipos = Object.keys(cuenta);
+      if (tipos.some((t) => t === 'p' || t === 'r' || t === 'q')) return false;
+      return tipos.reduce((s, t) => s + cuenta[t], 0) <= 1;
+    }
+
+    function evaluar(b, t, half, reps) {
+      const movs = legales(b, t);
+      const jaque = enJaque(b, t);
+      if (movs.length === 0) {
+        return jaque ? { status: 'checkmate', winner: opuesto(t), motivo: null }
+          : { status: 'stalemate', winner: null, motivo: null };
+      }
+      if (insuficiente(b)) return { status: 'draw', winner: null, motivo: 'material' };
+      if (half >= 100) return { status: 'draw', winner: null, motivo: '50' };
+      if ((reps[b + t] || 0) >= 3) return { status: 'draw', winner: null, motivo: 'repeticion' };
+      return { status: 'playing', winner: null, motivo: null };
+    }
+
+    // ---------- Notación ----------
+
+    function notacion(b, from, to, promo) {
+      const p = b[from], t = tipoDe(p);
+      const captura = b[to] !== '.';
+      const a = casilla(from), d = casilla(to);
+      if (t === 'p') {
+        let s = captura ? a[0] + 'x' + d : a + '-' + d;
+        if (promo) s += '=' + LETRA[promo];
+        return s;
+      }
+      return LETRA[t] + a + (captura ? 'x' : '-') + d;
+    }
+
+    function describir(b, from, to, promo) {
+      const t = tipoDe(b[from]), c = colorDe(b[from]);
+      const adj = GENERO[t] === 'f' ? (c === 'w' ? 'blanca' : 'negra') : (c === 'w' ? 'blanco' : 'negro');
+      const cap = b[to] !== '.';
+      let d = NOMBRE[t] + ' ' + adj + ' de ' + casilla(from) + (cap ? ' captura en ' : ' a ') + casilla(to);
+      if (promo) d += ' y corona ' + NOMBRE[promo];
+      return d;
+    }
+
+    // ---------- Estado ----------
+
+    function estadoInicial() {
+      return {
+        b: INICIAL, t: 'w', ply: 0, half: 0, last: null, lt: '', hist: [],
+        reps: { [INICIAL + 'w']: 1 }, status: 'playing', winner: null, motivo: null,
+      };
+    }
+
+    function valido(s) {
+      if (!s || typeof s !== 'object') return false;
+      if (typeof s.b !== 'string' || s.b.length !== 25 || !/^[rnbqkpRNBQKP.]+$/.test(s.b)) return false;
+      if (s.t !== 'w' && s.t !== 'b') return false;
+      if (typeof s.ply !== 'number' || typeof s.half !== 'number') return false;
+      if (!['playing', 'checkmate', 'stalemate', 'draw'].includes(s.status)) return false;
+      if (!s.reps || typeof s.reps !== 'object') return false;
+      if (s.hist !== undefined && !Array.isArray(s.hist)) return false;
+      return true;
+    }
+
+    function leerEstado() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return null;
+        const s = JSON.parse(raw);
+        if (valido(s)) {
+          if (!Array.isArray(s.hist)) s.hist = [];
+          return s;
+        }
+      } catch {}
+      return null;
+    }
+
+    function persistir() {
+      if (fromUrl) return;
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
+    }
+
+    // ---------- Jugadas ----------
+
+    function hacer(from, to, promo) {
+      const not = notacion(state.b, from, to, promo);
+      const desc = describir(state.b, from, to, promo);
+      const esPeon = tipoDe(state.b[from]) === 'p';
+      const captura = state.b[to] !== '.';
+      state.b = aplica(state.b, from, to, promo);
+      state.ply++;
+      state.half = esPeon || captura ? 0 : state.half + 1;
+      state.last = { from, to };
+      state.lt = not;
+      state.hist = (state.hist || []).concat({ t: not, d: desc });
+      state.t = opuesto(state.t);
+      const key = state.b + state.t;
+      state.reps = { ...state.reps, [key]: (state.reps[key] || 0) + 1 };
+      Object.assign(state, evaluar(state.b, state.t, state.half, state.reps));
+      fromUrl = false;
+      persistir();
+      sel = -1;
+      dests = [];
+      promoPend = null;
+      pintar();
+      avisarTurno();
+    }
+
+    function intentar(from, to) {
+      const t = tipoDe(state.b[from]);
+      if (t === 'p' && Math.floor(to / 5) === filaMeta(colorDe(state.b[from]))) {
+        promoPend = { from, to };
+        sel = -1;
+        dests = [];
+        pintar();
+        return;
+      }
+      hacer(from, to);
+    }
+
+    function tocar(i) {
+      if (state.status !== 'playing' || promoPend) return;
+      if (sel >= 0 && dests.includes(i)) { intentar(sel, i); return; }
+      const p = state.b[i];
+      if (p !== '.' && colorDe(p) === state.t) {
+        sel = i;
+        dests = destinos(state.b, i);
+        pintar();
+        return;
+      }
+      sel = -1;
+      dests = [];
+      pintar();
+    }
+
+    // ---------- Avisos ----------
+
+    function avisar(texto, ms) {
+      notice.textContent = texto;
+      notice.classList.remove('d-none');
+      clearTimeout(noticeTimer);
+      noticeTimer = setTimeout(() => notice.classList.add('d-none'), ms || 1800);
+    }
+
+    function colorNombre(c) {
+      return c === 'w' ? 'las blancas' : 'las negras';
+    }
+
+    function avisarTurno() {
+      if (state.status === 'playing') {
+        if (enJaque(state.b, state.t)) avisar('⚠️ ¡Jaque a ' + colorNombre(state.t) + '!', 2000);
+        else avisar('Turno de ' + colorNombre(state.t), 1800);
+      } else if (state.status === 'checkmate') {
+        avisar('♛ ¡Jaque mate!', 3000);
+      } else {
+        avisar('🤝 Empate', 3000);
+      }
+    }
+
+    // ---------- Pintar ----------
+
+    function renderPromo() {
+      const cont = promoEl.querySelector('div');
+      cont.innerHTML = '';
+      const c = colorDe(state.b[promoPend.from]);
+      for (const t of ['q', 'r', 'b', 'n']) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'btn btn-sm btn-outline-primary';
+        b.textContent = GLIFO[c][t] + ' ' + NOMBRE[t];
+        b.addEventListener('click', () => hacer(promoPend.from, promoPend.to, t));
+        cont.append(b);
+      }
+    }
+
+    function celdaMov(h) {
+      const s = document.createElement('span');
+      if (!h) return s;
+      s.className = 'mv';
+      s.textContent = h.t;
+      s.title = h.d;
+      s.tabIndex = 0;
+      s.setAttribute('role', 'button');
+      s.addEventListener('click', () => avisar(h.d, 2200));
+      s.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); avisar(h.d, 2200); }
+      });
+      return s;
+    }
+
+    function pintarHistorial() {
+      const hist = state.hist || [];
+      historialEl.innerHTML = '';
+      historialVacio.classList.toggle('d-none', hist.length > 0);
+      for (let m = 0; m < Math.ceil(hist.length / 2); m++) {
+        const par = document.createElement('span');
+        par.className = 'mv-par';
+        const num = document.createElement('span');
+        num.className = 'mv-num';
+        num.textContent = (m + 1) + '.';
+        par.append(num);
+        par.append(celdaMov(hist[m * 2]));
+        if (hist[m * 2 + 1]) par.append(celdaMov(hist[m * 2 + 1]));
+        historialEl.append(par);
+      }
+    }
+
+    function pintar() {
+      tablero.innerHTML = '';
+      const jaque = state.status === 'playing' && enJaque(state.b, state.t);
+      const reyEnJaque = jaque ? reyDe(state.b, state.t) : -1;
+      for (let r = 4; r >= 0; r--) {
+        for (let c = 0; c < 5; c++) {
+          const i = r * 5 + c;
+          const p = state.b[i];
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.setAttribute('role', 'gridcell');
+          btn.className = (r + c) % 2 === 0 ? 'casilla-oscura' : 'casilla-clara';
+          if (i === sel) btn.classList.add('sel');
+          if (dests.includes(i)) {
+            btn.classList.add('destino');
+            if (p !== '.') btn.classList.add('ocupado');
+          }
+          if (p !== '.') {
+            const sp = document.createElement('span');
+            sp.className = 'pieza ' + (colorDe(p) === 'w' ? 'blanca' : 'negra');
+            sp.textContent = GLIFO[colorDe(p)][tipoDe(p)];
+            btn.append(sp);
+          }
+          if (i === reyEnJaque) btn.classList.add('jaque');
+          if (r === 0) {
+            const f = document.createElement('span');
+            f.className = 'coord archivo';
+            f.textContent = ARCHIVOS[c];
+            f.setAttribute('aria-hidden', 'true');
+            btn.append(f);
+          }
+          if (c === 0) {
+            const f = document.createElement('span');
+            f.className = 'coord fila';
+            f.textContent = r + 1;
+            f.setAttribute('aria-hidden', 'true');
+            btn.append(f);
+          }
+          btn.setAttribute('aria-label', casilla(i) + (p === '.' ? ' vacía' : ', ' + NOMBRE[tipoDe(p)] + ' ' + (colorDe(p) === 'w' ? 'blanca' : 'negra')));
+          btn.addEventListener('click', () => tocar(i));
+          tablero.append(btn);
+        }
+      }
+
+      if (state.status === 'playing') {
+        turnoEl.innerHTML = (state.t === 'w' ? '⬜ Turno de las blancas' : '⬛ Turno de las negras') + (jaque ? ' · ¡Jaque!' : '');
+      } else {
+        turnoEl.textContent = state.status === 'checkmate' ? 'Jaque mate' : 'Empate';
+      }
+      jugadaEl.textContent = 'Jugada ' + (Math.floor(state.ply / 2) + 1);
+      ultimoEl.textContent = state.lt ? 'Último movimiento: ' + state.lt : '\u00a0';
+      pintarHistorial();
+
+      promoEl.classList.toggle('d-none', !promoPend);
+      if (promoPend) renderPromo();
+
+      resultado.classList.toggle('d-none', state.status === 'playing');
+      if (state.status !== 'playing') {
+        if (state.status === 'checkmate') {
+          resultado.className = 'card mb-3 border-success';
+          resultadoTitulo.textContent = '♛ ¡Jaque mate!';
+          resultadoTexto.textContent = 'Ganaron ' + colorNombre(state.winner) + '.';
+        } else {
+          resultado.className = 'card mb-3 border-secondary';
+          resultadoTitulo.textContent = '🤝 Tablas';
+          const motivos = {
+            material: 'por material insuficiente',
+            '50': 'por la regla de 50 jugadas',
+            repeticion: 'por triple repetición',
+          };
+          resultadoTexto.textContent = state.status === 'stalemate'
+            ? 'por rey ahogado'
+            : (motivos[state.motivo] || '');
+        }
+      }
+      ajustarTablero();
+    }
+
+    // ---------- Pantalla completa ----------
+
+    const panel = $('panel');
+    const btnCompleto = $('completo');
+    const btnSalir = $('salir-completo');
+    let completo = false;
+
+    function ajustarTablero() {
+      if (!completo) return;
+      const cuerpo = panel.querySelector('.card-body');
+      const est = getComputedStyle(cuerpo);
+      let usado = parseFloat(est.paddingTop) + parseFloat(est.paddingBottom);
+      for (const hijo of cuerpo.children) {
+        if (hijo === tablero) continue;
+        if (hijo.id === 'promo' && hijo.classList.contains('d-none')) continue;
+        const cs = getComputedStyle(hijo);
+        usado += hijo.getBoundingClientRect().height + parseFloat(cs.marginTop) + parseFloat(cs.marginBottom);
+      }
+      const ancho = cuerpo.clientWidth - parseFloat(est.paddingLeft) - parseFloat(est.paddingRight);
+      const lado = Math.max(120, Math.min(ancho, window.innerHeight - usado));
+      tablero.style.width = lado + 'px';
+    }
+
+    function entrarCompleto() {
+      completo = true;
+      document.body.classList.add('pantalla-completa');
+      btnSalir.classList.remove('d-none');
+      if (panel.requestFullscreen) panel.requestFullscreen().catch(() => {});
+      ajustarTablero();
+    }
+
+    function salirCompleto() {
+      completo = false;
+      document.body.classList.remove('pantalla-completa');
+      btnSalir.classList.add('d-none');
+      tablero.style.width = '';
+      if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+    }
+
+    // ---------- Reiniciar / compartir ----------
+
+    function reiniciar() {
+      state = estadoInicial();
+      sel = -1;
+      dests = [];
+      promoPend = null;
+      fromUrl = false;
+      try { localStorage.removeItem(STORAGE_KEY); } catch {}
+      history.replaceState(null, '', window.location.pathname);
+      pintar();
+      avisar('Partida nueva', 1800);
+    }
+
+    function copiarLink() {
+      const g = state.b.match(/.{5}/g).join('/');
+      const url = location.origin + location.pathname
+        + '?g=' + encodeURIComponent(g)
+        + '&t=' + state.t + '&m=' + state.ply + '&h=' + state.half;
+      const listo = () => { $('share').textContent = '¡Copiado!'; avisar('Link copiado', 1800); setTimeout(() => { $('share').textContent = '🔗 Compartir'; }, 1500); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(listo).catch(() => { window.prompt('Copiá el link:', url); });
+      } else {
+        window.prompt('Copiá el link:', url);
+      }
+    }
+
+    // ---------- Init ----------
+
+    (function init() {
+      const params = new URLSearchParams(location.search);
+      const g = params.get('g');
+      if (g) {
+        const b = g.replace(/\//g, '');
+        if (b.length === 25 && /^[rnbqkpRNBQKP.]+$/.test(b)) {
+          fromUrl = true;
+          const ply = Math.max(0, parseInt(params.get('m'), 10) || 0);
+          const half = Math.max(0, parseInt(params.get('h'), 10) || 0);
+          const t = params.get('t') === 'b' ? 'b' : 'w';
+          state = {
+            b, t, ply, half, last: null, lt: '', hist: [],
+            reps: { [b + t]: 1 }, status: 'playing', winner: null, motivo: null,
+          };
+          Object.assign(state, evaluar(b, t, half, state.reps));
+          return;
+        }
+      }
+      const stored = leerEstado();
+      if (stored) { state = stored; return; }
+      state = estadoInicial();
+      persistir();
+    })();
+
+    // ---------- Eventos ----------
+
+    $('share').addEventListener('click', copiarLink);
+    $('otra').addEventListener('click', reiniciar);
+
+    btnCompleto.addEventListener('click', entrarCompleto);
+    btnSalir.addEventListener('click', salirCompleto);
+    window.addEventListener('resize', ajustarTablero);
+    window.addEventListener('orientationchange', ajustarTablero);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && completo) salirCompleto(); });
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement) {
+        if (completo && document.fullscreenEnabled) salirCompleto();
+      } else {
+        ajustarTablero();
+      }
+    });
+
+    const resetBtn = $('reset');
+    let resetArmada = false, resetTimer;
+    function resetDesarmar() {
+      resetArmada = false;
+      resetBtn.textContent = '🗑️ Reiniciar';
+      resetBtn.classList.remove('btn-danger');
+      resetBtn.classList.add('btn-outline-secondary');
+    }
+    resetBtn.addEventListener('click', () => {
+      if (resetArmada) {
+        clearTimeout(resetTimer);
+        resetDesarmar();
+        reiniciar();
+        return;
+      }
+      resetArmada = true;
+      resetBtn.textContent = '¿Seguro? Tocá de nuevo';
+      resetBtn.classList.remove('btn-outline-secondary');
+      resetBtn.classList.add('btn-danger');
+      clearTimeout(resetTimer);
+      resetTimer = setTimeout(resetDesarmar, 5000);
+    });
+
+    // theme toggle: Bootstrap's native data-bs-theme, remembered per browser
+    (() => {
+      const root = document.documentElement;
+      const btn = $('theme-toggle');
+      const leer = () => { try { return localStorage.getItem('theme'); } catch { return null; } };
+      const guardar = (t) => { try { localStorage.setItem('theme', t); } catch {} };
+      const initial = leer() || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        guardar(next);
+        apply(next);
+      });
+    })();
+
+    pintar();
+    if (state.status !== 'playing') avisarTurno();
+  </script>
+</body>
+</html>

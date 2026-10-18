@@ -504,6 +504,20 @@
         <h2 class="h6 mb-1">💾 Escritorio</h2>
         <p class="text-body-secondary small mb-3">Llevate todas tus herramientas a otro navegador o máquina: exportá un archivo JSON con el estado completo e importalo donde quieras.</p>
         <p class="small mb-3" id="escritorio-status" role="status">Detectando datos guardados…</p>
+        <div id="storage" class="mb-3">
+          <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mb-1">
+            <span class="small fw-semibold">Espacio usado en este navegador</span>
+            <span id="storage-label" class="small text-body-secondary">Calculando…</span>
+          </div>
+          <div class="progress" role="progressbar" aria-label="Uso del almacenamiento local"
+            aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="storage-bar" style="height: 1rem;">
+            <div class="progress-bar" id="storage-fill" style="width: 0%"></div>
+          </div>
+          <p id="storage-detail" class="small text-body-secondary mt-1 mb-0">&nbsp;</p>
+          <button id="storage-toggle" class="btn btn-link btn-sm p-0 text-decoration-none d-none" type="button"
+            aria-expanded="false" aria-controls="storage-top">Ver detalle por herramienta ▸</button>
+          <div id="storage-top" class="d-none"></div>
+        </div>
         <div class="d-flex flex-wrap gap-2 mb-2">
           <button id="escritorio-export" class="btn btn-outline-secondary btn-sm" type="button">💾 Exportar</button>
           <button id="escritorio-import" class="btn btn-outline-secondary btn-sm" type="button">📥 Importar</button>
@@ -634,6 +648,18 @@
       let wipeStep = 0;
       let wipeTimer = null;
 
+      // Nombres legibles de cada herramienta, tomados del propio listado.
+      const NOMBRES = {};
+      document.querySelectorAll('a.list-group-item').forEach(a => {
+        const slug = (a.getAttribute('href') || '').replace(/\/$/, '');
+        const strong = a.querySelector('strong');
+        if (slug && strong) NOMBRES[slug] = strong.textContent.trim();
+      });
+
+      // Aproximado 1 carácter = 1 byte (localStorage guarda UTF-16); el límite
+      // típico por origen es ~5 MB y la importación usa la misma vara (~4,5 MB).
+      const LIMITE = 5242880;
+
       function showNotice(text) {
         notice.textContent = text;
         notice.classList.remove('d-none');
@@ -672,6 +698,97 @@
         status.textContent = n
           ? `Hay datos guardados en ${n} de ${SLUGS.length} herramientas.`
           : `No hay datos guardados todavía (0 de ${SLUGS.length} herramientas).`;
+        refreshStorage();
+      }
+
+      // ---------- Medidor de almacenamiento ----------
+
+      const storageLabel = document.getElementById('storage-label');
+      const storageBar = document.getElementById('storage-bar');
+      const storageFill = document.getElementById('storage-fill');
+      const storageDetail = document.getElementById('storage-detail');
+      const storageTop = document.getElementById('storage-top');
+      const storageToggle = document.getElementById('storage-toggle');
+      let storageAbierto = null;
+
+      function fmtTam(n) {
+        if (n < 1024) return n + ' B';
+        if (n < 1048576) return (n / 1024).toFixed(n < 10240 ? 1 : 0) + ' KB';
+        return (n / 1048576).toFixed(2) + ' MB';
+      }
+
+      function medirStorage() {
+        const items = [];
+        let total = 0;
+        try {
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            const v = localStorage.getItem(k) || '';
+            const size = k.length + v.length;
+            total += size;
+            items.push({ key: k, size });
+          }
+        } catch { return { total: 0, items: [] }; }
+        items.sort((a, b) => b.size - a.size);
+        return { total, items };
+      }
+
+      function refreshStorage() {
+        const { total, items } = medirStorage();
+        const pct = Math.min(100, (total / LIMITE) * 100);
+        const pctTxt = total > 0 && pct < 1 ? '<1' : pct.toFixed(pct < 10 ? 1 : 0);
+        if (storageAbierto === null) storageAbierto = pct >= 70;
+        storageFill.style.width = pct + '%';
+        storageFill.className = 'progress-bar ' + (pct >= 90 ? 'bg-danger' : pct >= 70 ? 'bg-warning' : 'bg-success');
+        storageBar.setAttribute('aria-valuenow', Math.round(pct));
+        storageLabel.textContent = `${fmtTam(total)} de ~5 MB (${pctTxt}% usado)`;
+        storageDetail.textContent = total
+          ? `Libre: ${fmtTam(LIMITE - total)} · ${items.length} entrada(s) en este navegador.`
+          : 'Sin datos guardados en este navegador.';
+
+        storageTop.innerHTML = '';
+        const conDatos = items.filter(it => it.size > 0);
+        const top = conDatos.slice(0, 5);
+        const max = top.length ? top[0].size : 1;
+        for (const it of top) {
+          const fila = document.createElement('div');
+          fila.className = 'mt-2';
+          const cab = document.createElement('div');
+          cab.className = 'd-flex flex-wrap justify-content-between align-items-baseline gap-2 small';
+          const nombre = document.createElement('span');
+          nombre.className = 'text-truncate flex-grow-1';
+          nombre.style.minWidth = '0';
+          nombre.textContent = NOMBRES[it.key] || it.key;
+          nombre.title = it.key;
+          const tam = document.createElement('span');
+          tam.className = 'text-body-secondary flex-shrink-0';
+          tam.textContent = `${fmtTam(it.size)} · ${Math.round((it.size / total) * 100)}% del usado`;
+          cab.append(nombre, tam);
+          const bar = document.createElement('div');
+          bar.className = 'progress mt-1';
+          bar.style.height = '.35rem';
+          const fill = document.createElement('div');
+          fill.className = 'progress-bar bg-secondary';
+          fill.style.width = Math.max(2, (it.size / max) * 100) + '%';
+          bar.append(fill);
+          fila.append(cab, bar);
+          storageTop.append(fila);
+        }
+        const resto = conDatos.length - top.length;
+        if (resto > 0) {
+          const p = document.createElement('p');
+          p.className = 'small text-body-secondary mt-2 mb-0';
+          p.textContent = `y ${resto} entrada(s) más.`;
+          storageTop.append(p);
+        }
+        storageToggle.classList.toggle('d-none', !top.length);
+        aplicarStorageAbierto();
+      }
+
+      function aplicarStorageAbierto() {
+        storageTop.classList.toggle('d-none', !storageAbierto);
+        storageToggle.setAttribute('aria-expanded', storageAbierto ? 'true' : 'false');
+        storageToggle.textContent = storageAbierto ? 'Ocultar detalle ▾' : 'Ver detalle por herramienta ▸';
       }
 
       function download(name, obj) {
@@ -808,6 +925,11 @@
         preview.classList.add('d-none');
         refreshStatus();
         showNotice('Se borraron los datos de todas las herramientas (el tema se mantiene).');
+      });
+
+      storageToggle.addEventListener('click', () => {
+        storageAbierto = !storageAbierto;
+        aplicarStorageAbierto();
       });
 
       refreshStatus();

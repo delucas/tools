@@ -8,7 +8,7 @@ help:
 	@echo "Uso: make [target]"
 	@echo ""
 	@echo "  serve   Servidor local en http://localhost:$(PORT) (ej: make serve PORT=8080)"
-	@echo "  check   Valida el repo: estructura, listados, SLUGS del Escritorio y sintaxis JS"
+	@echo "  check   Valida el repo: estructura, catálogo, listados y sintaxis JS"
 	@echo "  status  Estado del working tree y de la rama vs remoto"
 	@echo "  deploy  Pushea los commits y avisa si quedan cambios sin commitear"
 
@@ -17,13 +17,12 @@ serve:
 
 check:
 	@fail=0; \
+	python3 scripts/check-catalogo.py || fail=1; \
 	for d in */; do \
 	slug=$${d%/}; \
 	[ -f "$$slug/index.html" ] || continue; \
 	[ -f "$$slug/README.md" ] || { echo "FALTA: $$slug/README.md"; fail=1; }; \
-	grep -q "href=\"$$slug/\"" index.html || { echo "FALTA: $$slug no listado en index.html raíz"; fail=1; }; \
 	grep -q "(./$$slug)" README.md || { echo "FALTA: $$slug no listado en README.md raíz"; fail=1; }; \
-	grep -q "'$$slug'" index.html || { echo "FALTA: $$slug no está en SLUGS del Escritorio"; fail=1; }; \
 	done; \
 	if command -v node >/dev/null 2>&1; then \
 	tmp=$$(mktemp -d); \

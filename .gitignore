@@ -3,3 +3,6 @@ Thumbs.db
 *.swp
 docs/
 .superpowers/
+
+# índice y estado local de Repowise
+.repowise/

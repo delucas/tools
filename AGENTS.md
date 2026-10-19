@@ -100,7 +100,7 @@ Para herramientas con estado que usen Vue.js (vía CDN, versión fija):
 
 1. Crear una carpeta raíz en kebab-case y español.
 2. Añadir su `index.html` autocontenido y un `README.md` breve.
-3. Agregarla a la tabla de `README.md` raíz y al listado de `index.html` raíz.
+3. Agregarla a la tabla de `README.md` raíz y al bloque JSON `#catalogo` de `index.html` raíz (sección y orden).
 
 ## Commits
 

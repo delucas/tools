@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Valida el catálogo del index.html raíz contra las carpetas de herramientas."""
+"""Valida el catálogo JSON del index.html raíz contra las carpetas de herramientas."""
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -9,70 +10,90 @@ RAIZ = Path(__file__).resolve().parent.parent
 INDEX = RAIZ / "index.html"
 
 
-def texto(fragmento):
-    return re.sub(r"<[^>]+>", "", fragmento).strip()
-
-
 def main():
     html = INDEX.read_text(encoding="utf-8")
-    secciones = list(re.finditer(r'<section class="tool-group[^"]*">(.*?)</section>', html, re.S))
-    if not secciones:
-        print("FALTA: no hay grupos .tool-group en index.html")
+    bloque = re.search(r'<script[^>]*\bid="catalogo"[^>]*>(.*?)</script>', html, re.S)
+    if not bloque:
+        print('FALTA: no se encontró el bloque <script id="catalogo">')
+        return 1
+    etiqueta = bloque.group(0)[: bloque.group(0).index(">") + 1]
+    if 'type="application/json"' not in etiqueta:
+        print('FALTA: el bloque #catalogo no es de tipo application/json')
+        return 1
+    try:
+        data = json.loads(bloque.group(1))
+    except json.JSONDecodeError as error:
+        print(f"FALTA: el catálogo no es JSON válido ({error})")
         return 1
 
     errores = []
-    apariciones = {}
-    grupos = set()
+    if not isinstance(data, dict):
+        print("FALTA: el catálogo debe ser un objeto JSON")
+        return 1
 
+    secciones = data.get("secciones")
+    herramientas = data.get("herramientas")
+    if not isinstance(secciones, list) or not secciones:
+        errores.append("el catálogo no tiene secciones")
+        secciones = []
+    if not isinstance(herramientas, list) or not herramientas:
+        errores.append("el catálogo no tiene herramientas")
+        herramientas = []
+
+    ids = set()
+    titulos = set()
     for i, seccion in enumerate(secciones, 1):
-        cuerpo = seccion.group(1)
-        h2 = re.search(r"<h2[^>]*>(.*?)</h2>", cuerpo, re.S)
-        if not h2:
-            errores.append(f"grupo {i}: falta <h2>")
-            nombre_grupo = f"grupo {i}"
+        if not isinstance(seccion, dict):
+            errores.append(f"sección {i}: debe ser un objeto")
+            continue
+        sid = seccion.get("id")
+        titulo = seccion.get("titulo")
+        if not isinstance(sid, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]*", sid):
+            errores.append(f"sección {i}: id inválido {sid!r}")
+        elif sid in ids:
+            errores.append(f"sección {i}: id duplicado {sid!r}")
         else:
-            titulo = re.sub(r'<span class="group-count.*?</span>', "", h2.group(1), flags=re.S)
-            nombre_grupo = texto(titulo)
-            if nombre_grupo in grupos:
-                errores.append(f"grupo duplicado: {nombre_grupo}")
-            grupos.add(nombre_grupo)
+            ids.add(sid)
+        if not isinstance(titulo, str) or not titulo.strip():
+            errores.append(f"sección {i}: falta el título")
+        elif titulo in titulos:
+            errores.append(f"sección {i}: título duplicado {titulo!r}")
+        else:
+            titulos.add(titulo)
 
-        anclas = re.findall(r"<a\s+([^>]*?)>(.*?)</a>", cuerpo, re.S)
-        if not anclas:
-            errores.append(f"{nombre_grupo}: grupo vacío")
+    slugs = {}
+    por_seccion = {sid: 0 for sid in ids}
+    for i, herramienta in enumerate(herramientas, 1):
+        if not isinstance(herramienta, dict):
+            errores.append(f"herramienta {i}: debe ser un objeto")
+            continue
+        slug = herramienta.get("slug")
+        nombre = herramienta.get("nombre")
+        descripcion = herramienta.get("descripcion")
+        seccion = herramienta.get("seccion")
+        if not isinstance(slug, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]*", slug):
+            errores.append(f"herramienta {i}: slug inválido {slug!r}")
+        elif slug in slugs:
+            errores.append(f"herramienta {i}: slug duplicado {slug!r}")
+        else:
+            slugs[slug] = seccion
+        if not isinstance(nombre, str) or not nombre.strip():
+            errores.append(f"herramienta {i} ({slug}): falta el nombre")
+        if not isinstance(descripcion, str) or not descripcion.strip():
+            errores.append(f"herramienta {i} ({slug}): falta la descripción")
+        if seccion not in ids:
+            errores.append(f"herramienta {i} ({slug}): sección desconocida {seccion!r}")
+        else:
+            por_seccion[seccion] += 1
 
-        for attrs, interior in anclas:
-            href = re.search(r'href="([^"]*)"', attrs)
-            if not href:
-                errores.append(f"{nombre_grupo}: herramienta sin href")
-                continue
-            href = href.group(1)
-            match = re.fullmatch(r"([a-z0-9][a-z0-9-]*)/", href)
-            if not match:
-                errores.append(f"{nombre_grupo}: href inválido {href!r}")
-                continue
-            slug = match.group(1)
-
-            data_slug = re.search(r'data-slug="([^"]*)"', attrs)
-            if data_slug and data_slug.group(1) != slug:
-                errores.append(
-                    f"{slug}: data-slug {data_slug.group(1)!r} no coincide con href {href!r}"
-                )
-            if not re.search(r"<strong[^>]*>\s*\S", interior):
-                errores.append(f"{slug}: falta el nombre en <strong>")
-            if not re.search(r"<small[^>]*>\s*\S", interior):
-                errores.append(f"{slug}: falta la descripción en <small>")
-
-            apariciones.setdefault(slug, []).append(nombre_grupo)
-
-    for slug, grupos_slug in sorted(apariciones.items()):
-        if len(grupos_slug) > 1:
-            errores.append(f"{slug}: aparece {len(grupos_slug)} veces ({', '.join(grupos_slug)})")
+    for sid, cantidad in sorted(por_seccion.items()):
+        if cantidad == 0:
+            errores.append(f"sección {sid!r}: no tiene herramientas")
 
     dirs = {p.name for p in RAIZ.iterdir() if p.is_dir() and (p / "index.html").is_file()}
-    for slug in sorted(dirs - set(apariciones)):
+    for slug in sorted(dirs - set(slugs)):
         errores.append(f"{slug}: tiene index.html pero no está en el catálogo")
-    for slug in sorted(set(apariciones) - dirs):
+    for slug in sorted(set(slugs) - dirs):
         errores.append(f"{slug}: está en el catálogo pero no tiene carpeta/index.html")
 
     if errores:
@@ -80,7 +101,7 @@ def main():
             print(f"FALTA: {error}")
         return 1
 
-    print(f"OK: catálogo con {len(apariciones)} herramientas en {len(secciones)} grupos")
+    print(f"OK: catálogo con {len(slugs)} herramientas en {len(secciones)} grupos")
     return 0
 
 

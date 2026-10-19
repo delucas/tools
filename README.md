@@ -2,7 +2,7 @@
 
 Colección de herramientas web autocontenidas: cada una es un único `index.html` con su CSS y JS embebidos (sin build, sin backend). Dependencias externas, si las hay, se cargan por CDN dentro del propio HTML.
 
-Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herramienta.
+Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herramienta. El índice raíz renderiza el catálogo con Vue desde el bloque JSON `#catalogo` de `index.html`: ahí se definen las secciones y a cuál pertenece cada herramienta.
 
 ## Herramientas
 

@@ -29,7 +29,7 @@ check:
 	trap 'rm -rf "$$tmp"' EXIT INT TERM; \
 	for f in index.html */index.html; do \
 	[ -f "$$f" ] || continue; \
-	n=$$(python3 -c 'import re,sys,pathlib; bs=re.findall(r"<script(?![^>]*src=)[^>]*>(.*?)</script>", pathlib.Path(sys.argv[1]).read_text(), re.S); [pathlib.Path(sys.argv[2] + str(i) + ".js").write_text(b) for i,b in enumerate(bs)]; print(len(bs))' "$$f" "$$tmp/blk-"); \
+	n=$$(python3 -c 'import re,sys,pathlib; bs=re.findall(r"<script(?![^>]*\bsrc=)(?![^>]*type=[^ >]*application/json)[^>]*>(.*?)</script>", pathlib.Path(sys.argv[1]).read_text(), re.S); [pathlib.Path(sys.argv[2] + str(i) + ".js").write_text(b) for i,b in enumerate(bs)]; print(len(bs))' "$$f" "$$tmp/blk-"); \
 	j=0; \
 	while [ "$$j" -lt "$$n" ]; do \
 	node --check "$$tmp/blk-$$j.js" || { echo "FALTA: sintaxis JS en $$f (bloque $$j)"; fail=1; }; \

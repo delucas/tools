@@ -26,6 +26,7 @@
       .tool-columns.filtering .list-group-item { margin-top: 0; border-radius: var(--bs-border-radius); }
     }
     @media (max-width: 767.98px) { #chips .btn { min-height: 2.75rem; } }
+    [v-cloak] { display: none; }
     .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
   </style>
 </head>
@@ -47,464 +48,35 @@
       Cada una es una página autocontenida que corre entera en tu navegador.
     </p>
 
-    <div class="sticky-top bg-body py-2 my-3">
-      <input id="filter" class="form-control" type="search" placeholder="🔍 Filtrar por nombre o descripción…" aria-label="Filtrar herramientas" autocomplete="off">
-      <div id="chips" class="d-flex flex-nowrap flex-md-wrap gap-2 overflow-auto mt-2" role="group" aria-label="Filtrar por categoría"></div>
+    <div id="catalogo-app" v-cloak>
+      <div class="sticky-top bg-body py-2 my-3">
+        <input id="filter" v-model="q" class="form-control" type="search" placeholder="🔍 Filtrar por nombre o descripción…" aria-label="Filtrar herramientas" autocomplete="off" @keydown.enter="abrirPrimera">
+        <div id="chips" class="d-flex flex-nowrap flex-md-wrap gap-2 overflow-auto mt-2" role="group" aria-label="Filtrar por categoría">
+          <button type="button" class="btn btn-sm rounded-pill border text-nowrap flex-shrink-0" :class="{ 'btn-secondary': cat === null }" :aria-pressed="cat === null" @click="cat = null">Todas</button>
+          <button v-for="grupo in grupos" :key="grupo.id" type="button" class="btn btn-sm rounded-pill border text-nowrap flex-shrink-0" :class="{ 'btn-secondary': cat === grupo.id }" :aria-pressed="cat === grupo.id" @click="cat = cat === grupo.id ? null : grupo.id">{{ grupo.titulo }}</button>
+        </div>
+      </div>
+
+      <div v-if="!totalVisibles" class="alert alert-secondary" role="status">Sin resultados para esa búsqueda.</div>
+
+      <div id="tools" class="tool-columns mb-4" :class="{ filtering: filtrando }">
+        <section v-for="grupo in gruposVisibles" :key="grupo.id" class="tool-group mb-4">
+          <h2 class="h6 text-body-secondary mb-2">{{ grupo.titulo }} <span class="group-count badge text-bg-secondary fw-normal">{{ contador(grupo) }}</span></h2>
+          <div class="list-group">
+            <a v-for="h in grupo.visibles" :key="h.slug" :href="h.slug + '/'" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+              <span>
+                <strong>{{ h.nombre }}</strong>
+                <br>
+                <small class="text-body-secondary">{{ h.descripcion }}</small>
+              </span>
+            </a>
+          </div>
+        </section>
+      </div>
     </div>
-
-    <div id="no-results" class="alert alert-secondary d-none" role="status">Sin resultados para esa búsqueda.</div>
-
-    <div id="tools" class="tool-columns mb-4">
-      <section class="tool-group mb-4">
-        <h2 class="h6 text-body-secondary mb-2">✍️ Editores <span class="group-count badge text-bg-secondary fw-normal">0</span></h2>
-        <div class="list-group">
-          <a href="markpress/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>📰 MarkPress</strong>
-              <br>
-              <small class="text-body-secondary">Editor markdown de dos paneles con tablas, LaTeX y salida a PDF.</small>
-            </span>
-          </a>
-          <a href="pseditor/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>⌨ PSEditor</strong>
-              <br>
-              <small class="text-body-secondary">Editor de pseudocódigo con resaltado, indentación y operadores Unicode.</small>
-            </span>
-          </a>
-          <a href="eqtex/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>∑ EqTeX</strong>
-              <br>
-              <small class="text-body-secondary">Editor de ecuaciones LaTeX con vista previa y PNG transparente.</small>
-            </span>
-          </a>
-          <a href="svg/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>👁️ SVG</strong>
-              <br>
-              <small class="text-body-secondary">Se ve ese SVG: editor con vista previa en vivo y descarga en PNG o SVG.</small>
-            </span>
-          </a>
-        </div>
-      </section>
-
-      <section class="tool-group mb-4">
-        <h2 class="h6 text-body-secondary mb-2">🖨️ Documentos <span class="group-count badge text-bg-secondary fw-normal">0</span></h2>
-        <div class="list-group">
-          <a href="hojitas/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>📄 Hojitas</strong>
-              <br>
-              <small class="text-body-secondary">Hojas A4 para imprimir: puntitos, renglones o cuadrícula.</small>
-            </span>
-          </a>
-          <a href="apacalypse/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>📚 APAcalypse</strong>
-              <br>
-              <small class="text-body-secondary">Generador de bibliografía APA a partir del ISBN del libro.</small>
-            </span>
-          </a>
-          <a href="docfactory/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🏭 DocFactory</strong>
-              <br>
-              <small class="text-body-secondary">Combinar correspondencia: plantilla + CSV, un documento por fila.</small>
-            </span>
-          </a>
-          <a href="escaner-pdf/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>📄 Escáner a PDF</strong>
-              <br>
-              <small class="text-body-secondary">Fotos de cada hoja compiladas en un PDF A4 para compartir.</small>
-            </span>
-          </a>
-          <a href="papeles/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>📐 Papeles</strong>
-              <br>
-              <small class="text-body-secondary">Tamaños de papel ISO (series A, B y C) a escala, con píxeles, peso y sobres.</small>
-            </span>
-          </a>
-        </div>
-      </section>
-
-      <section class="tool-group mb-4">
-        <h2 class="h6 text-body-secondary mb-2">🔤 Texto y datos <span class="group-count badge text-bg-secondary fw-normal">0</span></h2>
-        <div class="list-group">
-          <a href="textwrangler/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🥋 TextWrangler</strong>
-              <br>
-              <small class="text-body-secondary">Domá tu texto: ordenar, mezclar, numerar líneas y cambiar mayúsculas.</small>
-            </span>
-          </a>
-          <a href="delta/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🔀 Delta</strong>
-              <br>
-              <small class="text-body-secondary">Compará dos textos lado a lado, con diferencias resaltadas.</small>
-            </span>
-          </a>
-          <a href="tabletop/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🗂️ Tabletop</strong>
-              <br>
-              <small class="text-body-secondary">Convertí tablas entre Markdown, CSV, HTML, ASCII y LaTeX, con grilla editable.</small>
-            </span>
-          </a>
-          <a href="csv-a-grafico/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>📊 CSV a Gráfico</strong>
-              <br>
-              <small class="text-body-secondary">Convierte un CSV pegado en un gráfico de torta, series o líneas.</small>
-            </span>
-          </a>
-        </div>
-      </section>
-
-      <section class="tool-group mb-4">
-        <h2 class="h6 text-body-secondary mb-2">📊 Estadística <span class="group-count badge text-bg-secondary fw-normal">0</span></h2>
-        <div class="list-group">
-          <a href="n-muestra/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🎯 n?</strong>
-              <br>
-              <small class="text-body-secondary">Calculá cuántas observaciones necesita tu estudio: proporciones y medias.</small>
-            </span>
-          </a>
-          <a href="p-value/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>📊 p-value</strong>
-              <br>
-              <small class="text-body-secondary">Inferencia rápida: p-value, valores críticos y decisión sobre H₀.</small>
-            </span>
-          </a>
-          <a href="test-ab/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>⚖️ A/B</strong>
-              <br>
-              <small class="text-body-secondary">Compará dos grupos: diferencia, intervalo, efecto y prueba t.</small>
-            </span>
-          </a>
-          <a href="azar/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🎲 ¿azar?</strong>
-              <br>
-              <small class="text-body-secondary">¿Tu secuencia se parece a lo esperado? Frecuencias, rachas y χ².</small>
-            </span>
-          </a>
-          <a href="dataset/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🧺 Dataset</strong>
-              <br>
-              <small class="text-body-secondary">Datos artificiales reproducibles: elegí distribución, parámetros y semilla.</small>
-            </span>
-          </a>
-        </div>
-      </section>
-
-      <section class="tool-group mb-4">
-        <h2 class="h6 text-body-secondary mb-2">∑ Matemáticas y lógica <span class="group-count badge text-bg-secondary fw-normal">0</span></h2>
-        <div class="list-group">
-          <a href="truth/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>✔ Tablas de Verdad</strong>
-              <br>
-              <small class="text-body-secondary">Generador de tablas de verdad a partir de una expresión booleana.</small>
-            </span>
-          </a>
-          <a href="n-factorial/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🧮 n! Explorador de conjuntos finitos</strong>
-              <br>
-              <small class="text-body-secondary">Explorá las estructuras combinatorias de un conjunto finito, con fórmulas y conteos exactos.</small>
-            </span>
-          </a>
-          <a href="conversor/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🔄 Conversor</strong>
-              <br>
-              <small class="text-body-secondary">Tus conversiones complicadas, sin vueltas: dos casillas mutuas e historial.</small>
-            </span>
-          </a>
-          <a href="calculadora/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🧮 Calculadora</strong>
-              <br>
-              <small class="text-body-secondary">Escribí en texto, mirá el resultado en LaTeX, con puente a EqTeX.</small>
-            </span>
-          </a>
-          <a href="metalicos/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🔩 Metálicos</strong>
-              <br>
-              <small class="text-body-secondary">Los 10 ratios metálicos, del platino al plomo: comparalos y calculá.</small>
-            </span>
-          </a>
-        </div>
-      </section>
-
-      <section class="tool-group mb-4">
-        <h2 class="h6 text-body-secondary mb-2">📷 QR y contacto <span class="group-count badge text-bg-secondary fw-normal">0</span></h2>
-        <div class="list-group">
-          <a href="qrlabs/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🧪 QRlabs</strong>
-              <br>
-              <small class="text-body-secondary">Generador de QR de URL, texto, Wi-Fi, email y vCard, con descarga en PNG o SVG.</small>
-            </span>
-          </a>
-          <a href="vcard/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🪪 VCard</strong>
-              <br>
-              <small class="text-body-secondary">Tu tarjeta laboral: descargala o abrila en QRlabs para que la escaneen.</small>
-            </span>
-          </a>
-          <a href="lector-qr/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>📷 Lector QR</strong>
-              <br>
-              <small class="text-body-secondary">Escaneá QR y códigos de barras con cámara o imagen, con historial local.</small>
-            </span>
-          </a>
-        </div>
-      </section>
-
-      <section class="tool-group mb-4">
-        <h2 class="h6 text-body-secondary mb-2">🎥 Reuniones y clases <span class="group-count badge text-bg-secondary fw-normal">0</span></h2>
-        <div class="list-group">
-          <a href="clocks/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🕐 Clocks... assemble!</strong>
-              <br>
-              <small class="text-body-secondary">Reloj mundial para trackear la hora de tu equipo o contactos.</small>
-            </span>
-          </a>
-          <a href="pre-flight/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🛫 Pre-flight</strong>
-              <br>
-              <small class="text-body-secondary">Chequeo pre-llamada: cámara, micrófono y parlantes, sin grabar nada.</small>
-            </span>
-          </a>
-          <a href="tick/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>⏱️ Tick</strong>
-              <br>
-              <small class="text-body-secondary">Cuenta atrás gigante para proyectar, que no deja dormir la pantalla.</small>
-            </span>
-          </a>
-          <a href="algolab/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🃏 AlgoLab</strong>
-              <br>
-              <small class="text-body-secondary">Mesa virtual para enseñar algoritmos con cartas, fichas y fibrones.</small>
-            </span>
-          </a>
-          <a href="estructuras/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🧱 Estructuras</strong>
-              <br>
-              <small class="text-body-secondary">Dibujá arreglos, matrices, pilas, colas, listas, árboles y grafos para tus clases, con salida a SVG, PNG, PPTX o Excalidraw.</small>
-            </span>
-          </a>
-        </div>
-      </section>
-
-      <section class="tool-group mb-4">
-        <h2 class="h6 text-body-secondary mb-2">🔧 Utilidades <span class="group-count badge text-bg-secondary fw-normal">0</span></h2>
-        <div class="list-group">
-          <a href="linkdb/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🔗 LinkDB</strong>
-              <br>
-              <small class="text-body-secondary">Tus links favoritos, con título automático y agregados locales.</small>
-            </span>
-          </a>
-          <a href="wand/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🪄 Wand</strong>
-              <br>
-              <small class="text-body-secondary">Tus bookmarklets arrastrables, en cualquier computadora.</small>
-            </span>
-          </a>
-          <a href="ducky/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🦆 Ducky</strong>
-              <br>
-              <small class="text-body-secondary">Patito de goma para depurar en voz alta: no responde, pero ayuda igual.</small>
-            </span>
-          </a>
-          <a href="between/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>⏳ Between</strong>
-              <br>
-              <small class="text-body-secondary">Diferencias entre fechas, en el orden que las pongas.</small>
-            </span>
-          </a>
-          <a href="clippy/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>📋 Clippy</strong>
-              <br>
-              <small class="text-body-secondary">Pegá algo y mirá qué hay adentro del portapapeles.</small>
-            </span>
-          </a>
-        </div>
-      </section>
-
-      <section class="tool-group mb-4">
-        <h2 class="h6 text-body-secondary mb-2">✅ Organización <span class="group-count badge text-bg-secondary fw-normal">0</span></h2>
-        <div class="list-group">
-          <a href="gsd/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>✅ Get Sh*t Done</strong>
-              <br>
-              <small class="text-body-secondary">Lista de tareas con fecha de creación y fecha de tildado.</small>
-            </span>
-          </a>
-          <a href="checksmith/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>⚒️ Checksmith</strong>
-              <br>
-              <small class="text-body-secondary">Forja de checklists: plantillas para instanciar en Get Sh*t Done.</small>
-            </span>
-          </a>
-          <a href="basket/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🛒 Compra-o-matic</strong>
-              <br>
-              <small class="text-body-secondary">Lista de compras, con cantidades y orden personalizado.</small>
-            </span>
-          </a>
-          <a href="board/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>📌 Board</strong>
-              <br>
-              <small class="text-body-secondary">Mini Trello minimalista: columnas y tarjetas arrastrables.</small>
-            </span>
-          </a>
-          <a href="miti-miti/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>⚖️ Miti-miti</strong>
-              <br>
-              <small class="text-body-secondary">Cuentas entre amigos, mitad y mitad: gastos, pagos y liquidación.</small>
-            </span>
-          </a>
-        </div>
-      </section>
-
-      <section class="tool-group mb-4">
-        <h2 class="h6 text-body-secondary mb-2">🔑 Criptografía <span class="group-count badge text-bg-secondary fw-normal">0</span></h2>
-        <div class="list-group">
-          <a href="fingerprint/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🫆 Fingerprint</strong>
-              <br>
-              <small class="text-body-secondary">Calculá MD5 y SHA de textos y archivos, con historial local.</small>
-            </span>
-          </a>
-          <a href="sauriopass/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🦕 Sauriopass</strong>
-              <br>
-              <small class="text-body-secondary">Contraseñas fáciles de recordar: animal + adjetivo + números.</small>
-            </span>
-          </a>
-        </div>
-      </section>
-
-      <section class="tool-group mb-4">
-        <h2 class="h6 text-body-secondary mb-2">🎨 Diseño <span class="group-count badge text-bg-secondary fw-normal">0</span></h2>
-        <div class="list-group">
-          <a href="chromatic/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🎨 Chromatic</strong>
-              <br>
-              <small class="text-body-secondary">Analizá colores y paletas: contraste, variantes y vista previa de diapositiva.</small>
-            </span>
-          </a>
-          <a href="swatchbook/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>📚 Swatchbook</strong>
-              <br>
-              <small class="text-body-secondary">Tu biblioteca de paletas: explorá, compará y reutilizá, con ida y vuelta a Chromatic.</small>
-            </span>
-          </a>
-          <a href="image-inspector/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🖼️ Image Inspector</strong>
-              <br>
-              <small class="text-body-secondary">DevTools para imágenes: archivo, hashes, dimensiones, EXIF y más, todo local.</small>
-            </span>
-          </a>
-          <a href="fontoscope/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🔭 Fontoscope</strong>
-              <br>
-              <small class="text-body-secondary">Cargá una fuente y mirala en todos sus tamaños, con cobertura Unicode real.</small>
-            </span>
-          </a>
-        </div>
-      </section>
-
-      <section class="tool-group mb-4">
-        <h2 class="h6 text-body-secondary mb-2">🎮 Juegos y azar <span class="group-count badge text-bg-secondary fw-normal">0</span></h2>
-        <div class="list-group">
-          <a href="guess/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🔢 Guess</strong>
-              <br>
-              <small class="text-body-secondary">Adiviná el número que piensa la máquina, con récord e historial.</small>
-            </span>
-          </a>
-          <a href="roller/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🎲 Roller</strong>
-              <br>
-              <small class="text-body-secondary">Dado de N caras, con historial y descarga en CSV.</small>
-            </span>
-          </a>
-          <a href="oracle/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🔮 Oracle</strong>
-              <br>
-              <small class="text-body-secondary">Bola 8 mágica clásica en español: preguntá y agitá.</small>
-            </span>
-          </a>
-          <a href="moneda/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🪙 Moneda</strong>
-              <br>
-              <small class="text-body-secondary">Tirá la moneda: sí o no, mitad y mitad.</small>
-            </span>
-          </a>
-          <a href="8/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🔢 8</strong>
-              <br>
-              <small class="text-body-secondary">El juego del ocho, con óptimo exacto y ranking por nivel.</small>
-            </span>
-          </a>
-          <a href="sudoku6/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>🔢 Sudoku6</strong>
-              <br>
-              <small class="text-body-secondary">Sudoku chico y tranquilo, con anotaciones y partida guardada.</small>
-            </span>
-          </a>
-          <a href="gardner/" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-            <span>
-              <strong>♟️ Gardner</strong>
-              <br>
-              <small class="text-body-secondary">Ajedrez 5×5 para dos jugadores en el mismo celular.</small>
-            </span>
-          </a>
-        </div>
-      </section>
-    </div>
+    <noscript>
+      <div class="alert alert-warning">Activá JavaScript para ver el catálogo de herramientas.</div>
+    </noscript>
 
     <section class="card mb-4" id="escritorio">
       <div class="card-body">
@@ -552,6 +124,84 @@
     </footer>
   </div>
 
+  <!-- Catálogo: única fuente de verdad de secciones y herramientas del índice. -->
+  <script type="application/json" id="catalogo">
+{
+  "secciones": [
+    { "id": "editores", "titulo": "✍️ Editores" },
+    { "id": "documentos", "titulo": "🖨️ Documentos" },
+    { "id": "texto-y-datos", "titulo": "🔤 Texto y datos" },
+    { "id": "estadistica", "titulo": "📊 Estadística" },
+    { "id": "matematicas-y-logica", "titulo": "∑ Matemáticas y lógica" },
+    { "id": "qr-y-contacto", "titulo": "📷 QR y contacto" },
+    { "id": "reuniones-y-clases", "titulo": "🎥 Reuniones y clases" },
+    { "id": "utilidades", "titulo": "🔧 Utilidades" },
+    { "id": "organizacion", "titulo": "✅ Organización" },
+    { "id": "criptografia", "titulo": "🔑 Criptografía" },
+    { "id": "diseno", "titulo": "🎨 Diseño" },
+    { "id": "juegos-y-azar", "titulo": "🎮 Juegos y azar" }
+  ],
+  "herramientas": [
+    { "slug": "markpress", "nombre": "📰 MarkPress", "descripcion": "Editor markdown de dos paneles con tablas, LaTeX y salida a PDF.", "seccion": "editores" },
+    { "slug": "pseditor", "nombre": "⌨ PSEditor", "descripcion": "Editor de pseudocódigo con resaltado, indentación y operadores Unicode.", "seccion": "editores" },
+    { "slug": "eqtex", "nombre": "∑ EqTeX", "descripcion": "Editor de ecuaciones LaTeX con vista previa y PNG transparente.", "seccion": "editores" },
+    { "slug": "svg", "nombre": "👁️ SVG", "descripcion": "Se ve ese SVG: editor con vista previa en vivo y descarga en PNG o SVG.", "seccion": "editores" },
+    { "slug": "hojitas", "nombre": "📄 Hojitas", "descripcion": "Hojas A4 para imprimir: puntitos, renglones o cuadrícula.", "seccion": "documentos" },
+    { "slug": "apacalypse", "nombre": "📚 APAcalypse", "descripcion": "Generador de bibliografía APA a partir del ISBN del libro.", "seccion": "documentos" },
+    { "slug": "docfactory", "nombre": "🏭 DocFactory", "descripcion": "Combinar correspondencia: plantilla + CSV, un documento por fila.", "seccion": "documentos" },
+    { "slug": "escaner-pdf", "nombre": "📄 Escáner a PDF", "descripcion": "Fotos de cada hoja compiladas en un PDF A4 para compartir.", "seccion": "documentos" },
+    { "slug": "papeles", "nombre": "📐 Papeles", "descripcion": "Tamaños de papel ISO (series A, B y C) a escala, con píxeles, peso y sobres.", "seccion": "documentos" },
+    { "slug": "textwrangler", "nombre": "🥋 TextWrangler", "descripcion": "Domá tu texto: ordenar, mezclar, numerar líneas y cambiar mayúsculas.", "seccion": "texto-y-datos" },
+    { "slug": "delta", "nombre": "🔀 Delta", "descripcion": "Compará dos textos lado a lado, con diferencias resaltadas.", "seccion": "texto-y-datos" },
+    { "slug": "tabletop", "nombre": "🗂️ Tabletop", "descripcion": "Convertí tablas entre Markdown, CSV, HTML, ASCII y LaTeX, con grilla editable.", "seccion": "texto-y-datos" },
+    { "slug": "csv-a-grafico", "nombre": "📊 CSV a Gráfico", "descripcion": "Convierte un CSV pegado en un gráfico de torta, series o líneas.", "seccion": "texto-y-datos" },
+    { "slug": "n-muestra", "nombre": "🎯 n?", "descripcion": "Calculá cuántas observaciones necesita tu estudio: proporciones y medias.", "seccion": "estadistica" },
+    { "slug": "p-value", "nombre": "📊 p-value", "descripcion": "Inferencia rápida: p-value, valores críticos y decisión sobre H₀.", "seccion": "estadistica" },
+    { "slug": "test-ab", "nombre": "⚖️ A/B", "descripcion": "Compará dos grupos: diferencia, intervalo, efecto y prueba t.", "seccion": "estadistica" },
+    { "slug": "azar", "nombre": "🎲 ¿azar?", "descripcion": "¿Tu secuencia se parece a lo esperado? Frecuencias, rachas y χ².", "seccion": "estadistica" },
+    { "slug": "dataset", "nombre": "🧺 Dataset", "descripcion": "Datos artificiales reproducibles: elegí distribución, parámetros y semilla.", "seccion": "estadistica" },
+    { "slug": "truth", "nombre": "✔ Tablas de Verdad", "descripcion": "Generador de tablas de verdad a partir de una expresión booleana.", "seccion": "matematicas-y-logica" },
+    { "slug": "n-factorial", "nombre": "🧮 n! Explorador de conjuntos finitos", "descripcion": "Explorá las estructuras combinatorias de un conjunto finito, con fórmulas y conteos exactos.", "seccion": "matematicas-y-logica" },
+    { "slug": "conversor", "nombre": "🔄 Conversor", "descripcion": "Tus conversiones complicadas, sin vueltas: dos casillas mutuas e historial.", "seccion": "matematicas-y-logica" },
+    { "slug": "calculadora", "nombre": "🧮 Calculadora", "descripcion": "Escribí en texto, mirá el resultado en LaTeX, con puente a EqTeX.", "seccion": "matematicas-y-logica" },
+    { "slug": "metalicos", "nombre": "🔩 Metálicos", "descripcion": "Los 10 ratios metálicos, del platino al plomo: comparalos y calculá.", "seccion": "matematicas-y-logica" },
+    { "slug": "qrlabs", "nombre": "🧪 QRlabs", "descripcion": "Generador de QR de URL, texto, Wi-Fi, email y vCard, con descarga en PNG o SVG.", "seccion": "qr-y-contacto" },
+    { "slug": "vcard", "nombre": "🪪 VCard", "descripcion": "Tu tarjeta laboral: descargala o abrila en QRlabs para que la escaneen.", "seccion": "qr-y-contacto" },
+    { "slug": "lector-qr", "nombre": "📷 Lector QR", "descripcion": "Escaneá QR y códigos de barras con cámara o imagen, con historial local.", "seccion": "qr-y-contacto" },
+    { "slug": "clocks", "nombre": "🕐 Clocks... assemble!", "descripcion": "Reloj mundial para trackear la hora de tu equipo o contactos.", "seccion": "reuniones-y-clases" },
+    { "slug": "pre-flight", "nombre": "🛫 Pre-flight", "descripcion": "Chequeo pre-llamada: cámara, micrófono y parlantes, sin grabar nada.", "seccion": "reuniones-y-clases" },
+    { "slug": "tick", "nombre": "⏱️ Tick", "descripcion": "Cuenta atrás gigante para proyectar, que no deja dormir la pantalla.", "seccion": "reuniones-y-clases" },
+    { "slug": "algolab", "nombre": "🃏 AlgoLab", "descripcion": "Mesa virtual para enseñar algoritmos con cartas, fichas y fibrones.", "seccion": "reuniones-y-clases" },
+    { "slug": "estructuras", "nombre": "🧱 Estructuras", "descripcion": "Dibujá arreglos, matrices, pilas, colas, listas, árboles y grafos para tus clases, con salida a SVG, PNG, PPTX o Excalidraw.", "seccion": "reuniones-y-clases" },
+    { "slug": "linkdb", "nombre": "🔗 LinkDB", "descripcion": "Tus links favoritos, con título automático y agregados locales.", "seccion": "utilidades" },
+    { "slug": "wand", "nombre": "🪄 Wand", "descripcion": "Tus bookmarklets arrastrables, en cualquier computadora.", "seccion": "utilidades" },
+    { "slug": "ducky", "nombre": "🦆 Ducky", "descripcion": "Patito de goma para depurar en voz alta: no responde, pero ayuda igual.", "seccion": "utilidades" },
+    { "slug": "between", "nombre": "⏳ Between", "descripcion": "Diferencias entre fechas, en el orden que las pongas.", "seccion": "utilidades" },
+    { "slug": "clippy", "nombre": "📋 Clippy", "descripcion": "Pegá algo y mirá qué hay adentro del portapapeles.", "seccion": "utilidades" },
+    { "slug": "gsd", "nombre": "✅ Get Sh*t Done", "descripcion": "Lista de tareas con fecha de creación y fecha de tildado.", "seccion": "organizacion" },
+    { "slug": "checksmith", "nombre": "⚒️ Checksmith", "descripcion": "Forja de checklists: plantillas para instanciar en Get Sh*t Done.", "seccion": "organizacion" },
+    { "slug": "basket", "nombre": "🛒 Compra-o-matic", "descripcion": "Lista de compras, con cantidades y orden personalizado.", "seccion": "organizacion" },
+    { "slug": "board", "nombre": "📌 Board", "descripcion": "Mini Trello minimalista: columnas y tarjetas arrastrables.", "seccion": "organizacion" },
+    { "slug": "miti-miti", "nombre": "⚖️ Miti-miti", "descripcion": "Cuentas entre amigos, mitad y mitad: gastos, pagos y liquidación.", "seccion": "organizacion" },
+    { "slug": "fingerprint", "nombre": "🫆 Fingerprint", "descripcion": "Calculá MD5 y SHA de textos y archivos, con historial local.", "seccion": "criptografia" },
+    { "slug": "sauriopass", "nombre": "🦕 Sauriopass", "descripcion": "Contraseñas fáciles de recordar: animal + adjetivo + números.", "seccion": "criptografia" },
+    { "slug": "chromatic", "nombre": "🎨 Chromatic", "descripcion": "Analizá colores y paletas: contraste, variantes y vista previa de diapositiva.", "seccion": "diseno" },
+    { "slug": "swatchbook", "nombre": "📚 Swatchbook", "descripcion": "Tu biblioteca de paletas: explorá, compará y reutilizá, con ida y vuelta a Chromatic.", "seccion": "diseno" },
+    { "slug": "image-inspector", "nombre": "🖼️ Image Inspector", "descripcion": "DevTools para imágenes: archivo, hashes, dimensiones, EXIF y más, todo local.", "seccion": "diseno" },
+    { "slug": "fontoscope", "nombre": "🔭 Fontoscope", "descripcion": "Cargá una fuente y mirala en todos sus tamaños, con cobertura Unicode real.", "seccion": "diseno" },
+    { "slug": "guess", "nombre": "🔢 Guess", "descripcion": "Adiviná el número que piensa la máquina, con récord e historial.", "seccion": "juegos-y-azar" },
+    { "slug": "roller", "nombre": "🎲 Roller", "descripcion": "Dado de N caras, con historial y descarga en CSV.", "seccion": "juegos-y-azar" },
+    { "slug": "oracle", "nombre": "🔮 Oracle", "descripcion": "Bola 8 mágica clásica en español: preguntá y agitá.", "seccion": "juegos-y-azar" },
+    { "slug": "moneda", "nombre": "🪙 Moneda", "descripcion": "Tirá la moneda: sí o no, mitad y mitad.", "seccion": "juegos-y-azar" },
+    { "slug": "8", "nombre": "🔢 8", "descripcion": "El juego del ocho, con óptimo exacto y ranking por nivel.", "seccion": "juegos-y-azar" },
+    { "slug": "sudoku6", "nombre": "🔢 Sudoku6", "descripcion": "Sudoku chico y tranquilo, con anotaciones y partida guardada.", "seccion": "juegos-y-azar" },
+    { "slug": "gardner", "nombre": "♟️ Gardner", "descripcion": "Ajedrez 5×5 para dos jugadores en el mismo celular.", "seccion": "juegos-y-azar" }
+  ]
+}
+  </script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.5.42/vue.global.prod.min.js"></script>
+
   <script>
     (() => {
       const root = document.documentElement;
@@ -567,68 +217,106 @@
       });
     })();
 
-    (() => {
-      const input = document.getElementById('filter');
-      const empty = document.getElementById('no-results');
-      const tools = document.getElementById('tools');
-      const chips = document.getElementById('chips');
-      const normalize = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      let cat = null; // grupo elegido con los chips; null = todas
-      const update = () => {
-        const q = normalize(input.value.trim());
-        let visible = 0;
-        tools.classList.toggle('filtering', !!q || !!cat);
-        chips.querySelectorAll('button').forEach(chip => {
-          const on = chip.group === cat;
-          chip.classList.toggle('btn-secondary', on);
-          chip.setAttribute('aria-pressed', on);
-        });
-        document.querySelectorAll('.tool-group').forEach(group => {
-          const items = group.querySelectorAll('.list-group-item');
-          let groupVisible = 0;
-          items.forEach(item => {
-            const match = (!cat || group === cat) && (!q || normalize(item.textContent).includes(q));
-            item.classList.toggle('d-none', !match);
-            if (match) groupVisible++;
+    window.CATALOGO = JSON.parse(document.getElementById('catalogo').textContent);
+
+    // Si Vue no carga (CDN caído) o falla al montar, se muestra el listado plano.
+    function montarListadoSimple() {
+      const app = document.getElementById('catalogo-app');
+      app.removeAttribute('v-cloak');
+      app.replaceChildren();
+
+      const aviso = document.createElement('div');
+      aviso.className = 'alert alert-warning';
+      aviso.setAttribute('role', 'note');
+      aviso.textContent = 'No se pudo cargar Vue: mostrando el listado completo, sin filtros ni agrupación por sección.';
+      app.append(aviso);
+
+      const titulo = document.createElement('h2');
+      titulo.className = 'h6 text-body-secondary mb-2';
+      titulo.textContent = `Herramientas (${CATALOGO.herramientas.length})`;
+      app.append(titulo);
+
+      const lista = document.createElement('div');
+      lista.className = 'list-group mb-4';
+      CATALOGO.herramientas.forEach((h) => {
+        const enlace = document.createElement('a');
+        enlace.href = `${h.slug}/`;
+        enlace.className = 'list-group-item list-group-item-action';
+        const nombre = document.createElement('strong');
+        nombre.textContent = h.nombre;
+        const descripcion = document.createElement('small');
+        descripcion.className = 'text-body-secondary d-block';
+        descripcion.textContent = h.descripcion;
+        enlace.append(nombre, descripcion);
+        lista.append(enlace);
+      });
+      app.append(lista);
+    }
+
+    function montarCatalogo() {
+      const { createApp, ref, computed } = Vue;
+      const normalizar = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+      createApp({
+        setup() {
+          const q = ref('');
+          const cat = ref(null);
+          const grupos = computed(() => CATALOGO.secciones.map((seccion) => ({
+            ...seccion,
+            herramientas: CATALOGO.herramientas.filter((h) => h.seccion === seccion.id)
+          })));
+          const filtrando = computed(() => !!q.value.trim() || cat.value !== null);
+          const gruposVisibles = computed(() => {
+            const term = normalizar(q.value.trim());
+            return grupos.value
+              .filter((grupo) => !cat.value || grupo.id === cat.value)
+              .map((grupo) => ({
+                ...grupo,
+                visibles: term
+                  ? grupo.herramientas.filter((h) => normalizar(`${h.nombre} ${h.descripcion}`).includes(term))
+                  : grupo.herramientas
+              }))
+              .filter((grupo) => grupo.visibles.length > 0);
           });
-          group.classList.toggle('d-none', groupVisible === 0);
-          visible += groupVisible;
-          const badge = group.querySelector('.group-count');
-          if (badge) badge.textContent = q ? `${groupVisible} de ${items.length}` : `${items.length}`;
-        });
-        empty.classList.toggle('d-none', visible > 0);
-      };
-      const addChip = (label, group) => {
-        const chip = document.createElement('button');
-        chip.type = 'button';
-        chip.className = 'btn btn-sm rounded-pill border text-nowrap flex-shrink-0';
-        chip.textContent = label;
-        chip.group = group;
-        chip.addEventListener('click', () => { cat = cat === group ? null : group; update(); });
-        chips.append(chip);
-      };
-      addChip('Todas', null);
-      document.querySelectorAll('.tool-group').forEach(group => addChip(group.querySelector('h2').firstChild.textContent.trim(), group));
-      input.addEventListener('input', update);
-      // "/" enfoca el filtro; Enter abre el primer resultado.
-      document.addEventListener('keydown', (e) => {
-        if (e.key === '/' && document.activeElement !== input) { e.preventDefault(); input.focus(); }
-      });
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && input.value.trim()) document.querySelector('.list-group-item:not(.d-none)')?.click();
-      });
-      update();
-    })();
+          const totalVisibles = computed(() => gruposVisibles.value.reduce((n, grupo) => n + grupo.visibles.length, 0));
+          const contador = (grupo) => q.value.trim()
+            ? `${grupo.visibles.length} de ${grupo.herramientas.length}`
+            : `${grupo.herramientas.length}`;
+          const abrirPrimera = () => document.querySelector('#tools .list-group-item')?.click();
+          return { q, cat, grupos, gruposVisibles, totalVisibles, filtrando, contador, abrirPrimera };
+        }
+      }).mount('#catalogo-app');
+    }
+
+    if (typeof Vue === 'undefined') {
+      montarListadoSimple();
+    } else {
+      try {
+        montarCatalogo();
+      } catch (error) {
+        console.error('No se pudo iniciar el catálogo con Vue:', error);
+        montarListadoSimple();
+      }
+    }
+
+    // "/" enfoca el filtro; Enter abre el primer resultado (ver @keydown.enter).
+    document.addEventListener('keydown', (e) => {
+      const filtro = document.getElementById('filter');
+      if (!filtro) return;
+      const activo = document.activeElement;
+      const escribiendo = /^(INPUT|TEXTAREA|SELECT)$/.test(activo.tagName) || activo.isContentEditable;
+      if (e.key !== '/' || escribiendo) return;
+      e.preventDefault();
+      filtro.focus();
+    });
 
     (() => {
       // Escritorio: exporta/importa el estado de todas las herramientas de una vez.
       // Cada herramienta guarda todo en UNA sola clave igual a su slug de carpeta
       // (ver AGENTS.md). Los valores se copian en crudo, sin parsear.
       // MIGRACIÓN (2026-09-21): LEGACY cubre las claves viejas durante la transición. Eliminar en 2027-03.
-      // El listado raíz es la única fuente de verdad: cada href="slug/" define una herramienta.
-      const catalogo = [...document.querySelectorAll('#tools a.list-group-item[href]')];
-      const slugDe = (a) => a.getAttribute('href').replace(/\/$/, '');
-      const SLUGS = catalogo.map(slugDe);
+      // El JSON del catálogo es la única fuente de verdad de slugs y nombres.
+      const SLUGS = CATALOGO.herramientas.map((h) => h.slug);
       const LEGACY = {
         apacalypse: ['apacalypse-citas'],
         basket: ['basket-lista'],
@@ -658,12 +346,8 @@
       let wipeStep = 0;
       let wipeTimer = null;
 
-      // Nombres legibles de cada herramienta, tomados del propio listado.
-      const NOMBRES = {};
-      catalogo.forEach(a => {
-        const strong = a.querySelector('strong');
-        if (strong) NOMBRES[slugDe(a)] = strong.textContent.trim();
-      });
+      // Nombres legibles de cada herramienta, tomados del catálogo.
+      const NOMBRES = Object.fromEntries(CATALOGO.herramientas.map((h) => [h.slug, h.nombre]));
 
       // Aproximado 1 carácter = 1 byte (localStorage guarda UTF-16); el límite
       // típico por origen es ~5 MB y la importación usa la misma vara (~4,5 MB).

@@ -6,3 +6,6 @@ docs/
 
 # índice y estado local de Repowise
 .repowise/
+
+# configuración local de agentes (generada por Repowise)
+.claude/

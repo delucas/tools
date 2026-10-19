@@ -38,9 +38,9 @@
     }
     .casilla-clara { background: var(--bs-secondary-bg); }
     .casilla-oscura { background: color-mix(in srgb, var(--bs-secondary-bg), var(--bs-body-color) 22%); }
-    #tablero .pieza { pointer-events: none; }
+    #tablero .pieza { pointer-events: none; font-variant-emoji: text; }
     #tablero .pieza.blanca { color: #fff; -webkit-text-stroke: 1.5px #2b2b2b; }
-    #tablero .pieza.negra { color: #1a1a1a; -webkit-text-stroke: 1.5px #f2f2f2; }
+    #tablero .pieza.negra { color: #1a1a1a; -webkit-text-stroke: 1.5px #f2f2f2; transform: rotate(180deg); }
     #tablero .coord {
       position: absolute;
       font-size: .6rem;
@@ -176,10 +176,10 @@
     const STORAGE_KEY = 'gardner';
     const INICIAL = 'RNBQKPPPPP.....ppppprnbqk';
     const GLIFO = {
-      // Blancas: piezas normales (Miscellaneous Symbols).
-      w: { k: '\u2654', q: '\u2655', r: '\u2656', b: '\u2657', n: '\u2658', p: '\u2659' },
-      // Negras: versiones giradas 180° (Chess Symbols, U+1FA24–U+1FA29) para que miren a quien juega arriba.
-      b: { k: '\u{1FA24}', q: '\u{1FA25}', r: '\u{1FA26}', b: '\u{1FA27}', n: '\u{1FA28}', p: '\u{1FA29}' },
+      // Blancas: piezas normales (Miscellaneous Symbols) con variante de texto (U+FE0E) para que no se rendericen como emoji.
+      w: { k: '\u2654\uFE0E', q: '\u2655\uFE0E', r: '\u2656\uFE0E', b: '\u2657\uFE0E', n: '\u2658\uFE0E', p: '\u2659\uFE0E' },
+      // Negras: glifos negros estándar (Miscellaneous Symbols) con variante de texto y girados 180° por CSS.
+      b: { k: '\u265A\uFE0E', q: '\u265B\uFE0E', r: '\u265C\uFE0E', b: '\u265D\uFE0E', n: '\u265E\uFE0E', p: '\u265F\uFE0E' },
     };
     const LETRA = { k: 'R', q: 'D', r: 'T', b: 'A', n: 'C', p: '' };
     const NOMBRE = { k: 'Rey', q: 'Dama', r: 'Torre', b: 'Alfil', n: 'Caballo', p: 'Peón' };

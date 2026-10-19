@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1F3B2%3B%3C/text%3E%3C/svg%3E">
+  <title>Asignatron — Reparto al azar</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    [v-cloak] { display: none; }
+    p.signature { font-size: 0.8em; }
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
+    input, select, textarea { font-size: 16px !important; }
+    .celda-items li + li { margin-top: .15rem; }
+  </style>
+</head>
+<body>
+  <main class="container py-4" id="app" v-cloak>
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">🎲 Asignatron</h1>
+        <p class="text-body-secondary mb-0">Repartí elementos al azar entre destinatarios, sin repetir hasta agotar cada lista.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ shared ? '¡Copiado!' : '🔗 Compartir' }}</button>
+        <button class="btn btn-sm" type="button" @click="reset" :class="resetArmed ? 'btn-danger' : 'btn-outline-secondary'">{{ resetArmed ? '¿Seguro? Tocá de nuevo' : '🗑️ Reiniciar' }}</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div v-if="notice" class="alert alert-success py-2 alert-flotante" role="status">{{ notice }}</div>
+
+    <div class="row g-4">
+      <div class="col-12 col-lg-5">
+        <section class="card mb-3">
+          <div class="card-body">
+            <h2 class="h6 mb-2">👥 Destinatarios</h2>
+            <label for="destinatarios" class="form-label small">Una persona por línea</label>
+            <textarea id="destinatarios" class="form-control" rows="5" v-model="destinatarios"
+              :class="{ 'is-invalid': problemas.destinatarios }" placeholder="Ana&#10;Beto&#10;Carla"></textarea>
+            <div v-if="problemas.destinatarios" class="text-danger small mt-1">{{ problemas.destinatarios }}</div>
+            <div class="form-text">{{ cantidadDestinatarios }} {{ cantidadDestinatarios === 1 ? 'destinatario' : 'destinatarios' }}</div>
+          </div>
+        </section>
+
+        <section class="card mb-3">
+          <div class="card-body">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+              <h2 class="h6 mb-0">🎁 Listas asignables</h2>
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="agregarLista">＋ Agregar lista</button>
+            </div>
+
+            <div v-for="(lista, i) in listas" :key="lista.id" class="border rounded p-2 mb-2">
+              <div class="d-flex gap-2 align-items-start">
+                <input class="form-control" type="text" v-model="lista.nombre" maxlength="80"
+                  :class="{ 'is-invalid': problemas.nombres[lista.id] }"
+                  :aria-label="'Nombre de la lista ' + (i + 1)" placeholder="p. ej. Regalos" autocomplete="off">
+                <button class="btn btn-outline-danger btn-sm" type="button" @click="eliminarLista(lista.id)"
+                  :disabled="listas.length <= 1" :title="listas.length <= 1 ? 'Tiene que quedar al menos una lista' : 'Eliminar lista'">🗑️</button>
+              </div>
+              <div v-if="problemas.nombres[lista.id]" class="text-danger small mt-1">{{ problemas.nombres[lista.id] }}</div>
+
+              <label :for="'items-' + lista.id" class="form-label small mt-2">Elementos, uno por línea</label>
+              <textarea :id="'items-' + lista.id" class="form-control" rows="4" v-model="lista.texto"
+                :class="{ 'is-invalid': problemas.items[lista.id] }" placeholder="Pelota&#10;Libro&#10;Rompecabezas"></textarea>
+              <div v-if="problemas.items[lista.id]" class="text-danger small mt-1">{{ problemas.items[lista.id] }}</div>
+              <div class="form-text">
+                {{ cantidadItems(lista) }} {{ cantidadItems(lista) === 1 ? 'elemento' : 'elementos' }}<span v-if="duplicadosDe(lista)"> · {{ duplicadosDe(lista) }} repetido{{ duplicadosDe(lista) === 1 ? '' : 's' }} ignorado{{ duplicadosDe(lista) === 1 ? '' : 's' }}</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div v-if="mensajes.length" class="alert alert-danger py-2" role="alert">
+          <ul class="mb-0 ps-3">
+            <li v-for="(m, i) in mensajes" :key="i">{{ m }}</li>
+          </ul>
+        </div>
+
+        <button class="btn btn-primary w-100" type="button" @click="generar">🎲 Generar asignaciones</button>
+      </div>
+
+      <div class="col-12 col-lg-7">
+        <section class="card" id="resultados">
+          <div class="card-body">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+              <h2 class="h6 mb-0">📋 Resultados</h2>
+              <button v-if="resultado" class="btn btn-outline-primary btn-sm" type="button" @click="generar">🎲 Volver a sortear</button>
+            </div>
+
+            <div v-if="!resultado" class="text-body-secondary text-center py-4">Completá los datos y generá las asignaciones.</div>
+            <div v-if="resultado" class="table-responsive mt-2">
+              <table class="table table-sm align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th scope="col">Destinatario</th>
+                    <th scope="col" v-for="col in resultado.columnas" :key="col.id">{{ col.nombre }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="fila in resultado.filas" :key="fila.destinatario">
+                    <th scope="row" class="fw-semibold">{{ fila.destinatario }}</th>
+                    <td v-for="(celda, j) in fila.celdas" :key="j">
+                      <ul v-if="celda.length" class="list-unstyled mb-0 celda-items">
+                        <li v-for="(item, k) in celda" :key="k">{{ item }}</li>
+                      </ul>
+                      <span v-else class="text-body-secondary">—</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div v-if="resultado" class="d-flex flex-wrap gap-2 mt-3">
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="copiarTexto">📋 Copiar como texto</button>
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="abrirTabletop">🗂️ Abrir en Tabletop</button>
+            </div>
+
+            <p v-if="resultado" class="form-text mb-0 mt-2">Cada lista se sortea por separado y cada destinatario recibe un elemento. Si la lista tiene menos elementos que destinatarios, se reparten al azar entre todos; si tiene más, los que sobran no se asignan. Volver a sortear recalcula con los datos actuales.</p>
+            <p v-if="resultado && sinAsignar().length" class="form-text mb-0 mt-1">Quedaron sin asignar por excedente: <span v-for="(s, i) in sinAsignar()" :key="s.nombre">{{ i ? ', ' : '' }}{{ s.nombre }} ({{ s.cantidad }})</span>.</p>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <p class="signature text-body-secondary mt-4">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.5.42/vue.global.prod.min.js"
+    integrity="sha512-PREsKi18CyKMgwXMJWtvkzinqjiN0znVfDovmVadp7pKiUpyNGtq7bD2fKElDBmdfH4DGJz8pmAdgihN8NZ8TQ=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script>
+    const STORAGE_KEY = 'asignatron';
+    let noticeTimer = null;
+    let resetTimer = null;
+
+    function newId() {
+      return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
+
+    function lineas(texto) {
+      return String(texto || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    }
+
+    function clave(s) {
+      return s.trim().replace(/\s+/g, ' ').toLowerCase();
+    }
+
+    function dedupe(items) {
+      const vistos = new Set();
+      const unicos = [];
+      for (const item of items) {
+        const k = clave(item);
+        if (vistos.has(k)) continue;
+        vistos.add(k);
+        unicos.push(item);
+      }
+      return { unicos, repetidos: items.length - unicos.length };
+    }
+
+    // Entero al azar en [0, max) con rechazo para no sesgar el módulo.
+    function randomInt(max) {
+      if (max <= 0) return 0;
+      if (window.crypto && crypto.getRandomValues) {
+        const limite = Math.floor(4294967296 / max) * max;
+        const buffer = new Uint32Array(1);
+        let x;
+        do { crypto.getRandomValues(buffer); x = buffer[0]; } while (x >= limite);
+        return x % max;
+      }
+      return Math.floor(Math.random() * max);
+    }
+
+    function mezclar(items) {
+      const copia = items.slice();
+      for (let i = copia.length - 1; i > 0; i--) {
+        const j = randomInt(i + 1);
+        [copia[i], copia[j]] = [copia[j], copia[i]];
+      }
+      return copia;
+    }
+
+    // Cada destinatario recibe un elemento de la lista.
+    // Si la lista es más corta, se reasigna al azar hasta completar; si sobra, el excedente no se usa.
+    function repartir(destinatarios, items) {
+      const resultado = new Map(destinatarios.map(d => [d, []]));
+      const orden = mezclar(destinatarios);
+      let mazo = mezclar(items);
+      let idx = 0;
+      for (const persona of orden) {
+        if (idx >= mazo.length) { mazo = mezclar(items); idx = 0; }
+        resultado.get(persona).push(mazo[idx++]);
+      }
+      return resultado;
+    }
+
+    function nuevaLista() {
+      return { id: newId(), nombre: '', texto: '' };
+    }
+
+    function estadoInicial() {
+      return { destinatarios: '', listas: [nuevaLista()] };
+    }
+
+    function normalizarEstado(raw) {
+      if (raw == null) return null;
+      let obj;
+      try { obj = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return null; }
+      if (!obj || typeof obj !== 'object') return null;
+      const destinatarios = typeof obj.destinatarios === 'string' ? obj.destinatarios.slice(0, 20000) : '';
+      let listas = Array.isArray(obj.listas) ? obj.listas : [];
+      listas = listas.slice(0, 50).map(l => ({
+        id: newId(),
+        nombre: typeof l?.nombre === 'string' ? l.nombre.slice(0, 80) : '',
+        texto: typeof l?.texto === 'string' ? l.texto.slice(0, 20000) : ''
+      }));
+      if (!listas.length) listas = [nuevaLista()];
+      return { destinatarios, listas };
+    }
+
+    function cargarEstado() {
+      const q = new URLSearchParams(window.location.search).get('data');
+      if (q) {
+        const s = normalizarEstado(q);
+        if (s) return { estado: s, fromUrl: true };
+      }
+      try {
+        const s = normalizarEstado(localStorage.getItem(STORAGE_KEY));
+        if (s) return { estado: s, fromUrl: false };
+      } catch { /* estado inicial */ }
+      return { estado: estadoInicial(), fromUrl: false };
+    }
+
+    const app = Vue.createApp({
+      data() {
+        const cargado = cargarEstado();
+        return {
+          destinatarios: cargado.estado.destinatarios,
+          listas: cargado.estado.listas,
+          fromUrl: cargado.fromUrl,
+          resultado: null,
+          mensajes: [],
+          problemas: { destinatarios: '', nombres: {}, items: {} },
+          notice: '',
+          shared: false,
+          resetArmed: false
+        };
+      },
+      computed: {
+        cantidadDestinatarios() {
+          return lineas(this.destinatarios).length;
+        },
+        hayProblemas() {
+          return Boolean(this.problemas.destinatarios)
+            || Object.keys(this.problemas.nombres).length > 0
+            || Object.keys(this.problemas.items).length > 0;
+        }
+      },
+      watch: {
+        destinatarios() { this.trasCambio(); },
+        listas: { deep: true, handler() { this.trasCambio(); } }
+      },
+      methods: {
+        cantidadItems(lista) {
+          return dedupe(lineas(lista.texto)).unicos.length;
+        },
+        duplicadosDe(lista) {
+          return dedupe(lineas(lista.texto)).repetidos;
+        },
+        showNotice(texto, ms = 2200) {
+          this.notice = texto;
+          clearTimeout(noticeTimer);
+          noticeTimer = setTimeout(() => { this.notice = ''; }, ms);
+        },
+        save() {
+          if (this.fromUrl) return;
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({
+              destinatarios: this.destinatarios,
+              listas: this.listas.map(l => ({ nombre: l.nombre, texto: l.texto }))
+            }));
+          } catch { /* sin persistencia */ }
+        },
+        trasCambio() {
+          if (this.resultado || this.mensajes.length || this.hayProblemas) {
+            this.resultado = null;
+            this.mensajes = [];
+            this.problemas = { destinatarios: '', nombres: {}, items: {} };
+          }
+          this.save();
+        },
+        agregarLista() {
+          this.listas.push(nuevaLista());
+        },
+        eliminarLista(id) {
+          if (this.listas.length <= 1) return;
+          this.listas = this.listas.filter(l => l.id !== id);
+        },
+        generar() {
+          const destinatarios = lineas(this.destinatarios);
+          const problemas = { destinatarios: '', nombres: {}, items: {} };
+          const mensajes = [];
+
+          const conteo = new Map();
+          destinatarios.forEach(d => conteo.set(clave(d), (conteo.get(clave(d)) || 0) + 1));
+          const repetidos = [];
+          const vistos = new Set();
+          destinatarios.forEach(d => {
+            const k = clave(d);
+            if ((conteo.get(k) || 0) > 1 && !vistos.has(k)) { vistos.add(k); repetidos.push(d); }
+          });
+
+          if (!destinatarios.length) {
+            problemas.destinatarios = 'Agregá al menos un destinatario.';
+            mensajes.push('Agregá al menos un destinatario.');
+          } else if (repetidos.length) {
+            problemas.destinatarios = `Repetidos: ${repetidos.join(', ')}.`;
+            mensajes.push(`Destinatarios repetidos: ${repetidos.join(', ')}.`);
+          }
+
+          const nombresConteo = new Map();
+          this.listas.forEach(l => {
+            const k = clave(l.nombre);
+            if (k) nombresConteo.set(k, (nombresConteo.get(k) || 0) + 1);
+          });
+          this.listas.forEach((lista, i) => {
+            const etiqueta = lista.nombre.trim() || `Lista ${i + 1}`;
+            if (!lista.nombre.trim()) problemas.nombres[lista.id] = 'Poné un nombre.';
+            else if ((nombresConteo.get(clave(lista.nombre)) || 0) > 1) problemas.nombres[lista.id] = 'Nombre repetido.';
+            if (!dedupe(lineas(lista.texto)).unicos.length) problemas.items[lista.id] = 'Agregá al menos un elemento.';
+            if (problemas.nombres[lista.id]) mensajes.push(`«${etiqueta}»: ${problemas.nombres[lista.id]}`);
+            if (problemas.items[lista.id]) mensajes.push(`«${etiqueta}»: ${problemas.items[lista.id]}`);
+          });
+
+          if (!this.listas.length) mensajes.push('Agregá al menos una lista asignable.');
+
+          if (mensajes.length) {
+            this.problemas = problemas;
+            this.mensajes = mensajes;
+            this.resultado = null;
+            return;
+          }
+
+          const columnas = this.listas.map(l => ({
+            id: l.id,
+            nombre: l.nombre.trim(),
+            items: dedupe(lineas(l.texto)).unicos
+          }));
+          const descartados = this.listas.reduce((total, l) => total + dedupe(lineas(l.texto)).repetidos, 0);
+          const repartos = columnas.map(col => repartir(destinatarios, col.items));
+          const filas = destinatarios.map(d => ({
+            destinatario: d,
+            celdas: repartos.map(reparto => reparto.get(d) || [])
+          }));
+
+          this.problemas = { destinatarios: '', nombres: {}, items: {} };
+          this.mensajes = [];
+          this.resultado = { columnas: columnas.map(c => ({ id: c.id, nombre: c.nombre })), filas };
+          if (descartados) {
+            this.showNotice(`Se ignoraron ${descartados} ${descartados === 1 ? 'elemento repetido' : 'elementos repetidos'}.`, 3000);
+          }
+          if (window.innerWidth < 992) {
+            this.$nextTick(() => document.getElementById('resultados')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+          }
+        },
+        tablaParaTabletop() {
+          if (!this.resultado) return [];
+          const encabezado = ['Destinatario', ...this.resultado.columnas.map(c => c.nombre)];
+          const filas = this.resultado.filas.map(f => [f.destinatario, ...f.celdas.map(celda => celda.join(', '))]);
+          return [encabezado, ...filas];
+        },
+        sinAsignar() {
+          if (!this.resultado) return [];
+          const n = this.resultado.filas.length;
+          const sobrantes = [];
+          this.listas.forEach((lista, i) => {
+            const unicos = dedupe(lineas(lista.texto)).unicos.length;
+            if (unicos > n) sobrantes.push({ nombre: lista.nombre.trim() || `Lista ${i + 1}`, cantidad: unicos - n });
+          });
+          return sobrantes;
+        },
+        textoAsignaciones() {
+          if (!this.resultado) return '';
+          return this.resultado.filas.map(fila => {
+            const partes = fila.celdas.map((celda, i) => `${this.resultado.columnas[i].nombre}: ${celda.join(', ')}`);
+            return `- ${fila.destinatario} - ${partes.join(' - ')}`;
+          }).join('\n');
+        },
+        async copiarTexto() {
+          const texto = this.textoAsignaciones();
+          if (!texto) return;
+          try {
+            await this.copyText(texto);
+            this.showNotice('Asignaciones copiadas.');
+          } catch {
+            window.prompt('Copiá las asignaciones:', texto);
+          }
+        },
+        abrirTabletop() {
+          if (!this.resultado) return;
+          const payload = { rows: this.tablaParaTabletop(), hasHeader: true, outTab: 'md' };
+          window.open(`../tabletop/?d=${encodeURIComponent(JSON.stringify(payload))}`, '_blank', 'noopener');
+        },
+        async copyText(texto) {
+          if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(texto);
+          const area = document.createElement('textarea');
+          area.value = texto;
+          area.style.position = 'fixed';
+          document.body.append(area);
+          area.select();
+          document.execCommand('copy');
+          area.remove();
+          return Promise.resolve();
+        },
+        async share() {
+          const url = new URL(window.location.href);
+          url.search = '';
+          url.searchParams.set('data', JSON.stringify({
+            destinatarios: this.destinatarios,
+            listas: this.listas.map(l => ({ nombre: l.nombre, texto: l.texto }))
+          }));
+          try {
+            await this.copyText(url.toString());
+            this.shared = true;
+            setTimeout(() => { this.shared = false; }, 1500);
+          } catch {
+            window.prompt('Copiá el enlace:', url.toString());
+          }
+        },
+        reset() {
+          if (!this.resetArmed) {
+            this.resetArmed = true;
+            clearTimeout(resetTimer);
+            resetTimer = setTimeout(() => { this.resetArmed = false; }, 5000);
+            return;
+          }
+          clearTimeout(resetTimer);
+          this.resetArmed = false;
+          try { localStorage.removeItem(STORAGE_KEY); } catch { /* sin persistencia */ }
+          const d = estadoInicial();
+          this.destinatarios = d.destinatarios;
+          this.listas = d.listas;
+          this.fromUrl = false;
+          this.resultado = null;
+          this.mensajes = [];
+          this.problemas = { destinatarios: '', nombres: {}, items: {} };
+          history.replaceState(null, '', window.location.pathname);
+          this.save();
+          this.showNotice('Se borró todo.');
+        }
+      },
+      mounted() {
+        if (this.fromUrl) this.showNotice('Vista compartida: los cambios no se guardan acá.', 3000);
+        else this.save();
+      }
+    });
+
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      app.mount('#app');
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

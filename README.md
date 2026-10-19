@@ -58,6 +58,7 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`sudoku6`](./sudoku6) | 🔢 Sudoku6: sudoku chico y tranquilo, con anotaciones y partida guardada. |
 | [`gardner`](./gardner) | ♟️ Gardner: ajedrez 5×5 para dos jugadores en el mismo celular. |
 | [`clippy`](./clippy) | 📋 Clippy: pegá algo y mirá qué hay adentro del portapapeles. |
+| [`asignatron`](./asignatron) | 🎲 Asignatron: repartí un elemento de cada lista por destinatario, al azar. |
 | [`metalicos`](./metalicos) | 🔩 Metálicos: los 10 ratios del platino al plomo, con calculadora y comparador. |
 | [`escaner-pdf`](./escaner-pdf) | 📄 Escáner a PDF: fotos de cada hoja compiladas en un PDF A4 para compartir. |
 | [`papeles`](./papeles) | 📐 Papeles: tamaños de papel ISO (series A, B y C) a escala, con píxeles, peso y sobres. |

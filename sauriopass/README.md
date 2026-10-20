@@ -8,6 +8,10 @@ Generador de contraseñas fáciles de recordar, en castellano: un animal, un adj
 2. Copiala con **📋 Copiar**. Cada botón genera una nueva y recuerda tu modo favorito.
 3. La página genera una al cargar para no arrancar vacía.
 
+## Trivias
+
+Al final hay tres preguntas desplegables sobre el origen de «l33t», la importancia de la longitud y por qué no conviene reutilizar contraseñas.
+
 ## Privacidad y seguridad
 
 - Todo se genera en tu navegador con `crypto.getRandomValues`; nada viaja a ningún servidor.

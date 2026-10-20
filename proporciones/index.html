@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x2797%3B%3C/text%3E%3C/svg%3E">
+  <title>Proporciones — Porcentajes, reglas de tres y mezclas</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    [v-cloak] { display: none; }
+
+    #app input, #app select { font-size: 16px; }
+
+    .alert-flotante {
+      position: fixed;
+      bottom: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1050;
+      max-width: min(92vw, 560px);
+      margin-bottom: 0;
+      box-shadow: var(--bs-box-shadow);
+    }
+
+    .bar-track {
+      height: 0.75rem;
+      background: var(--bs-secondary-bg);
+      border-radius: 0.375rem;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 0.375rem;
+      transition: width 0.15s ease;
+    }
+
+    .bar-stack { display: flex; }
+
+    .bar-seg {
+      height: 100%;
+      min-width: 2px;
+      transition: width 0.15s ease;
+    }
+
+    .bar-seg:first-child {
+      border-top-left-radius: 0.375rem;
+      border-bottom-left-radius: 0.375rem;
+    }
+
+    .bar-seg:last-child {
+      border-top-right-radius: 0.375rem;
+      border-bottom-right-radius: 0.375rem;
+    }
+
+    .legend-dot {
+      display: inline-block;
+      width: 0.65rem;
+      height: 0.65rem;
+      border-radius: 50%;
+      flex: 0 0 auto;
+    }
+
+    p.signature { font-size: 0.8em; }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4" id="app" style="max-width: 960px;" v-cloak>
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">➗ Proporciones</h1>
+        <p class="text-body-secondary mb-0">Porcentajes, variaciones, regla de tres y mezclas, sin vueltas.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ compartido ? '¡Copiado!' : '🔗 Compartir' }}</button>
+        <button class="btn btn-sm" type="button" @click="reset" :class="resetArmed ? 'btn-danger' : 'btn-outline-secondary'">{{ resetArmed ? '¿Seguro? Tocá de nuevo' : '🗑️ Reiniciar' }}</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div v-if="notice" class="alert py-2 alert-flotante" :class="'alert-' + noticeType" role="status">{{ notice }}</div>
+
+    <nav class="nav nav-pills flex-wrap gap-1 mb-3" aria-label="Modo de cálculo">
+      <button v-for="m in modos" :key="m.id" type="button" class="nav-link py-1 px-3"
+        :class="{ active: modo === m.id }" :aria-pressed="modo === m.id" @click="modo = m.id">{{ m.nombre }}</button>
+    </nav>
+
+    <div class="row g-3">
+      <section class="col-12 col-md-5">
+        <div class="card">
+          <div class="card-body">
+            <h2 class="h6 mb-1">{{ modoInfo.titulo }}</h2>
+            <p class="text-body-secondary small mb-3">{{ modoInfo.ayuda }}</p>
+
+            <div v-if="modo === 'porcentaje'">
+              <div class="row g-2">
+                <div class="col-5">
+                  <label class="form-label small mb-1" for="pct-p">Porcentaje</label>
+                  <div class="input-group">
+                    <input id="pct-p" class="form-control" type="number" step="any" v-model="porcentaje.p" placeholder="15" autocomplete="off">
+                    <span class="input-group-text">%</span>
+                  </div>
+                </div>
+                <div class="col-7">
+                  <label class="form-label small mb-1" for="pct-v">Valor base</label>
+                  <input id="pct-v" class="form-control" type="number" step="any" v-model="porcentaje.v" placeholder="800" autocomplete="off">
+                </div>
+              </div>
+              <div class="mt-2">
+                <label class="form-label small mb-1" for="pct-u">Unidad (opcional)</label>
+                <input id="pct-u" class="form-control" type="text" v-model="porcentaje.u" placeholder="kg, ml, $…" autocomplete="off">
+              </div>
+            </div>
+
+            <div v-else-if="modo === 'relativo'">
+              <div class="row g-2">
+                <div class="col-6">
+                  <label class="form-label small mb-1" for="rel-a">Cantidad (parte)</label>
+                  <input id="rel-a" class="form-control" type="number" step="any" v-model="relativo.a" placeholder="30" autocomplete="off">
+                </div>
+                <div class="col-6">
+                  <label class="form-label small mb-1" for="rel-b">Total</label>
+                  <input id="rel-b" class="form-control" type="number" step="any" v-model="relativo.b" placeholder="200" autocomplete="off">
+                </div>
+              </div>
+            </div>
+
+            <div v-else-if="modo === 'variacion'">
+              <div class="row g-2">
+                <div class="col-6">
+                  <label class="form-label small mb-1" for="var-d">Valor inicial</label>
+                  <input id="var-d" class="form-control" type="number" step="any" v-model="variacion.d" placeholder="100" autocomplete="off">
+                </div>
+                <div class="col-6">
+                  <label class="form-label small mb-1" for="var-h">Valor final</label>
+                  <input id="var-h" class="form-control" type="number" step="any" v-model="variacion.h" placeholder="125" autocomplete="off">
+                </div>
+              </div>
+              <div class="mt-2">
+                <label class="form-label small mb-1" for="var-u">Unidad (opcional)</label>
+                <input id="var-u" class="form-control" type="text" v-model="variacion.u" placeholder="kg, $, ml…" autocomplete="off">
+              </div>
+            </div>
+
+            <div v-else-if="modo === 'regla'">
+              <p class="small text-body-secondary mb-2">Planteo: <span class="font-monospace">A : B = C : X</span></p>
+              <div class="row g-2">
+                <div class="col-4">
+                  <label class="form-label small mb-1" for="reg-a">A</label>
+                  <input id="reg-a" class="form-control" type="number" step="any" v-model="regla.a" placeholder="2" autocomplete="off">
+                </div>
+                <div class="col-4">
+                  <label class="form-label small mb-1" for="reg-b">B</label>
+                  <input id="reg-b" class="form-control" type="number" step="any" v-model="regla.b" placeholder="6" autocomplete="off">
+                </div>
+                <div class="col-4">
+                  <label class="form-label small mb-1" for="reg-c">C</label>
+                  <input id="reg-c" class="form-control" type="number" step="any" v-model="regla.c" placeholder="5" autocomplete="off">
+                </div>
+              </div>
+              <div class="form-text mb-2">X se calcula como B × C ÷ A.</div>
+              <div>
+                <label class="form-label small mb-1" for="reg-u">Unidad (opcional)</label>
+                <input id="reg-u" class="form-control" type="text" v-model="regla.u" placeholder="kg, ml, $…" autocomplete="off">
+              </div>
+            </div>
+
+            <div v-else-if="modo === 'relacion'">
+              <label class="form-label small mb-1" for="rel-ratio">Relación de partes</label>
+              <input id="rel-ratio" class="form-control" type="text" v-model="relacion.ratio" placeholder="3:1" autocomplete="off" :aria-invalid="ratioInvalida" @input="onRatioInput">
+              <div class="form-text mb-3">Separá con dos puntos: 3:1, 2:3:1. Se aceptan decimales.</div>
+              <div v-if="ratioInvalida" class="form-text text-danger mb-3">Usá entre 2 y 8 números positivos separados por dos puntos (ej. 3:1).</div>
+
+              <label class="form-label small mb-1" for="rel-base">Calcular a partir de</label>
+              <select id="rel-base" class="form-select" v-model="relacion.base">
+                <option value="parte">Una cantidad de un componente</option>
+                <option value="total">El total de la mezcla</option>
+              </select>
+
+              <div v-if="relacion.base === 'parte'" class="mt-2">
+                <label class="form-label small mb-1" for="rel-i">Componente</label>
+                <select id="rel-i" class="form-select" v-model.number="relacion.i">
+                  <option v-if="!partesRelacion" value="" disabled>Escribí una relación válida</option>
+                  <option v-for="(p, i) in (partesRelacion || [])" :key="i" :value="i">Parte {{ i + 1 }} ({{ fmt(p) }})</option>
+                </select>
+              </div>
+
+              <div class="mt-2">
+                <label class="form-label small mb-1" for="rel-v">{{ relacion.base === 'parte' ? 'Cantidad de esa parte' : 'Total de la mezcla' }}</label>
+                <input id="rel-v" class="form-control" type="number" step="any" min="0" v-model="relacion.v" placeholder="250" autocomplete="off">
+              </div>
+
+              <div class="mt-2">
+                <label class="form-label small mb-1" for="rel-u">Unidad (opcional)</label>
+                <input id="rel-u" class="form-control" type="text" v-model="relacion.u" placeholder="g, ml, $…" autocomplete="off">
+              </div>
+              <div class="form-text mt-2">La relación no cambia si multiplicás todas las partes por el mismo número.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="col-12 col-md-7">
+        <div class="card">
+          <div class="card-body">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+              <h2 class="h6 mb-0">Resultado</h2>
+              <button class="btn btn-outline-secondary btn-sm" type="button" @click="copiar" :disabled="!calc || !!calc.error">
+                {{ copiado ? '¡Copiado!' : '📋 Copiar' }}
+              </button>
+            </div>
+
+            <div v-if="calc && calc.error" class="alert alert-warning py-2 small mb-0" role="alert">{{ calc.error }}</div>
+            <div v-else-if="!calc" class="text-body-secondary small">Completá los datos para ver el resultado.</div>
+
+            <template v-else>
+              <div class="display-6 fw-semibold font-monospace text-break mb-1">{{ calc.principal }}</div>
+              <p class="text-body-secondary mb-2">{{ calc.detalle }}</p>
+              <p class="small font-monospace text-body-secondary text-break mb-2">{{ calc.formula }}</p>
+
+              <ul v-if="calc.extras.length" class="list-unstyled small mb-0">
+                <li v-for="e in calc.extras" :key="e.k" class="d-flex justify-content-between gap-2 border-top py-1">
+                  <span class="text-body-secondary">{{ e.k }}</span>
+                  <span class="font-monospace text-end">{{ e.v }}</span>
+                </li>
+              </ul>
+
+              <div v-if="calc.filas" class="mt-2">
+                <div v-for="f in calc.filas" :key="f.nombre" class="d-flex justify-content-between gap-2 border-top py-1">
+                  <span class="text-break">{{ f.nombre }} <span class="text-body-secondary small">· {{ f.partesTxt }}</span></span>
+                  <span class="font-monospace text-end">{{ f.montoTxt }}</span>
+                </div>
+                <div class="d-flex justify-content-between gap-2 border-top fw-semibold pt-1">
+                  <span>Total</span>
+                  <span class="font-monospace text-end">{{ calc.totalTxt }}</span>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <div v-if="calc && calc.chart" class="card mt-3">
+          <div class="card-body">
+            <h2 class="h6 mb-3">{{ calc.chart.titulo }}</h2>
+
+            <div v-for="(g, gi) in calc.chart.grupos" :key="gi" :class="gi < calc.chart.grupos.length - 1 ? 'mb-3' : ''">
+              <div v-if="g.titulo" class="small fw-semibold text-body-secondary mb-2">{{ g.titulo }}</div>
+
+              <template v-if="g.stacked">
+                <div class="bar-track bar-stack" role="img" :aria-label="g.aria">
+                  <div v-for="s in g.segmentos" :key="s.label" class="bar-seg" :class="s.clase"
+                    :style="{ width: s.pct + '%' }" :title="s.title"></div>
+                </div>
+                <div class="d-flex flex-wrap gap-2 gap-sm-3 small mt-2">
+                  <span v-for="s in g.segmentos" :key="s.label" class="d-inline-flex align-items-center gap-1">
+                    <span class="legend-dot" :class="s.clase"></span>
+                    <span class="text-break">{{ s.label }} · {{ s.pctTxt }}</span>
+                  </span>
+                </div>
+              </template>
+
+              <template v-else>
+                <div v-for="b in g.barras" :key="b.label" class="mb-2">
+                  <div class="d-flex justify-content-between gap-2 small mb-1">
+                    <span class="text-break">{{ b.label }}</span>
+                    <span class="font-monospace text-end">{{ b.valorTxt }}</span>
+                  </div>
+                  <div class="bar-track">
+                    <div class="bar-fill" :class="b.clase" :style="{ width: b.ancho + '%' }"></div>
+                  </div>
+                </div>
+              </template>
+            </div>
+
+            <p v-if="calc.chart.nota" class="small text-body-secondary mt-2 mb-0">{{ calc.chart.nota }}</p>
+          </div>
+        </div>
+
+        <div v-if="calc && !calc.error && !calc.chart" class="alert alert-secondary py-2 small mt-3 mb-0" role="note">
+          El gráfico se muestra cuando hay valores no negativos y alguna magnitud para comparar.
+        </div>
+      </section>
+    </div>
+
+    <section class="card mt-3 mb-3">
+      <div class="card-body">
+        <h2 class="h6 mb-3">🧠 Trivias</h2>
+        <details class="mb-2">
+          <summary class="fw-semibold">Si algo sube 20 % y después baja 20 %, ¿vuelve al valor inicial?</summary>
+          <p class="small text-body-secondary mb-0 mt-1">No. Queda en 96 %: 1,20 × 0,80 = 0,96. La suba se calcula sobre un valor más alto que la baja.</p>
+        </details>
+        <details class="mb-2">
+          <summary class="fw-semibold">En una mezcla 3:1, ¿qué fracción del total es el componente de 3 partes?</summary>
+          <p class="small text-body-secondary mb-0 mt-1">3/4, es decir el 75 %. La relación compara partes entre sí, no con el total.</p>
+        </details>
+        <details>
+          <summary class="fw-semibold">¿Qué significa que A sea el 150 % de B?</summary>
+          <p class="small text-body-secondary mb-0 mt-1">Que A = 1,5 × B: A es un 50 % mayor que B. Superar el 100 % no es un error.</p>
+        </details>
+      </div>
+    </section>
+
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.5.42/vue.global.prod.min.js"></script>
+
+  <script>
+    const STORAGE_KEY = 'proporciones';
+
+    const MODOS = [
+      { id: 'porcentaje', nombre: 'Porcentaje', titulo: 'Porcentaje de un valor', ayuda: 'Calculá cuánto representa un porcentaje de una cantidad.' },
+      { id: 'relativo', nombre: 'Qué %', titulo: 'Porcentaje relativo', ayuda: 'Calculá qué porcentaje es una cantidad respecto de otra.' },
+      { id: 'variacion', nombre: 'Variación', titulo: 'Aumentos y disminuciones', ayuda: 'Compará dos valores y mirá la variación porcentual y la diferencia.' },
+      { id: 'regla', nombre: 'Regla de 3', titulo: 'Regla de tres directa', ayuda: 'Completá A, B y C para resolver A : B = C : X.' },
+      { id: 'relacion', nombre: 'Relación', titulo: 'Relaciones y mezclas', ayuda: 'Repartí una cantidad o un total según una relación de partes.' }
+    ];
+
+    const NF = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 6 });
+    const NF_PCT = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 });
+
+    function defaults() {
+      return {
+        modo: 'porcentaje',
+        porcentaje: { p: '15', v: '800', u: '' },
+        relativo: { a: '30', b: '200' },
+        variacion: { d: '100', h: '125', u: '' },
+        regla: { a: '2', b: '6', c: '5', u: '' },
+        relacion: { ratio: '3:1', base: 'parte', i: 1, v: '250', u: 'g' }
+      };
+    }
+
+    function num(v) {
+      if (typeof v === 'number') return Number.isFinite(v) ? v : NaN;
+      const s = String(v ?? '').trim();
+      if (s === '') return NaN;
+      const n = Number(s);
+      return Number.isFinite(n) ? n : NaN;
+    }
+
+    function fmt(n) {
+      if (!Number.isFinite(n)) return '—';
+      if (Object.is(n, -0)) n = 0;
+      const abs = Math.abs(n);
+      if (abs !== 0 && (abs >= 1e12 || abs < 1e-6)) {
+        return n.toExponential(4).replace('.', ',').replace('e+', 'e');
+      }
+      return NF.format(n);
+    }
+
+    function fmtPct(n) {
+      if (!Number.isFinite(n)) return '—';
+      if (Object.is(n, -0)) n = 0;
+      const abs = Math.abs(n);
+      if (abs !== 0 && (abs >= 1e12 || abs < 1e-4)) {
+        return n.toExponential(2).replace('.', ',').replace('e+', 'e') + ' %';
+      }
+      return NF_PCT.format(n) + ' %';
+    }
+
+    function conUnidad(n, u) {
+      const texto = String(u ?? '').trim();
+      return fmt(n) + (texto ? ' ' + texto : '');
+    }
+
+    function parseRatio(txt) {
+      const raw = String(txt ?? '').trim();
+      if (!raw) return null;
+      const partes = raw.split(':').map(parte => {
+        const t = parte.trim().replace(',', '.');
+        if (!t) return NaN;
+        const n = Number(t);
+        return Number.isFinite(n) ? n : NaN;
+      });
+      if (partes.length < 2 || partes.length > 8) return null;
+      if (partes.some(n => !Number.isFinite(n) || n <= 0)) return null;
+      return partes;
+    }
+
+    function normalizar(raw) {
+      const s = defaults();
+      if (!raw || typeof raw !== 'object') return s;
+      if (MODOS.some(m => m.id === raw.modo)) s.modo = raw.modo;
+
+      const texto = (v, fallback) => (typeof v === 'string' || typeof v === 'number') ? String(v) : fallback;
+
+      if (raw.porcentaje && typeof raw.porcentaje === 'object') {
+        s.porcentaje.p = texto(raw.porcentaje.p, s.porcentaje.p);
+        s.porcentaje.v = texto(raw.porcentaje.v, s.porcentaje.v);
+        s.porcentaje.u = texto(raw.porcentaje.u, s.porcentaje.u);
+      }
+      if (raw.relativo && typeof raw.relativo === 'object') {
+        s.relativo.a = texto(raw.relativo.a, s.relativo.a);
+        s.relativo.b = texto(raw.relativo.b, s.relativo.b);
+      }
+      if (raw.variacion && typeof raw.variacion === 'object') {
+        s.variacion.d = texto(raw.variacion.d, s.variacion.d);
+        s.variacion.h = texto(raw.variacion.h, s.variacion.h);
+        s.variacion.u = texto(raw.variacion.u, s.variacion.u);
+      }
+      if (raw.regla && typeof raw.regla === 'object') {
+        s.regla.a = texto(raw.regla.a, s.regla.a);
+        s.regla.b = texto(raw.regla.b, s.regla.b);
+        s.regla.c = texto(raw.regla.c, s.regla.c);
+        s.regla.u = texto(raw.regla.u, s.regla.u);
+      }
+      if (raw.relacion && typeof raw.relacion === 'object') {
+        s.relacion.ratio = texto(raw.relacion.ratio, s.relacion.ratio);
+        s.relacion.base = raw.relacion.base === 'total' ? 'total' : 'parte';
+        s.relacion.v = texto(raw.relacion.v, s.relacion.v);
+        s.relacion.u = texto(raw.relacion.u, s.relacion.u);
+        const partes = parseRatio(s.relacion.ratio);
+        const i = Number(raw.relacion.i);
+        s.relacion.i = partes && Number.isInteger(i) && i >= 0 && i < partes.length ? i : 0;
+      }
+      return s;
+    }
+
+    function estadoInicial() {
+      const q = new URLSearchParams(window.location.search);
+      const modo = q.get('modo');
+
+      if (modo && MODOS.some(m => m.id === modo)) {
+        const s = defaults();
+        s.modo = modo;
+        const set = (obj, key, param) => {
+          const v = q.get(param);
+          if (v !== null) obj[key] = v;
+        };
+
+        if (modo === 'porcentaje') {
+          set(s.porcentaje, 'p', 'p');
+          set(s.porcentaje, 'v', 'v');
+          set(s.porcentaje, 'u', 'u');
+        } else if (modo === 'relativo') {
+          set(s.relativo, 'a', 'a');
+          set(s.relativo, 'b', 'b');
+        } else if (modo === 'variacion') {
+          set(s.variacion, 'd', 'd');
+          set(s.variacion, 'h', 'h');
+          set(s.variacion, 'u', 'u');
+        } else if (modo === 'regla') {
+          set(s.regla, 'a', 'a');
+          set(s.regla, 'b', 'b');
+          set(s.regla, 'c', 'c');
+          set(s.regla, 'u', 'u');
+        } else if (modo === 'relacion') {
+          set(s.relacion, 'ratio', 'r');
+          set(s.relacion, 'base', 'base');
+          set(s.relacion, 'v', 'v');
+          set(s.relacion, 'u', 'u');
+          if (q.get('i') !== null) {
+            const i = Number(q.get('i'));
+            if (Number.isInteger(i)) s.relacion.i = i;
+          }
+          s.relacion.base = s.relacion.base === 'total' ? 'total' : 'parte';
+          const partes = parseRatio(s.relacion.ratio);
+          if (!partes || s.relacion.i < 0 || s.relacion.i >= partes.length) s.relacion.i = 0;
+        }
+        return { estado: s, fromUrl: true };
+      }
+
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) return { estado: normalizar(JSON.parse(raw)), fromUrl: false };
+      } catch { /* se usan los ejemplos */ }
+
+      return { estado: defaults(), fromUrl: false };
+    }
+
+    function armarGrupo(items, titulo) {
+      if (!items.length) return null;
+      if (items.some(item => !Number.isFinite(item.valor) || item.valor < 0)) return null;
+      const max = Math.max(...items.map(item => item.valor));
+      if (!(max > 0)) return null;
+      return {
+        titulo: titulo || '',
+        aria: items.map(item => `${item.label}: ${item.valorTxt}`).join('; '),
+        barras: items.map(item => ({
+          label: item.label,
+          valorTxt: item.valorTxt,
+          clase: item.clase,
+          ancho: Math.max(0, Math.min(100, (item.valor / max) * 100))
+        }))
+      };
+    }
+
+    function chartGrupos(titulo, grupos, nota) {
+      const armados = [];
+      for (const grupo of grupos) {
+        const g = armarGrupo(grupo.items, grupo.titulo);
+        if (!g) return null;
+        armados.push(g);
+      }
+      return armados.length ? { titulo, grupos: armados, nota } : null;
+    }
+
+    function chartStack(titulo, partes, nota) {
+      const suma = partes.reduce((total, parte) => total + parte, 0);
+      if (!(suma > 0)) return null;
+      const clases = ['bg-primary', 'bg-success', 'bg-warning', 'bg-info', 'bg-danger', 'bg-secondary'];
+      const segmentos = partes.map((parte, i) => {
+        const pct = (parte / suma) * 100;
+        return {
+          label: `Parte ${i + 1} (${fmt(parte)} ${parte === 1 ? 'parte' : 'partes'})`,
+          pct,
+          pctTxt: fmtPct(pct),
+          clase: clases[i % clases.length],
+          title: `Parte ${i + 1}: ${fmt(parte)} de ${fmt(suma)} partes (${fmtPct(pct)})`
+        };
+      });
+      return {
+        titulo,
+        grupos: [{
+          titulo: '',
+          stacked: true,
+          aria: `Composición: ${segmentos.map(s => `${s.label} ${s.pctTxt}`).join('; ')}`,
+          segmentos
+        }],
+        nota
+      };
+    }
+
+    function copiarConTextarea(texto) {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = texto;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand('copy');
+        ta.remove();
+        return Promise.resolve(ok);
+      } catch {
+        return Promise.resolve(false);
+      }
+    }
+
+    function copiarTexto(texto) {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function' && window.isSecureContext) {
+        try {
+          return navigator.clipboard.writeText(texto).then(() => true, () => copiarConTextarea(texto));
+        } catch {
+          return copiarConTextarea(texto);
+        }
+      }
+      return copiarConTextarea(texto);
+    }
+
+    const init = estadoInicial();
+    let noticeTimer, copyTimer, shareTimer, resetTimer;
+
+    Vue.createApp({
+      data() {
+        return {
+          modos: MODOS,
+          modo: init.estado.modo,
+          porcentaje: init.estado.porcentaje,
+          relativo: init.estado.relativo,
+          variacion: init.estado.variacion,
+          regla: init.estado.regla,
+          relacion: init.estado.relacion,
+          fromUrl: init.fromUrl,
+          guardando: false,
+          notice: '',
+          noticeType: 'success',
+          copiado: false,
+          compartido: false,
+          resetArmed: false
+        };
+      },
+      computed: {
+        modoInfo() {
+          return MODOS.find(m => m.id === this.modo) || MODOS[0];
+        },
+        partesRelacion() {
+          return parseRatio(this.relacion.ratio);
+        },
+        ratioInvalida() {
+          return this.relacion.ratio.trim() !== '' && !this.partesRelacion;
+        },
+        snapshot() {
+          return {
+            modo: this.modo,
+            porcentaje: { ...this.porcentaje },
+            relativo: { ...this.relativo },
+            variacion: { ...this.variacion },
+            regla: { ...this.regla },
+            relacion: { ...this.relacion }
+          };
+        },
+        calc() {
+          if (this.modo === 'porcentaje') return this.calcPorcentaje();
+          if (this.modo === 'relativo') return this.calcRelativo();
+          if (this.modo === 'variacion') return this.calcVariacion();
+          if (this.modo === 'regla') return this.calcRegla();
+          if (this.modo === 'relacion') return this.calcRelacion();
+          return null;
+        }
+      },
+      watch: {
+        snapshot: {
+          deep: true,
+          handler(valor) {
+            if (this.guardando) return;
+            if (this.fromUrl) this.fromUrl = false;
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(valor)); } catch {}
+          }
+        }
+      },
+      methods: {
+        fmt,
+        showNotice(msg, tipo = 'success') {
+          this.notice = msg;
+          this.noticeType = tipo;
+          clearTimeout(noticeTimer);
+          noticeTimer = setTimeout(() => { this.notice = ''; }, 2000);
+        },
+        onRatioInput() {
+          const partes = this.partesRelacion;
+          if (partes && (this.relacion.i < 0 || this.relacion.i >= partes.length)) this.relacion.i = 0;
+        },
+        calcPorcentaje() {
+          const p = num(this.porcentaje.p);
+          const v = num(this.porcentaje.v);
+          if (!Number.isFinite(p) || !Number.isFinite(v)) return null;
+          const resultado = (p * v) / 100;
+          const u = this.porcentaje.u;
+          const baseTxt = conUnidad(v, u);
+          const resultTxt = conUnidad(resultado, u);
+          return {
+            principal: resultTxt,
+            detalle: `${fmtPct(p)} de ${baseTxt}`,
+            formula: `${baseTxt} × ${fmt(p)} ÷ 100 = ${resultTxt}`,
+            extras: [],
+            filas: null,
+            totalTxt: '',
+            copia: `${fmtPct(p)} de ${baseTxt} = ${resultTxt}`,
+            chart: chartGrupos('Participación en la base', [{
+              items: [
+                { label: 'Base', valor: v, valorTxt: baseTxt, clase: 'bg-secondary' },
+                { label: 'Resultado', valor: resultado, valorTxt: resultTxt, clase: 'bg-primary' }
+              ]
+            }], 'La barra del resultado se compara con la base.')
+          };
+        },
+        calcRelativo() {
+          const a = num(this.relativo.a);
+          const b = num(this.relativo.b);
+          if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+          if (b === 0) return { error: 'El total no puede ser 0.' };
+          const resultado = (a / b) * 100;
+          return {
+            principal: fmtPct(resultado),
+            detalle: `${fmt(a)} de ${fmt(b)}`,
+            formula: `${fmt(a)} ÷ ${fmt(b)} × 100 = ${fmtPct(resultado)}`,
+            extras: [],
+            filas: null,
+            totalTxt: '',
+            copia: `${fmt(a)} es el ${fmtPct(resultado)} de ${fmt(b)}`,
+            chart: chartGrupos('Parte y total', [{
+              items: [
+                { label: 'Parte', valor: a, valorTxt: fmt(a), clase: 'bg-primary' },
+                { label: 'Total', valor: b, valorTxt: fmt(b), clase: 'bg-secondary' }
+              ]
+            }], 'La parte se compara con el total.')
+          };
+        },
+        calcVariacion() {
+          const d = num(this.variacion.d);
+          const h = num(this.variacion.h);
+          if (!Number.isFinite(d) || !Number.isFinite(h)) return null;
+          if (d === 0) return { error: 'El valor inicial no puede ser 0.' };
+
+          const diferencia = h - d;
+          const porcentaje = (diferencia / Math.abs(d)) * 100;
+          const factor = h / d;
+          const estado = diferencia > 0 ? 'Aumentó' : diferencia < 0 ? 'Disminuyó' : 'Sin cambios';
+          const signoPct = porcentaje > 0 ? '+' : '';
+          const signoDif = diferencia > 0 ? '+' : '';
+          const u = this.variacion.u;
+          const dTxt = conUnidad(d, u);
+          const hTxt = conUnidad(h, u);
+          const difTxt = `${signoDif}${conUnidad(diferencia, u)}`;
+
+          return {
+            principal: `${signoPct}${fmtPct(porcentaje)}`,
+            detalle: `De ${dTxt} a ${hTxt} · ${estado}`,
+            formula: `(${hTxt} − ${dTxt}) ÷ |${dTxt}| × 100 = ${fmtPct(porcentaje)}`,
+            extras: [
+              { k: 'Diferencia', v: difTxt },
+              { k: 'Factor', v: `×${fmt(factor)}` }
+            ],
+            filas: null,
+            totalTxt: '',
+            copia: `De ${dTxt} a ${hTxt}: ${signoPct}${fmtPct(porcentaje)} (diferencia ${difTxt})`,
+            chart: chartGrupos('Antes y después', [{
+              items: [
+                { label: 'Inicial', valor: d, valorTxt: dTxt, clase: 'bg-secondary' },
+                { label: 'Final', valor: h, valorTxt: hTxt, clase: 'bg-primary' }
+              ]
+            }], 'La barra final se compara con la inicial.')
+          };
+        },
+        calcRegla() {
+          const a = num(this.regla.a);
+          const b = num(this.regla.b);
+          const c = num(this.regla.c);
+          if (!Number.isFinite(a) || !Number.isFinite(b) || !Number.isFinite(c)) return null;
+          if (a === 0) return { error: 'A no puede ser 0: es el divisor.' };
+
+          const x = (b * c) / a;
+          const u = this.regla.u;
+          const xTxt = conUnidad(x, u);
+
+          return {
+            principal: xTxt,
+            detalle: `${fmt(a)} : ${fmt(b)} = ${fmt(c)} : X`,
+            formula: `X = ${fmt(b)} × ${fmt(c)} ÷ ${fmt(a)} = ${xTxt}`,
+            extras: [],
+            filas: null,
+            totalTxt: '',
+            copia: `${fmt(a)} : ${fmt(b)} = ${fmt(c)} : ${xTxt}`,
+            chart: chartGrupos('Proporción directa', [
+              {
+                titulo: 'A : B',
+                items: [
+                  { label: 'A', valor: a, valorTxt: fmt(a), clase: 'bg-secondary' },
+                  { label: 'B', valor: b, valorTxt: fmt(b), clase: 'bg-primary' }
+                ]
+              },
+              {
+                titulo: 'C : X',
+                items: [
+                  { label: 'C', valor: c, valorTxt: fmt(c), clase: 'bg-secondary' },
+                  { label: 'X', valor: x, valorTxt: xTxt, clase: 'bg-primary' }
+                ]
+              }
+            ], 'Cada grupo se escala a su propio máximo para comparar las dos razones.')
+          };
+        },
+        calcRelacion() {
+          const partes = this.partesRelacion;
+          if (!partes) return null;
+
+          const valor = num(this.relacion.v);
+          if (!Number.isFinite(valor)) return null;
+          if (valor < 0) return { error: 'La cantidad no puede ser negativa.' };
+
+          const suma = partes.reduce((total, parte) => total + parte, 0);
+          const i = Number.isInteger(this.relacion.i) && this.relacion.i >= 0 && this.relacion.i < partes.length ? this.relacion.i : 0;
+          const base = this.relacion.base === 'total' ? 'total' : 'parte';
+          const factor = base === 'total' ? valor / suma : valor / partes[i];
+          const total = factor * suma;
+          const u = this.relacion.u;
+          const totalTxt = conUnidad(total, u);
+
+          const filas = partes.map((parte, indice) => ({
+            nombre: `Parte ${indice + 1}`,
+            partesTxt: `${fmt(parte)} ${parte === 1 ? 'parte' : 'partes'}`,
+            montoTxt: conUnidad(parte * factor, u)
+          }));
+
+          const formula = base === 'total'
+            ? `1 parte = ${conUnidad(valor, u)} ÷ ${fmt(suma)} = ${conUnidad(factor, u)}`
+            : `1 parte = ${conUnidad(valor, u)} ÷ ${fmt(partes[i])} = ${conUnidad(factor, u)}`;
+
+          const copia = [
+            `Relación ${partes.map(fmt).join(' : ')}`,
+            ...filas.map(fila => `${fila.nombre}: ${fila.montoTxt}`),
+            `Total: ${totalTxt}`,
+            formula
+          ].join('\n');
+
+          return {
+            principal: totalTxt,
+            detalle: `Total de la mezcla · ${fmt(suma)} ${suma === 1 ? 'parte' : 'partes'}`,
+            formula,
+            extras: [],
+            filas,
+            totalTxt,
+            copia,
+            chart: chartStack('Composición de la mezcla', partes,
+              `Total: ${fmt(suma)} ${suma === 1 ? 'parte' : 'partes'}.`)
+          };
+        },
+        copiar() {
+          const c = this.calc;
+          if (!c || c.error) return;
+          copiarTexto(c.copia).then(ok => {
+            if (!ok) { this.showNotice('No se pudo copiar.', 'danger'); return; }
+            this.showNotice('Resultado copiado');
+            this.copiado = true;
+            clearTimeout(copyTimer);
+            copyTimer = setTimeout(() => { this.copiado = false; }, 1500);
+          });
+        },
+        share() {
+          const url = new URL(window.location.href);
+          url.search = '';
+          url.searchParams.set('modo', this.modo);
+
+          const set = (clave, valor) => {
+            if (valor !== undefined && valor !== null) url.searchParams.set(clave, String(valor));
+          };
+
+          if (this.modo === 'porcentaje') {
+            set('p', this.porcentaje.p);
+            set('v', this.porcentaje.v);
+            if (this.porcentaje.u.trim()) set('u', this.porcentaje.u);
+          } else if (this.modo === 'relativo') {
+            set('a', this.relativo.a);
+            set('b', this.relativo.b);
+          } else if (this.modo === 'variacion') {
+            set('d', this.variacion.d);
+            set('h', this.variacion.h);
+            if (this.variacion.u.trim()) set('u', this.variacion.u);
+          } else if (this.modo === 'regla') {
+            set('a', this.regla.a);
+            set('b', this.regla.b);
+            set('c', this.regla.c);
+            if (this.regla.u.trim()) set('u', this.regla.u);
+          } else if (this.modo === 'relacion') {
+            set('r', this.relacion.ratio);
+            set('base', this.relacion.base);
+            set('i', this.relacion.i);
+            set('v', this.relacion.v);
+            set('u', this.relacion.u);
+          }
+
+          copiarTexto(url.toString()).then(ok => {
+            if (!ok) { this.showNotice('No se pudo copiar el link.', 'danger'); return; }
+            this.showNotice('Link copiado');
+            this.compartido = true;
+            clearTimeout(shareTimer);
+            shareTimer = setTimeout(() => { this.compartido = false; }, 1500);
+          });
+        },
+        reset() {
+          if (!this.resetArmed) {
+            this.resetArmed = true;
+            clearTimeout(resetTimer);
+            resetTimer = setTimeout(() => { this.resetArmed = false; }, 5000);
+            return;
+          }
+
+          clearTimeout(resetTimer);
+          this.resetArmed = false;
+          this.copiado = false;
+          this.compartido = false;
+          this.guardando = true;
+
+          const d = defaults();
+          this.modo = d.modo;
+          this.porcentaje = d.porcentaje;
+          this.relativo = d.relativo;
+          this.variacion = d.variacion;
+          this.regla = d.regla;
+          this.relacion = d.relacion;
+          this.fromUrl = false;
+
+          try { localStorage.removeItem(STORAGE_KEY); } catch {}
+          history.replaceState(null, '', window.location.pathname);
+
+          this.$nextTick(() => {
+            this.guardando = false;
+            try { localStorage.removeItem(STORAGE_KEY); } catch {}
+          });
+
+          this.showNotice('Ejemplos restaurados');
+        }
+      }
+    }).mount('#app');
+
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
+      apply(initial);
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

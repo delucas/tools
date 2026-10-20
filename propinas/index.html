@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f37d%3B%26%23xfe0f%3B%3C/text%3E%3C/svg%3E">
+  <title>Propinas — Calculá propina y total por persona</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    [v-cloak] { display: none; }
+
+    #app input { font-size: 16px; }
+    #app .input-group-lg input { font-size: 1.25rem; }
+
+    .alert-flotante {
+      position: fixed;
+      bottom: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1050;
+      max-width: min(92vw, 560px);
+      margin-bottom: 0;
+      box-shadow: var(--bs-box-shadow);
+    }
+
+    .chart-box {
+      position: relative;
+      height: 230px;
+      margin-top: 0.25rem;
+    }
+
+    .chart-box canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    .chart-center {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 40%;
+      max-width: 150px;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .chart-total {
+      display: block;
+      font-size: clamp(0.72rem, 2.7vw, 0.95rem);
+      overflow-wrap: anywhere;
+    }
+
+    .chart-empty {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      text-align: center;
+    }
+
+    .legend-dot {
+      display: inline-block;
+      width: 0.65rem;
+      height: 0.65rem;
+      border-radius: 50%;
+      flex: 0 0 auto;
+    }
+
+    .legend-label { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .legend-amount { min-width: 6rem; text-align: right; white-space: nowrap; }
+    .legend-pct { min-width: 3rem; text-align: right; white-space: nowrap; }
+    .legend-list { min-height: 6.9rem; }
+
+    .error-line { min-height: 1.35rem; }
+    .slot-stack { display: grid; }
+    .slot-stack > * { grid-area: 1 / 1; }
+
+    .help-stack { display: grid; }
+    .help-stack > * { grid-area: 1 / 1; }
+
+    .custom-row { display: flex; align-items: center; gap: 0.5rem; }
+    .custom-row > .form-check-input { margin-left: -1.5em; margin-top: 0; flex: 0 0 auto; }
+    .custom-row > .form-check-label { flex: 1 1 auto; }
+    .custom-step-wrap { flex: 0 0 auto; width: 8.5rem; }
+
+    #app summary { cursor: pointer; }
+
+    p.signature { font-size: 0.8em; }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4" id="app" style="max-width: 720px;" v-cloak>
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">🍽️ Propinas</h1>
+        <p class="text-body-secondary mb-0">Calculá propina, total y cuánto paga cada persona.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">🔗 Compartir</button>
+        <button class="btn btn-sm" type="button" @click="reset" :class="resetArmed ? 'btn-danger' : 'btn-outline-secondary'">{{ resetArmed ? '¿Seguro? Tocá de nuevo' : '🗑️ Reiniciar' }}</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div v-if="notice" class="alert py-2 alert-flotante" :class="'alert-' + noticeType" role="status">{{ notice }}</div>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <h2 class="h6 mb-3">La cuenta</h2>
+
+        <label for="cuenta" class="form-label">Importe de la cuenta <span class="text-body-secondary">(obligatorio)</span></label>
+        <div class="input-group input-group-lg">
+          <span class="input-group-text">$</span>
+          <input id="cuenta" class="form-control" type="text" inputmode="decimal" autocomplete="off" placeholder="48000"
+            :value="cuentaInput" @input="onCuentaInput" @blur="onCuentaBlur" aria-describedby="cuenta-help"
+            :aria-invalid="!!cuentaError">
+        </div>
+        <div id="cuenta-help" class="form-text">Acepta 48000, 48.000 o 48000,50.</div>
+        <div class="form-text text-danger error-line" :class="{ invisible: !cuentaError }">{{ cuentaError || ' ' }}</div>
+
+        <div class="mt-3">
+          <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2">
+            <span class="form-label mb-0">Propina</span>
+            <span class="badge text-bg-secondary" :class="{ invisible: driver !== 'pct' }">fijado</span>
+          </div>
+          <div class="d-flex flex-wrap gap-2 mt-1" role="group" aria-label="Porcentaje de propina">
+            <button v-for="p in presetPcts" :key="p" class="btn rounded-pill" type="button"
+              :class="isPresetActive(p) ? 'btn-primary' : 'btn-outline-secondary'"
+              :aria-pressed="isPresetActive(p)" @click="setPct(p)">{{ p }}%</button>
+          </div>
+          <div class="input-group mt-2" style="max-width: 14rem;">
+            <label class="input-group-text" for="pct">Personalizado</label>
+            <input id="pct" class="form-control text-end" type="text" inputmode="decimal" autocomplete="off"
+              :value="pctInput" @input="onPctInput" @blur="onPctBlur" :aria-invalid="!!pctError">
+            <span class="input-group-text">%</span>
+          </div>
+          <div class="form-text text-danger error-line" :class="{ invisible: !pctError }">{{ pctError || ' ' }}</div>
+        </div>
+
+        <div class="mt-3">
+          <label for="personas" class="form-label">Personas</label>
+          <div class="input-group" style="max-width: 11rem;">
+            <button class="btn btn-outline-secondary" type="button" @click="decPeople" :disabled="personas === 1" aria-label="Restar persona">−</button>
+            <input id="personas" class="form-control text-center" type="text" inputmode="numeric" autocomplete="off"
+              :value="personasInput" @input="onPeopleInput" @blur="onPeopleBlur" aria-label="Cantidad de personas">
+            <button class="btn btn-outline-secondary" type="button" @click="incPeople" :disabled="personas === 99" aria-label="Sumar persona">+</button>
+          </div>
+        </div>
+
+        <fieldset class="mt-3">
+          <legend class="form-label fs-6">Redondear total</legend>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="redondeo" id="redondeo-none" value="none"
+              v-model="roundMode" :disabled="driver !== 'pct'" @change="onRoundChange">
+            <label class="form-check-label" for="redondeo-none">Sin redondear</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="redondeo" id="redondeo-100" value="100"
+              v-model="roundMode" :disabled="driver !== 'pct'" @change="onRoundChange">
+            <label class="form-check-label" for="redondeo-100">Al próximo $100</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="redondeo" id="redondeo-1000" value="1000"
+              v-model="roundMode" :disabled="driver !== 'pct'" @change="onRoundChange">
+            <label class="form-check-label" for="redondeo-1000">Al próximo $1.000</label>
+          </div>
+          <div class="form-check custom-row">
+            <input class="form-check-input" type="radio" name="redondeo" id="redondeo-custom" value="custom"
+              v-model="roundMode" :disabled="driver !== 'pct'" @change="onRoundChange">
+            <label class="form-check-label" for="redondeo-custom">Personalizado</label>
+            <div class="custom-step-wrap" :class="{ invisible: roundMode !== 'custom' }" :inert="roundMode !== 'custom'">
+              <div class="input-group input-group-sm">
+                <span class="input-group-text">$</span>
+                <input id="paso" class="form-control" type="text" inputmode="numeric" autocomplete="off"
+                  :value="customStepInput" @input="onStepInput" @blur="onStepBlur" :disabled="roundMode !== 'custom'"
+                  aria-label="Múltiplo personalizado en pesos" :aria-invalid="!!customStepError" aria-describedby="paso-help">
+              </div>
+            </div>
+          </div>
+
+          <div class="help-stack form-text mt-2">
+            <span class="text-danger" :class="{ invisible: !customStepError }">{{ customStepError || ' ' }}</span>
+            <span id="paso-help" :class="{ invisible: !(driver === 'pct' && roundMode === 'custom' && !customStepError) }">Múltiplo en pesos; por ejemplo, 500 o 2.000.</span>
+            <span :class="{ invisible: !(driver === 'pct' && roundMode !== 'custom') }">El redondeo se suma a la propina; abajo mostramos el porcentaje efectivo.</span>
+            <span :class="{ invisible: driver === 'pct' }">Redondeo no disponible al fijar un importe final. Volvé a porcentaje para usarlo.</span>
+          </div>
+        </fieldset>
+      </div>
+    </section>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+          <h2 class="h6 mb-0">Resultado</h2>
+          <div class="d-flex flex-wrap align-items-center gap-2">
+            <span class="small text-body-secondary d-none d-sm-inline">El último importe que editás queda fijado.</span>
+            <button class="btn btn-outline-secondary btn-sm" type="button" :class="{ invisible: !canBackToPct }"
+              :disabled="!canBackToPct" @click="backToPct" title="Calcular desde el porcentaje">↩ Volver a porcentaje</button>
+          </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-baseline gap-2 py-2">
+          <span class="text-body-secondary">Cuenta</span>
+          <span class="font-monospace">{{ hasCuenta ? money(cuentaCents) : '—' }}</span>
+        </div>
+
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 py-2 border-top">
+          <div>
+            <span class="form-label mb-0">{{ roundingApplied ? 'Propina efectiva' : 'Propina' }}</span>
+            <span v-if="calculable" class="badge text-bg-secondary ms-1">{{ pctLabel(effectivePct) }}</span>
+          </div>
+          <div class="font-monospace fs-5 fw-semibold">{{ calculable ? money(tipCents) : '—' }}</div>
+        </div>
+        <div class="slot-stack small text-body-secondary text-end">
+          <span :class="{ invisible: !(calculable && roundingApplied) }">Base {{ pctLabel(pct) }}: {{ money(baseTipCents) }} + redondeo {{ money(roundingDeltaCents) }}</span>
+          <span :class="{ invisible: !(calculable && roundingNoDelta) }">El total ya era múltiplo de {{ stepLabel }}; no hubo diferencia.</span>
+        </div>
+
+        <div class="py-2 border-top">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <label for="total" class="form-label mb-0">
+              Total a pagar
+              <span class="badge text-bg-secondary ms-1" :class="{ invisible: driver !== 'total' }">fijado</span>
+            </label>
+            <div class="input-group" style="max-width: 13rem;">
+              <span class="input-group-text">$</span>
+              <input id="total" class="form-control text-end font-monospace" :class="{ 'border-primary': driver === 'total' }"
+                type="text" inputmode="decimal" autocomplete="off" :value="totalInput" :disabled="!hasCuenta"
+                @focus="$event.target.select()" @input="onTotalInput" @blur="onTotalBlur" :aria-invalid="!!totalError">
+            </div>
+          </div>
+          <div class="form-text text-danger text-end error-line" :class="{ invisible: !totalError }">{{ totalError || ' ' }}</div>
+        </div>
+
+        <div class="py-2 border-top">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <label for="por-persona" class="form-label mb-0">
+              Por persona <span class="text-body-secondary">({{ peopleLabel }})</span>
+              <span class="badge text-bg-secondary ms-1" :class="{ invisible: driver !== 'perPerson' }">fijado</span>
+            </label>
+            <div class="input-group" style="max-width: 13rem;">
+              <span class="input-group-text">$</span>
+              <input id="por-persona" class="form-control text-end font-monospace" :class="{ 'border-primary': driver === 'perPerson' }"
+                type="text" inputmode="decimal" autocomplete="off" :value="perPersonInput" :disabled="!hasCuenta"
+                @focus="$event.target.select()" @input="onPerPersonInput" @blur="onPerPersonBlur" :aria-invalid="!!perPersonError">
+            </div>
+          </div>
+          <div class="form-text text-danger text-end error-line" :class="{ invisible: !perPersonError }">{{ perPersonError || ' ' }}</div>
+        </div>
+
+        <div class="slot-stack mt-3">
+          <div class="alert alert-danger py-2 mb-0" role="alert" :class="{ invisible: !resultError }">{{ resultError || ' ' }}</div>
+          <div class="alert alert-secondary py-2 mb-0" role="note" :class="{ invisible: hasCuenta }">
+            Ingresá la cuenta para empezar.
+          </div>
+        </div>
+
+        <div class="mt-4">
+          <h3 class="h6">Composición del total</h3>
+          <div class="chart-box">
+            <canvas v-show="canShowChart && !chartError" id="chart-composicion" role="img" :aria-label="chartAria"></canvas>
+            <div v-if="!chartError && !canShowChart" class="chart-empty text-body-secondary small">
+              {{ hasCuenta ? 'Completá un total válido para ver la composición.' : 'Ingresá la cuenta para ver la composición del total.' }}
+            </div>
+            <div v-if="chartError" class="chart-empty">
+              <div class="alert alert-secondary py-2 mb-0" role="note">
+                No se pudo cargar el gráfico; el cálculo sigue funcionando.
+              </div>
+            </div>
+            <div v-if="canShowChart && !chartError" class="chart-center" aria-hidden="true">
+              <span class="text-body-secondary small">Total</span>
+              <strong class="chart-total font-monospace">{{ money(totalCents) }}</strong>
+            </div>
+          </div>
+          <ul class="list-unstyled small mt-2 mb-0 legend-list">
+            <li v-for="seg in chartSegments" :key="seg.key" class="d-flex flex-wrap align-items-baseline gap-2 py-1">
+              <span class="legend-dot" :style="{ background: 'var(' + seg.colorVar + ')' }" aria-hidden="true"></span>
+              <span class="legend-label">{{ seg.label }}</span>
+              <span class="legend-amount font-monospace">{{ money(seg.cents) }}</span>
+              <span class="legend-pct text-body-secondary">{{ sharePct(seg.cents) }}</span>
+            </li>
+          </ul>
+        </div>
+
+        <button class="btn btn-primary w-100 mt-4" type="button" :disabled="!canCopy" @click="copySummary">📋 Copiar resumen</button>
+      </div>
+    </section>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <h2 class="h6 mb-3">🧠 Trivias</h2>
+        <details class="mb-2">
+          <summary class="fw-semibold">¿De dónde viene la palabra «propina»?</summary>
+          <p class="small text-body-secondary mb-0 mt-1">Del latín <em>propinare</em>, que significa «brindar» o «beber a la salud de alguien». En la antigua Roma se dejaba una moneda extra para que se sumara otra ronda.</p>
+        </details>
+        <details class="mb-2">
+          <summary class="fw-semibold">¿En qué país puede ser incómodo dejar propina?</summary>
+          <p class="small text-body-secondary mb-0 mt-1">En Japón. El servicio se considera parte del precio y dejar dinero puede interpretarse como una imposición; en muchos lugares lo correcto es no dejar nada.</p>
+        </details>
+        <details>
+          <summary class="fw-semibold">¿Cuánto se acostumbra dejar en Argentina?</summary>
+          <p class="small text-body-secondary mb-0 mt-1">Alrededor del 10% en bares y restaurantes. No es obligatorio por ley, pero es la referencia habitual para reconocer el servicio.</p>
+        </details>
+      </div>
+    </section>
+
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.5.42/vue.global.prod.min.js"
+    integrity="sha512-PREsKi18CyKMgwXMJWtvkzinqjiN0znVfDovmVadp7pKiUpyNGtq7bD2fKElDBmdfH4DGJz8pmAdgihN8NZ8TQ=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"
+    integrity="sha512-WoViKhKD4qI2WruSZqv9+kvM4WfFhUMQCLN4QlDTt5aU56fLQy2gYoxWIqlEnXqJy/+Ac5q/hk1oWfqnMDhwMA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script>
+    const STORAGE_KEY = 'propinas';
+    const DEFAULT_PCT = 10;
+    const DEFAULT_PEOPLE = 2;
+    const DEFAULT_CUSTOM_STEP = 500;
+
+    const fmtMoney = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+    const fmtAmountInput = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2, useGrouping: false });
+    const fmtPct = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 1, useGrouping: false });
+    const fmtInt = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 });
+
+    function formatMoney(cents) {
+      return '$ ' + fmtMoney.format(cents / 100);
+    }
+
+    function formatAmountInput(cents) {
+      return fmtAmountInput.format(cents / 100);
+    }
+
+    function formatPct(value) {
+      if (!Number.isFinite(value)) return '—';
+      return fmtPct.format(value) + '%';
+    }
+
+    function clampInt(value, min, max) {
+      return Math.min(max, Math.max(min, Math.round(value)));
+    }
+
+    function applyRounding(cents, stepCents) {
+      if (!stepCents) return cents;
+      return Math.ceil(cents / stepCents) * stepCents;
+    }
+
+    function round6(value) {
+      return Math.round(value * 1e6) / 1e6;
+    }
+
+    function parseAmountToCents(raw) {
+      if (raw == null) return null;
+      let s = String(raw).trim().replace(/\$/g, '').replace(/\s/g, '').replace(/\u00a0/g, '');
+      if (!s) return null;
+      if (/^\d+[.,]$/.test(s)) s = s.slice(0, -1);
+      if (s.includes(',') && s.includes('.')) {
+        s = s.replace(/\./g, '');
+      } else if (/^\d{1,3}(\.\d{3})+$/.test(s)) {
+        s = s.replace(/\./g, '');
+      }
+      s = s.replace(',', '.');
+      if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;
+      const value = Number(s);
+      if (!Number.isFinite(value) || value <= 0 || value > 999999999) return null;
+      return Math.round(value * 100);
+    }
+
+    function parsePct(raw) {
+      if (raw == null) return null;
+      let s = String(raw).trim().replace(/%/g, '').replace(/\s/g, '').replace(/\u00a0/g, '');
+      if (!s) return null;
+      if (/^\d+[.,]$/.test(s)) s = s.slice(0, -1);
+      if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) s = s.replace(/\./g, '').replace(',', '.');
+      else s = s.replace(',', '.');
+      if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;
+      const value = Number(s);
+      if (!Number.isFinite(value) || value < 0 || value > 1000) return null;
+      return Math.round(value * 10) / 10;
+    }
+
+    function parsePctParam(raw) {
+      if (raw == null) return null;
+      const s = String(raw).trim().replace(',', '.');
+      if (!s) return null;
+      const value = Number(s);
+      if (!Number.isFinite(value) || value < 0 || value > 1000) return null;
+      return round6(value);
+    }
+
+    function parseStep(raw) {
+      if (raw == null) return null;
+      let s = String(raw).trim().replace(/\$/g, '').replace(/\s/g, '').replace(/\u00a0/g, '');
+      if (!s) return null;
+      if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
+      if (!/^\d+$/.test(s)) return null;
+      const value = Number(s);
+      if (!Number.isFinite(value) || value < 1 || value > 1000000) return null;
+      return value;
+    }
+
+    function defaultState() {
+      return {
+        cuentaCents: null,
+        personas: DEFAULT_PEOPLE,
+        driver: 'pct',
+        pct: DEFAULT_PCT,
+        fixedTotalCents: null,
+        fixedPerPersonCents: null,
+        roundMode: 'none',
+        customStep: DEFAULT_CUSTOM_STEP
+      };
+    }
+
+    function normalizeState(raw) {
+      if (!raw || typeof raw !== 'object') return null;
+      const state = defaultState();
+      if (Number.isFinite(raw.cuentaCents) && raw.cuentaCents > 0) state.cuentaCents = Math.round(raw.cuentaCents);
+      if (Number.isFinite(raw.personas)) state.personas = clampInt(raw.personas, 1, 99);
+      if (Number.isFinite(raw.pct)) state.pct = Math.min(1000, Math.max(0, raw.pct));
+      if (Number.isFinite(raw.customStep)) state.customStep = clampInt(raw.customStep, 1, 1000000);
+      if (['none', '100', '1000', 'custom'].includes(raw.roundMode)) state.roundMode = raw.roundMode;
+      if (raw.driver === 'total' && Number.isFinite(raw.fixedTotalCents) && raw.fixedTotalCents > 0) {
+        state.driver = 'total';
+        state.fixedTotalCents = Math.round(raw.fixedTotalCents);
+      } else if (raw.driver === 'perPerson' && Number.isFinite(raw.fixedPerPersonCents) && raw.fixedPerPersonCents > 0) {
+        state.driver = 'perPerson';
+        state.fixedPerPersonCents = Math.round(raw.fixedPerPersonCents);
+      }
+      if (state.driver !== 'pct') state.roundMode = 'none';
+      return state;
+    }
+
+    function loadState() {
+      const params = new URLSearchParams(window.location.search);
+      const urlKeys = ['cuenta', 'personas', 'modo', 'pct', 'total', 'persona', 'redondeo', 'paso'];
+      if (urlKeys.some(key => params.has(key))) {
+        const state = defaultState();
+        state.cuentaCents = parseAmountToCents(params.get('cuenta'));
+        const personas = Number.parseInt(params.get('personas'), 10);
+        if (Number.isFinite(personas)) state.personas = clampInt(personas, 1, 99);
+        const pct = parsePctParam(params.get('pct'));
+        if (pct != null) state.pct = pct;
+        const redondeo = params.get('redondeo');
+        if (redondeo === '100' || redondeo === '1000' || redondeo === 'custom') state.roundMode = redondeo;
+        const paso = parseStep(params.get('paso'));
+        if (paso != null) state.customStep = paso;
+        const modo = params.get('modo');
+        if (modo === 'total') {
+          const total = parseAmountToCents(params.get('total'));
+          if (total != null) {
+            state.driver = 'total';
+            state.fixedTotalCents = total;
+          }
+        } else if (modo === 'persona') {
+          const perPerson = parseAmountToCents(params.get('persona'));
+          if (perPerson != null) {
+            state.driver = 'perPerson';
+            state.fixedPerPersonCents = perPerson;
+          }
+        }
+        if (state.driver !== 'pct') state.roundMode = 'none';
+        return { state, fromUrl: true };
+      }
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const state = normalizeState(JSON.parse(raw));
+          if (state) return { state, fromUrl: false };
+        }
+      } catch { /* sin estado guardado */ }
+      return { state: defaultState(), fromUrl: false };
+    }
+
+    function copyText(text) {
+      if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
+      return new Promise((resolve, reject) => {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.append(textarea);
+        textarea.select();
+        try {
+          document.execCommand('copy') ? resolve() : reject(new Error('copy'));
+        } catch (error) {
+          reject(error);
+        } finally {
+          textarea.remove();
+        }
+      });
+    }
+
+    let noticeTimer = null;
+    let resetTimer = null;
+    let chart = null;
+
+    const app = Vue.createApp({
+      data() {
+        const loaded = loadState();
+        return {
+          ...loaded.state,
+          fromUrl: loaded.fromUrl,
+          presetPcts: [0, 5, 10, 12, 15, 20],
+          cuentaRaw: null,
+          totalRaw: null,
+          perPersonRaw: null,
+          pctRaw: null,
+          personasRaw: null,
+          customStepRaw: null,
+          notice: '',
+          noticeType: 'success',
+          resetArmed: false,
+          themeVersion: 0,
+          chartError: false
+        };
+      },
+      computed: {
+        personasSafe() {
+          return clampInt(this.personas, 1, 99);
+        },
+        pctSafe() {
+          return Math.min(1000, Math.max(0, Number.isFinite(this.pct) ? this.pct : 0));
+        },
+        hasCuenta() {
+          return Number.isFinite(this.cuentaCents) && this.cuentaCents > 0;
+        },
+        customStepValid() {
+          return Number.isFinite(this.customStep) && this.customStep >= 1 && this.customStep <= 1000000;
+        },
+        customStepError() {
+          if (this.roundMode !== 'custom') return '';
+          if (!this.customStepValid) return 'Múltiplo entre 1 y 1.000.000.';
+          return '';
+        },
+        roundingStepCents() {
+          if (this.driver !== 'pct') return 0;
+          if (this.roundMode === '100') return 10000;
+          if (this.roundMode === '1000') return 100000;
+          if (this.roundMode === 'custom' && this.customStepValid) return this.customStep * 100;
+          return 0;
+        },
+        baseTipCents() {
+          if (!this.hasCuenta) return 0;
+          return Math.round(this.cuentaCents * this.pctSafe / 100);
+        },
+        rawTotalCents() {
+          if (!this.hasCuenta) return 0;
+          return this.cuentaCents + this.baseTipCents;
+        },
+        roundedTotalCents() {
+          if (!this.hasCuenta) return 0;
+          return applyRounding(this.rawTotalCents, this.roundingStepCents);
+        },
+        roundingDeltaCents() {
+          return this.roundedTotalCents - this.rawTotalCents;
+        },
+        totalCents() {
+          if (!this.hasCuenta) return null;
+          if (this.driver === 'total') return this.fixedTotalCents;
+          if (this.driver === 'perPerson') {
+            return this.fixedPerPersonCents != null ? this.fixedPerPersonCents * this.personasSafe : null;
+          }
+          return this.roundedTotalCents;
+        },
+        tipCents() {
+          if (this.totalCents == null) return null;
+          return this.totalCents - this.cuentaCents;
+        },
+        effectivePct() {
+          if (!this.hasCuenta || this.tipCents == null) return null;
+          return this.tipCents / this.cuentaCents * 100;
+        },
+        perPersonCents() {
+          if (this.totalCents == null) return null;
+          return this.totalCents / this.personasSafe;
+        },
+        roundingApplied() {
+          return this.driver === 'pct' && this.roundingStepCents > 0 && this.roundingDeltaCents > 0;
+        },
+        roundingNoDelta() {
+          return this.driver === 'pct' && this.roundingStepCents > 0 && this.roundingDeltaCents === 0;
+        },
+        stepLabel() {
+          if (this.roundMode === '100') return '$100';
+          if (this.roundMode === '1000') return '$1.000';
+          if (this.roundMode === 'custom') return this.customStepValid ? '$' + fmtInt.format(this.customStep) : '$…';
+          return '';
+        },
+        displayPct() {
+          if (this.driver === 'pct') return this.pctSafe;
+          return this.effectivePct != null && this.effectivePct >= 0 ? this.effectivePct : 0;
+        },
+        cuentaInput() {
+          if (this.cuentaRaw !== null) return this.cuentaRaw;
+          return this.hasCuenta ? formatAmountInput(this.cuentaCents) : '';
+        },
+        cuentaError() {
+          if (this.cuentaRaw !== null && this.cuentaRaw.trim() !== '' && this.cuentaCents == null) {
+            return 'Importe inválido (ej. 48000,50).';
+          }
+          return '';
+        },
+        pctInput() {
+          if (this.pctRaw !== null) return this.pctRaw;
+          return fmtPct.format(this.displayPct);
+        },
+        pctError() {
+          if (this.pctRaw !== null && this.pctRaw.trim() !== '' && parsePct(this.pctRaw) == null) {
+            return 'Ingresá un porcentaje válido.';
+          }
+          return '';
+        },
+        personasInput() {
+          if (this.personasRaw !== null) return this.personasRaw;
+          return String(this.personasSafe);
+        },
+        customStepInput() {
+          if (this.customStepRaw !== null) return this.customStepRaw;
+          return this.customStepValid ? String(this.customStep) : '';
+        },
+        totalInput() {
+          if (this.totalRaw !== null) return this.totalRaw;
+          return this.totalCents == null ? '' : formatAmountInput(this.totalCents);
+        },
+        perPersonInput() {
+          if (this.perPersonRaw !== null) return this.perPersonRaw;
+          return this.perPersonCents == null ? '' : formatAmountInput(this.perPersonCents);
+        },
+        totalError() {
+          if (this.driver !== 'total') return '';
+          if (this.totalRaw !== null && this.totalRaw.trim() !== '' && this.fixedTotalCents == null) {
+            return 'Ingresá un total válido.';
+          }
+          return '';
+        },
+        perPersonError() {
+          if (this.driver !== 'perPerson') return '';
+          if (this.perPersonRaw !== null && this.perPersonRaw.trim() !== '' && this.fixedPerPersonCents == null) {
+            return 'Ingresá un importe válido.';
+          }
+          return '';
+        },
+        resultError() {
+          if (!this.hasCuenta) return '';
+          if (this.driver === 'total' && this.fixedTotalCents == null) {
+            return this.totalError ? '' : 'Ingresá un total a pagar.';
+          }
+          if (this.driver === 'perPerson' && this.fixedPerPersonCents == null) {
+            return this.perPersonError ? '' : 'Ingresá un importe por persona.';
+          }
+          if (this.totalCents != null && this.totalCents < this.cuentaCents) {
+            return this.driver === 'perPerson'
+              ? 'El por-persona no cubre la cuenta.'
+              : 'El total no cubre la cuenta.';
+          }
+          if (this.tipCents != null && this.tipCents < 0) {
+            return 'La propina no puede ser negativa.';
+          }
+          return '';
+        },
+        calculable() {
+          return this.hasCuenta && !this.resultError;
+        },
+        canCopy() {
+          return this.calculable && !this.customStepError && !this.pctError;
+        },
+        canBackToPct() {
+          return this.driver !== 'pct' && this.hasCuenta;
+        },
+        peopleLabel() {
+          return this.personasSafe === 1 ? '1 persona' : this.personasSafe + ' personas';
+        },
+        chartSegments() {
+          if (!this.calculable) return [];
+          const segments = [
+            { key: 'cuenta', label: 'Cuenta', cents: this.cuentaCents, colorVar: '--bs-primary' },
+            { key: 'propina', label: this.roundingApplied ? 'Propina base' : 'Propina', cents: this.roundingApplied ? this.baseTipCents : this.tipCents, colorVar: '--bs-success' }
+          ];
+          if (this.roundingApplied) {
+            segments.push({ key: 'redondeo', label: 'Redondeo', cents: this.roundingDeltaCents, colorVar: '--bs-warning' });
+          }
+          return segments.filter(segment => segment.cents > 0);
+        },
+        canShowChart() {
+          return this.calculable && this.chartSegments.length > 0;
+        },
+        chartAria() {
+          if (!this.canShowChart) return 'Sin datos para graficar.';
+          const parts = this.chartSegments.map(segment => `${segment.label} ${this.money(segment.cents)} (${this.sharePct(segment.cents)} del total)`);
+          return 'Composición del total: ' + parts.join(', ') + '.';
+        },
+        summary() {
+          if (!this.calculable || this.customStepError || this.pctError) return '';
+          const lines = ['🍽️ Propinas', `Cuenta: ${this.money(this.cuentaCents)}`];
+          if (this.driver === 'pct') {
+            if (this.roundingApplied) {
+              lines.push(`Propina (${this.pctLabel(this.pct)}): ${this.money(this.baseTipCents)}`);
+              lines.push(`Redondeo al próximo ${this.stepLabel}: +${this.money(this.roundingDeltaCents)}`);
+              lines.push(`Propina efectiva: ${this.money(this.tipCents)} (${this.pctLabel(this.effectivePct)})`);
+            } else {
+              lines.push(`Propina (${this.pctLabel(this.pct)}): ${this.money(this.tipCents)}`);
+            }
+          } else {
+            lines.push(`Propina: ${this.money(this.tipCents)} (${this.pctLabel(this.effectivePct)})`);
+          }
+          lines.push(`Total a pagar: ${this.money(this.totalCents)}`);
+          lines.push(`Personas: ${this.personasSafe}`);
+          lines.push(`Por persona: ${this.money(this.perPersonCents)}`);
+          return lines.join('\n');
+        }
+      },
+      watch: {
+        chartSegments() {
+          this.$nextTick(() => this.renderChart());
+        },
+        themeVersion() {
+          this.$nextTick(() => this.renderChart());
+        }
+      },
+      methods: {
+        money(cents) {
+          return formatMoney(cents);
+        },
+        pctLabel(value) {
+          return formatPct(value);
+        },
+        sharePct(cents) {
+          if (!this.totalCents) return '0%';
+          return formatPct(cents / this.totalCents * 100);
+        },
+        isPresetActive(preset) {
+          return this.driver === 'pct' && Math.abs(this.pctSafe - preset) < 0.05;
+        },
+        showNotice(text, type = 'success') {
+          this.notice = text;
+          this.noticeType = type;
+          clearTimeout(noticeTimer);
+          noticeTimer = setTimeout(() => { this.notice = ''; }, 2200);
+        },
+        persist() {
+          if (this.fromUrl) {
+            this.fromUrl = false;
+            return;
+          }
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({
+              v: 1,
+              cuentaCents: this.cuentaCents,
+              personas: this.personas,
+              driver: this.driver,
+              pct: this.pct,
+              fixedTotalCents: this.fixedTotalCents,
+              fixedPerPersonCents: this.fixedPerPersonCents,
+              roundMode: this.roundMode,
+              customStep: this.customStep
+            }));
+          } catch { /* sin persistencia */ }
+        },
+        onCuentaInput(event) {
+          const raw = event.target.value;
+          this.cuentaRaw = raw;
+          this.cuentaCents = parseAmountToCents(raw);
+          this.persist();
+        },
+        onCuentaBlur() {
+          if (this.cuentaRaw !== null && this.cuentaCents != null) this.cuentaRaw = null;
+        },
+        onPctInput(event) {
+          const raw = event.target.value;
+          this.pctRaw = raw;
+          const parsed = parsePct(raw);
+          this.pct = parsed == null ? 0 : parsed;
+          this.driver = 'pct';
+          this.fixedTotalCents = null;
+          this.fixedPerPersonCents = null;
+          this.totalRaw = null;
+          this.perPersonRaw = null;
+          this.persist();
+        },
+        onPctBlur() {
+          if (this.pctRaw === null) return;
+          const parsed = parsePct(this.pctRaw);
+          if (parsed != null) {
+            this.pct = parsed;
+            this.pctRaw = null;
+          } else if (this.pctRaw.trim() === '') {
+            this.pct = 0;
+            this.pctRaw = null;
+          }
+        },
+        onPeopleInput(event) {
+          const raw = event.target.value;
+          this.personasRaw = raw;
+          const parsed = Number.parseInt(raw, 10);
+          this.personas = Number.isFinite(parsed) ? clampInt(parsed, 1, 99) : 1;
+          this.persist();
+        },
+        onPeopleBlur() {
+          if (this.personasRaw === null) return;
+          const parsed = Number.parseInt(this.personasRaw, 10);
+          this.personas = Number.isFinite(parsed) ? clampInt(parsed, 1, 99) : 1;
+          this.personasRaw = null;
+        },
+        decPeople() {
+          if (this.personas <= 1) return;
+          this.personas = clampInt(this.personas - 1, 1, 99);
+          this.personasRaw = null;
+          this.persist();
+        },
+        incPeople() {
+          if (this.personas >= 99) return;
+          this.personas = clampInt(this.personas + 1, 1, 99);
+          this.personasRaw = null;
+          this.persist();
+        },
+        setPct(value) {
+          this.driver = 'pct';
+          this.pct = value;
+          this.pctRaw = null;
+          this.fixedTotalCents = null;
+          this.fixedPerPersonCents = null;
+          this.totalRaw = null;
+          this.perPersonRaw = null;
+          this.persist();
+        },
+        onTotalInput(event) {
+          const raw = event.target.value;
+          this.totalRaw = raw;
+          this.driver = 'total';
+          this.fixedTotalCents = parseAmountToCents(raw);
+          this.fixedPerPersonCents = null;
+          this.perPersonRaw = null;
+          this.pctRaw = null;
+          this.roundMode = 'none';
+          this.persist();
+        },
+        onTotalBlur() {
+          if (this.totalRaw === null) return;
+          if (this.driver === 'total' && this.fixedTotalCents != null) this.totalRaw = null;
+          else if (this.driver !== 'total') this.totalRaw = null;
+        },
+        onPerPersonInput(event) {
+          const raw = event.target.value;
+          this.perPersonRaw = raw;
+          this.driver = 'perPerson';
+          this.fixedPerPersonCents = parseAmountToCents(raw);
+          this.fixedTotalCents = null;
+          this.totalRaw = null;
+          this.pctRaw = null;
+          this.roundMode = 'none';
+          this.persist();
+        },
+        onPerPersonBlur() {
+          if (this.perPersonRaw === null) return;
+          if (this.driver === 'perPerson' && this.fixedPerPersonCents != null) this.perPersonRaw = null;
+          else if (this.driver !== 'perPerson') this.perPersonRaw = null;
+        },
+        onRoundChange() {
+          this.persist();
+        },
+        onStepInput(event) {
+          const raw = event.target.value;
+          this.customStepRaw = raw;
+          this.customStep = parseStep(raw);
+          this.persist();
+        },
+        onStepBlur() {
+          if (this.customStepRaw !== null && this.customStep != null) this.customStepRaw = null;
+        },
+        backToPct() {
+          if (!this.hasCuenta) return;
+          const effective = this.effectivePct;
+          this.driver = 'pct';
+          this.pct = effective != null && effective >= 0 ? Math.min(1000, effective) : this.pctSafe;
+          this.pctRaw = null;
+          this.fixedTotalCents = null;
+          this.fixedPerPersonCents = null;
+          this.totalRaw = null;
+          this.perPersonRaw = null;
+          this.roundMode = 'none';
+          this.persist();
+          this.showNotice('Calculando desde el porcentaje.');
+        },
+        async share() {
+          const url = new URL(window.location.href);
+          url.search = '';
+          if (this.hasCuenta) url.searchParams.set('cuenta', String(this.cuentaCents / 100));
+          url.searchParams.set('personas', String(this.personasSafe));
+          let mode = 'pct';
+          if (this.driver === 'total' && this.fixedTotalCents != null) {
+            mode = 'total';
+            url.searchParams.set('modo', 'total');
+            url.searchParams.set('total', String(this.fixedTotalCents / 100));
+          } else if (this.driver === 'perPerson' && this.fixedPerPersonCents != null) {
+            mode = 'persona';
+            url.searchParams.set('modo', 'persona');
+            url.searchParams.set('persona', String(this.fixedPerPersonCents / 100));
+          } else {
+            url.searchParams.set('modo', 'pct');
+            const pct = this.driver === 'pct'
+              ? this.pct
+              : (this.effectivePct != null && this.effectivePct >= 0 ? this.effectivePct : this.pct);
+            url.searchParams.set('pct', String(round6(pct)));
+          }
+          if (mode === 'pct' && !this.customStepError) {
+            if (this.roundMode === '100' || this.roundMode === '1000') {
+              url.searchParams.set('redondeo', this.roundMode);
+            } else if (this.roundMode === 'custom') {
+              url.searchParams.set('redondeo', 'custom');
+              url.searchParams.set('paso', String(this.customStep));
+            }
+          }
+          try {
+            await copyText(url.toString());
+            this.showNotice('Link copiado.');
+          } catch {
+            window.prompt('Copiá el enlace:', url.toString());
+          }
+        },
+        async copySummary() {
+          if (!this.canCopy) return;
+          try {
+            await copyText(this.summary);
+            this.showNotice('Resumen copiado.');
+          } catch {
+            this.showNotice('No se pudo copiar.', 'danger');
+            window.prompt('Copiá el resumen:', this.summary);
+          }
+        },
+        reset() {
+          if (!this.resetArmed) {
+            this.resetArmed = true;
+            clearTimeout(resetTimer);
+            resetTimer = setTimeout(() => { this.resetArmed = false; }, 5000);
+            return;
+          }
+          clearTimeout(resetTimer);
+          this.resetArmed = false;
+          try { localStorage.removeItem(STORAGE_KEY); } catch { /* sin persistencia */ }
+          const defaults = defaultState();
+          this.cuentaCents = defaults.cuentaCents;
+          this.personas = defaults.personas;
+          this.driver = defaults.driver;
+          this.pct = defaults.pct;
+          this.fixedTotalCents = defaults.fixedTotalCents;
+          this.fixedPerPersonCents = defaults.fixedPerPersonCents;
+          this.roundMode = defaults.roundMode;
+          this.customStep = defaults.customStep;
+          this.cuentaRaw = null;
+          this.totalRaw = null;
+          this.perPersonRaw = null;
+          this.pctRaw = null;
+          this.personasRaw = null;
+          this.customStepRaw = null;
+          this.fromUrl = false;
+          history.replaceState(null, '', window.location.pathname);
+          this.showNotice('Calculadora reiniciada.');
+        },
+        onThemeChange() {
+          this.themeVersion += 1;
+        },
+        renderChart() {
+          const canvas = document.getElementById('chart-composicion');
+          if (typeof Chart === 'undefined') {
+            this.chartError = true;
+            if (chart) { chart.destroy(); chart = null; }
+            return;
+          }
+          this.chartError = false;
+          if (!canvas || !this.canShowChart) {
+            if (chart) { chart.destroy(); chart = null; }
+            return;
+          }
+          if (chart) { chart.destroy(); chart = null; }
+          const previous = Chart.getChart(canvas);
+          if (previous) previous.destroy();
+          const styles = getComputedStyle(document.documentElement);
+          const css = name => styles.getPropertyValue(name).trim();
+          const cardBg = css('--bs-card-bg') || css('--bs-body-bg') || '#ffffff';
+          const data = this.chartSegments;
+          try {
+            chart = new Chart(canvas, {
+              type: 'doughnut',
+              data: {
+                labels: data.map(segment => segment.label),
+                datasets: [{
+                  data: data.map(segment => segment.cents / 100),
+                  backgroundColor: data.map(segment => css(segment.colorVar)),
+                  borderColor: cardBg,
+                  borderWidth: 2,
+                  hoverOffset: 4
+                }]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '66%',
+                animation: false,
+                plugins: {
+                  legend: { display: false },
+                  tooltip: {
+                    callbacks: {
+                      label: context => `${context.label}: ${formatMoney(Math.round(context.raw * 100))}`
+                    }
+                  }
+                }
+              }
+            });
+          } catch {
+            this.chartError = true;
+            chart = null;
+          }
+        }
+      },
+      mounted() {
+        window.addEventListener('propinas-theme', this.onThemeChange);
+        this.$nextTick(() => this.renderChart());
+        if (this.fromUrl) this.showNotice('Vista compartida: editá algo para guardarla acá.');
+      },
+      beforeUnmount() {
+        window.removeEventListener('propinas-theme', this.onThemeChange);
+      }
+    });
+
+    app.mount('#app');
+
+    (() => {
+      const root = document.documentElement;
+      const button = document.getElementById('theme-toggle');
+      const stored = localStorage.getItem('theme');
+      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      const apply = (theme) => {
+        root.setAttribute('data-bs-theme', theme);
+        button.textContent = theme === 'dark' ? '☀️' : '🌙';
+        window.dispatchEvent(new Event('propinas-theme'));
+      };
+      apply(initial);
+      button.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        apply(next);
+      });
+    })();
+  </script>
+</body>
+</html>

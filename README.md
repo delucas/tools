@@ -15,6 +15,7 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`basket`](./basket) | Lista de compras para cualquier comercio, con cantidades, unidades y orden personalizado. |
 | [`board`](./board) | 📌 Board: mini Trello minimalista con columnas y tarjetas arrastrables. |
 | [`miti-miti`](./miti-miti) | Cuentas entre amigos, mitad y mitad: gastos, pagos y liquidación. |
+| [`propinas`](./propinas) | Calculá propina, redondeo y total por persona, y fijá el total o lo que paga cada uno. |
 | [`gsd`](./gsd) | Get Sh*t Done: lista de tareas con fecha de creación y fecha de tildado. |
 | [`checksmith`](./checksmith) | Forja de checklists: catálogo de plantillas para instanciar en Get Sh*t Done. |
 | [`hojitas`](./hojitas) | Hojas A4 para imprimir: puntitos, renglones o cuadrícula configurables. |

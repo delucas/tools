@@ -52,6 +52,21 @@ Este repositorio reúne herramientas web autocontenidas. Cada herramienta vive e
 </div>
 ```
 
+- Si la herramienta lo justifica, se pueden agregar hasta 3 **trivias** al final, antes de la firma. Son opcionales: no las uses como relleno. Van en una tarjeta con preguntas desplegables nativas (`<details>`/`<summary>`, sin JS adicional ni Bootstrap bundle), con respuestas breves y verificables. El formato de referencia está en `propinas/index.html`.
+
+```html
+<section class="card mb-3">
+  <div class="card-body">
+    <h2 class="h6 mb-3">🧠 Trivias</h2>
+    <details class="mb-2">
+      <summary class="fw-semibold">¿Pregunta?</summary>
+      <p class="small text-body-secondary mb-0 mt-1">Respuesta breve.</p>
+    </details>
+    <!-- hasta 3; la última puede ir sin mb-2 -->
+  </div>
+</section>
+```
+
 - Al final, incluir exactamente (con la clase `signature` y su regla CSS):
 
 ```html

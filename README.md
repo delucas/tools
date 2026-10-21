@@ -61,6 +61,7 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`clippy`](./clippy) | 📋 Clippy: pegá algo y mirá qué hay adentro del portapapeles. |
 | [`asignatron`](./asignatron) | 🎲 Asignatron: repartí un elemento de cada lista por destinatario, al azar. |
 | [`cerrajero`](./cerrajero) | 🗝️ Cerrajero: perfilá una llave sobre la pantalla, con líneas ajustables y dibujo en vivo. |
+| [`conversor-bases`](./conversor-bases) | 🔢 Conversor de bases: enteros entre binario, octal, decimal, hexadecimal y bases de 2 a 36. |
 | [`metalicos`](./metalicos) | 🔩 Metálicos: los 10 ratios del platino al plomo, con calculadora y comparador. |
 | [`proporciones`](./proporciones) | ➗ Proporciones: porcentajes, variaciones, regla de tres y mezclas 3:1, al instante. |
 | [`escaner-pdf`](./escaner-pdf) | 📄 Escáner a PDF: fotos de cada hoja compiladas en un PDF A4 para compartir. |

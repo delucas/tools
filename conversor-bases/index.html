@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f522%3B%3C/text%3E%3C/svg%3E">
+  <title>Conversor de bases — Enteros en bases 2 a 36</title>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    p.signature { font-size: 0.8em; }
+
+    .alert-flotante {
+      position: fixed;
+      bottom: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1050;
+      max-width: min(92vw, 560px);
+      margin-bottom: 0;
+      box-shadow: var(--bs-box-shadow);
+    }
+
+    .num-field {
+      height: 100%;
+      padding: 0.5rem;
+      border: 1px solid transparent;
+      border-radius: 0.6rem;
+      transition: background-color 0.15s ease, border-color 0.15s ease;
+    }
+
+    .num-field.field-active {
+      background: var(--bs-tertiary-bg);
+      border-color: var(--bs-border-color);
+    }
+
+    .num-field.field-active .form-control {
+      border-color: var(--bs-primary);
+    }
+
+    .num-input {
+      font-family: var(--bs-font-monospace);
+      font-size: 1rem;
+    }
+
+    .chart { display: block; height: auto; }
+    .chart-scale { width: auto; min-width: 8.75rem; }
+    .chart-bar { fill: var(--bs-primary); }
+    .chart-bar.zero { fill: var(--bs-secondary-color); opacity: 0.22; }
+    .chart-axis { stroke: var(--bs-border-color); stroke-width: 1; }
+    .chart-label {
+      fill: var(--bs-secondary-color);
+      font-family: var(--bs-font-monospace);
+      font-size: 10px;
+    }
+
+    .decomp-scroll { overflow-x: auto; padding-bottom: 0.25rem; }
+    .decomp-line {
+      font-family: var(--bs-font-monospace);
+      font-size: 0.9rem;
+      white-space: nowrap;
+    }
+    .decomp-line sup, .decomp-line sub { font-size: 0.7em; }
+
+    .repr {
+      font-family: var(--bs-font-monospace);
+      white-space: nowrap;
+    }
+
+    .allbases-table thead th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: var(--bs-body-bg);
+    }
+
+    @media (max-width: 575.98px) {
+      .num-field { padding: 0.4rem; }
+      .decomp-line { font-size: 0.82rem; }
+    }
+  </style>
+</head>
+<body>
+  <main class="container py-4" style="max-width: 960px;">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">🔢 Conversor de bases</h1>
+        <p class="text-body-secondary mb-0">Enteros entre binario, octal, decimal, hexadecimal y cualquier base de 2 a 36.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="share" class="btn btn-outline-secondary btn-sm" type="button">🔗 Compartir</button>
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div id="notice" class="alert alert-success py-2 alert-flotante d-none" role="status"></div>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+          <h2 class="h6 mb-0">Entrada y equivalencias</h2>
+          <span class="badge text-bg-secondary">Editá cualquier campo</span>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-12 col-md-6">
+            <div id="field-10" class="num-field">
+              <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
+                <label for="in-10" class="form-label mb-0">Decimal</label>
+                <span class="badge text-bg-secondary">base 10</span>
+              </div>
+              <div class="input-group">
+                <input id="in-10" class="form-control num-input" type="text" inputmode="numeric"
+                  autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" aria-describedby="err-10">
+                <button class="btn btn-outline-secondary" type="button" data-copy="10" aria-label="Copiar decimal">📋</button>
+              </div>
+              <div id="err-10" class="small text-danger mt-1 d-none" role="alert"></div>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-6">
+            <div id="field-2" class="num-field">
+              <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
+                <label for="in-2" class="form-label mb-0">Binario</label>
+                <span class="badge text-bg-secondary">base 2</span>
+              </div>
+              <div class="input-group">
+                <input id="in-2" class="form-control num-input" type="text" inputmode="numeric"
+                  autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" aria-describedby="err-2">
+                <button class="btn btn-outline-secondary" type="button" data-copy="2" aria-label="Copiar binario">📋</button>
+              </div>
+              <div id="err-2" class="small text-danger mt-1 d-none" role="alert"></div>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-6">
+            <div id="field-8" class="num-field">
+              <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
+                <label for="in-8" class="form-label mb-0">Octal</label>
+                <span class="badge text-bg-secondary">base 8</span>
+              </div>
+              <div class="input-group">
+                <input id="in-8" class="form-control num-input" type="text" inputmode="numeric"
+                  autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" aria-describedby="err-8">
+                <button class="btn btn-outline-secondary" type="button" data-copy="8" aria-label="Copiar octal">📋</button>
+              </div>
+              <div id="err-8" class="small text-danger mt-1 d-none" role="alert"></div>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-6">
+            <div id="field-16" class="num-field">
+              <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
+                <label for="in-16" class="form-label mb-0">Hexadecimal</label>
+                <span class="badge text-bg-secondary">base 16</span>
+              </div>
+              <div class="input-group">
+                <input id="in-16" class="form-control num-input" type="text" inputmode="text"
+                  autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false"
+                  enterkeyhint="done" aria-describedby="err-16">
+                <button class="btn btn-outline-secondary" type="button" data-copy="16" aria-label="Copiar hexadecimal">📋</button>
+              </div>
+              <div id="err-16" class="small text-danger mt-1 d-none" role="alert"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-3 align-items-start mt-1">
+          <div class="col-12 col-sm-4">
+            <label for="base-extra" class="form-label">Otra base</label>
+            <select id="base-extra" class="form-select" aria-label="Base de la representación extra"></select>
+            <div class="form-text">De 2 a 36.</div>
+          </div>
+          <div class="col-12 col-sm-8">
+            <div id="field-extra" class="num-field">
+              <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
+                <label for="in-extra" class="form-label mb-0">Representación</label>
+                <span id="extra-badge" class="badge text-bg-secondary">base 12</span>
+              </div>
+              <div id="extra-group" class="input-group">
+                <input id="in-extra" class="form-control num-input" type="text" inputmode="text"
+                  autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false"
+                  enterkeyhint="done" aria-describedby="err-extra">
+                <button class="btn btn-outline-secondary" type="button" data-copy="extra" aria-label="Copiar la representación en la base extra">📋</button>
+              </div>
+              <div id="err-extra" class="small text-danger mt-1 d-none" role="alert"></div>
+            </div>
+            <p id="extra-note" class="small text-body-secondary mt-1 mb-0 d-none">
+              Esa base ya está en los campos de arriba; usá ese campo.
+            </p>
+          </div>
+        </div>
+
+        <p class="form-text mt-3 mb-0">
+          Solo enteros positivos, hasta 128 dígitos al escribir en un campo. En bases mayores a 10 se usan las letras A–Z.
+          También se aceptan los prefijos <code>0b</code>, <code>0o</code> y <code>0x</code> al pegar.
+        </p>
+      </div>
+    </section>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-1">
+          <div class="d-flex flex-wrap align-items-center gap-2">
+            <h2 class="h6 mb-0">Cómo se compone</h2>
+            <span id="comp-badge" class="badge text-bg-secondary">base 2</span>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <label for="chart-scale" class="small text-body-secondary mb-0">Escala</label>
+            <select id="chart-scale" class="form-select chart-scale" aria-label="Escala del gráfico">
+              <option value="linear">Lineal</option>
+              <option value="log" selected>Logarítmica</option>
+            </select>
+          </div>
+        </div>
+        <p id="comp-subtitle" class="small text-body-secondary mb-0">Ingresá un número entero para ver la composición.</p>
+
+        <div id="chart-empty" class="small text-body-secondary mt-3">Ingresá un número entero para ver el aporte de cada posición.</div>
+        <div id="chart-wrap" class="mt-3 d-none">
+          <svg id="chart" class="chart w-100" viewBox="0 0 360 180" role="img" aria-label="Aportes por posición"></svg>
+          <p id="chart-help" class="form-text mt-1 mb-0">
+            La altura de cada barra es logarítmica: sirve para comparar aportes de distinto tamaño.
+            La posición 0 es la de las unidades.
+          </p>
+        </div>
+
+        <details class="mt-3">
+          <summary class="fw-semibold">🧩 Ver la cuenta completa</summary>
+          <div id="decomp" class="mt-2"></div>
+        </details>
+      </div>
+    </section>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <details>
+          <summary class="fw-semibold">🌐 Ver todas las bases (2–36)</summary>
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-2 mb-2">
+            <p class="small text-body-secondary mb-0">La misma cantidad en cada base.</p>
+            <button id="copy-table" class="btn btn-outline-secondary btn-sm" type="button">📋 Copiar tabla</button>
+          </div>
+          <div class="table-responsive" style="max-height: 420px;">
+            <table class="table table-sm table-hover align-middle mb-0 allbases-table">
+              <caption class="visually-hidden">Representación del número en las bases 2 a 36</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Base</th>
+                  <th scope="col">Representación</th>
+                </tr>
+              </thead>
+              <tbody id="allbases-body"></tbody>
+            </table>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <h2 class="h6 mb-3">🧠 Trivias</h2>
+        <details class="mb-2">
+          <summary class="fw-semibold">¿Qué significa el subíndice en 101010₂?</summary>
+          <p class="small text-body-secondary mb-0 mt-1">
+            Indica la base. 101010₂ = 1 × 2⁵ + 0 × 2⁴ + 1 × 2³ + 0 × 2² + 1 × 2¹ + 0 × 2⁰ = 42.
+          </p>
+        </details>
+        <details class="mb-2">
+          <summary class="fw-semibold">¿Por qué hexadecimal usa letras de la A a la F?</summary>
+          <p class="small text-body-secondary mb-0 mt-1">
+            Porque necesita 16 símbolos. Del 0 al 9 son diez; A–F representan 10–15. Así cada dígito hexadecimal equivale a 4 bits.
+          </p>
+        </details>
+        <details>
+          <summary class="fw-semibold">¿Cómo se pasa de binario a hexadecimal sin pasar por decimal?</summary>
+          <p class="small text-body-secondary mb-0 mt-1">
+            Agrupá los bits de a cuatro desde la derecha, completá con ceros a la izquierda y reemplazá cada grupo por su dígito hexadecimal.
+            101010₂ = 0010 1010₂ = 2A₁₆.
+          </p>
+        </details>
+      </div>
+    </section>
+
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const STORAGE_KEY = 'conversor-bases';
+      const DEFAULT = { b: 2, v: '101010', cb: 12, sc: 'log' };
+      const MAX_DIGITS = 128;
+      const STANDARD = [2, 8, 10, 16];
+      const DIGITS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      const BASE_NAMES = { 2: 'binario', 8: 'octal', 10: 'decimal', 16: 'hexadecimal' };
+
+      const inputs = {
+        10: document.getElementById('in-10'),
+        2: document.getElementById('in-2'),
+        8: document.getElementById('in-8'),
+        16: document.getElementById('in-16')
+      };
+      const errors = {
+        10: document.getElementById('err-10'),
+        2: document.getElementById('err-2'),
+        8: document.getElementById('err-8'),
+        16: document.getElementById('err-16')
+      };
+      const fieldWraps = {
+        10: document.getElementById('field-10'),
+        2: document.getElementById('field-2'),
+        8: document.getElementById('field-8'),
+        16: document.getElementById('field-16')
+      };
+
+      const extraSelect = document.getElementById('base-extra');
+      const extraInput = document.getElementById('in-extra');
+      const extraGroup = document.getElementById('extra-group');
+      const extraNote = document.getElementById('extra-note');
+      const extraBadge = document.getElementById('extra-badge');
+      const extraError = document.getElementById('err-extra');
+      const extraFieldWrap = document.getElementById('field-extra');
+
+      const compBadge = document.getElementById('comp-badge');
+      const compSubtitle = document.getElementById('comp-subtitle');
+      const chart = document.getElementById('chart');
+      const chartWrap = document.getElementById('chart-wrap');
+      const chartEmpty = document.getElementById('chart-empty');
+      const chartHelp = document.getElementById('chart-help');
+      const scaleSelect = document.getElementById('chart-scale');
+      const decomp = document.getElementById('decomp');
+      const allbasesBody = document.getElementById('allbases-body');
+      const copyTableBtn = document.getElementById('copy-table');
+
+      const notice = document.getElementById('notice');
+      const shareBtn = document.getElementById('share');
+      const resetBtn = document.getElementById('reset');
+      const themeBtn = document.getElementById('theme-toggle');
+
+      let value = null;
+      let activeKey = '2';
+      let cb = 12;
+      let scale = DEFAULT.sc;
+      let fromUrl = false;
+      let noticeTimer = null;
+      let resetArmed = false;
+      let resetTimer = null;
+
+      function digitValue(ch) {
+        return DIGITS.indexOf(ch.toUpperCase());
+      }
+
+      function formatValue(n, base) {
+        return n.toString(base).toUpperCase();
+      }
+
+      function keyForBase(base) {
+        return STANDARD.includes(base) ? String(base) : 'extra';
+      }
+
+      function baseForKey(key) {
+        return key === 'extra' ? cb : Number(key);
+      }
+
+      function fieldForKey(key) {
+        return key === 'extra' ? extraInput : inputs[Number(key)];
+      }
+
+      function errorForKey(key) {
+        return key === 'extra' ? extraError : errors[Number(key)];
+      }
+
+      function parseText(raw, base) {
+        let text = raw.trim();
+        if (!text) return { empty: true };
+
+        const prefix = base === 2 ? '0b' : base === 8 ? '0o' : base === 16 ? '0x' : null;
+        if (prefix && text.length >= 2 && text.slice(0, 2).toLowerCase() === prefix) {
+          text = text.slice(2).trim();
+        }
+        if (!text) return { empty: true };
+        if (text.length > MAX_DIGITS) {
+          return { error: `Máximo ${MAX_DIGITS} dígitos por campo.` };
+        }
+
+        let result = 0n;
+        const bigBase = BigInt(base);
+        for (const ch of text) {
+          const d = digitValue(ch);
+          if (d < 0 || d >= base) {
+            return { error: `“${ch}” no es un dígito válido en base ${base}.` };
+          }
+          result = result * bigBase + BigInt(d);
+        }
+        return { value: result };
+      }
+
+      function setError(key, message) {
+        const input = fieldForKey(key);
+        const el = errorForKey(key);
+        if (input) {
+          input.classList.toggle('is-invalid', Boolean(message));
+          input.setAttribute('aria-invalid', message ? 'true' : 'false');
+        }
+        if (el) {
+          el.textContent = message || '';
+          el.classList.toggle('d-none', !message);
+        }
+      }
+
+      function clearAllErrors() {
+        STANDARD.forEach((base) => setError(String(base), ''));
+        setError('extra', '');
+      }
+
+      function showNotice(message, kind = 'success') {
+        clearTimeout(noticeTimer);
+        notice.textContent = message;
+        notice.className = `alert alert-flotante py-2 alert-${kind === 'error' ? 'danger' : kind === 'warning' ? 'warning' : 'success'}`;
+        notice.classList.remove('d-none');
+        noticeTimer = setTimeout(() => notice.classList.add('d-none'), 2200);
+      }
+
+      function updateActiveStyles() {
+        STANDARD.forEach((base) => {
+          fieldWraps[base].classList.toggle('field-active', activeKey === String(base));
+        });
+        extraFieldWrap.classList.toggle('field-active', activeKey === 'extra');
+      }
+
+      function setActive(key) {
+        if (key === 'extra' && STANDARD.includes(cb)) return;
+        activeKey = key;
+        renderAll();
+      }
+
+      function syncFields(exceptKey) {
+        STANDARD.forEach((base) => {
+          const key = String(base);
+          if (key === exceptKey) return;
+          inputs[base].value = value === null ? '' : formatValue(value, base);
+          setError(key, '');
+        });
+
+        if (STANDARD.includes(cb)) {
+          extraInput.value = '';
+          setError('extra', '');
+        } else if (exceptKey !== 'extra') {
+          extraInput.value = value === null ? '' : formatValue(value, cb);
+          setError('extra', '');
+        }
+      }
+
+      function normalizeField(key) {
+        if (key === 'extra' && STANDARD.includes(cb)) return;
+        if (value === null) return;
+        const input = fieldForKey(key);
+        const parsed = parseText(input.value, baseForKey(key));
+        if (!parsed.error && !parsed.empty) {
+          input.value = formatValue(value, baseForKey(key));
+          setError(key, '');
+        }
+      }
+
+      function onFieldInput(key) {
+        const input = fieldForKey(key);
+        const base = baseForKey(key);
+        activeKey = key;
+        updateActiveStyles();
+
+        const parsed = parseText(input.value, base);
+        if (parsed.error) {
+          setError(key, parsed.error);
+          renderAll();
+          return;
+        }
+
+        setError(key, '');
+        value = parsed.empty ? null : parsed.value;
+        syncFields(key);
+        renderAll();
+        saveState();
+      }
+
+      function onExtraBaseChange() {
+        const next = Number(extraSelect.value);
+        if (!Number.isInteger(next) || next < 2 || next > 36) return;
+        cb = next;
+        setError('extra', '');
+        activeKey = STANDARD.includes(cb) ? String(cb) : 'extra';
+        refreshExtraUI();
+        syncFields(null);
+        renderAll();
+        saveState();
+      }
+
+      function refreshExtraUI() {
+        const duplicate = STANDARD.includes(cb);
+        extraFieldWrap.classList.toggle('d-none', duplicate);
+        extraGroup.classList.toggle('d-none', duplicate);
+        extraNote.classList.toggle('d-none', !duplicate);
+        extraInput.disabled = duplicate;
+        extraBadge.textContent = `base ${cb}`;
+        extraSelect.value = String(cb);
+
+        if (duplicate) {
+          extraInput.value = '';
+          setError('extra', '');
+        } else {
+          extraInput.value = value === null ? '' : formatValue(value, cb);
+        }
+      }
+
+      function renderChart() {
+        chartHelp.textContent = scale === 'log'
+          ? 'La altura de cada barra es logarítmica: sirve para comparar aportes de distinto tamaño. La posición 0 es la de las unidades.'
+          : 'La altura de cada barra es proporcional al aporte de cada posición. La posición 0 es la de las unidades.';
+
+        if (value === null) {
+          chartWrap.classList.add('d-none');
+          chartEmpty.classList.remove('d-none');
+          return;
+        }
+
+        chartWrap.classList.remove('d-none');
+        chartEmpty.classList.add('d-none');
+
+        const base = baseForKey(activeKey);
+        const repr = formatValue(value, base);
+        const n = repr.length;
+        const width = 360;
+        const height = 180;
+        const left = 10;
+        const right = 10;
+        const top = 16;
+        const bottom = 30;
+        const plotWidth = width - left - right;
+        const plotHeight = height - top - bottom;
+        const logs = [];
+        const contributions = new Array(n);
+        let maxLog = 0;
+        let power = 1n;
+
+        for (let i = n - 1; i >= 0; i--) {
+          contributions[i] = BigInt(digitValue(repr[i])) * power;
+          power *= BigInt(base);
+        }
+
+        for (let i = 0; i < n; i++) {
+          const d = digitValue(repr[i]);
+          const p = n - 1 - i;
+          const weight = d > 0 ? p * Math.log10(base) + Math.log10(d) : 0;
+          logs.push(weight);
+          if (weight > maxLog) maxLog = weight;
+        }
+
+        const slot = plotWidth / n;
+        const barWidth = Math.max(1, Math.min(18, slot * 0.62));
+        const usesLog = scale === 'log';
+        let bars = '';
+
+        for (let i = 0; i < n; i++) {
+          const d = digitValue(repr[i]);
+          const p = n - 1 - i;
+          let h;
+
+          if (d === 0) {
+            h = 1.5;
+          } else if (maxLog === 0) {
+            h = plotHeight;
+          } else if (usesLog) {
+            h = Math.max(2, (logs[i] / maxLog) * plotHeight);
+          } else {
+            h = Math.max(2, Math.pow(10, logs[i] - maxLog) * plotHeight);
+          }
+
+          const x = left + i * slot + (slot - barWidth) / 2;
+          const y = top + plotHeight - h;
+          const cls = d === 0 ? 'chart-bar zero' : 'chart-bar';
+          bars += `<rect class="${cls}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${h.toFixed(1)}"><title>Posición ${p}: ${d} × ${base}^${p} = ${contributions[i].toString()}</title></rect>`;
+        }
+
+        const step = Math.max(1, Math.ceil(n / 10));
+        let labels = '';
+        for (let i = 0; i < n; i++) {
+          const p = n - 1 - i;
+          if (p % step !== 0 && i !== 0 && i !== n - 1) continue;
+          const x = left + i * slot + slot / 2;
+          labels += `<text class="chart-label" x="${x.toFixed(1)}" y="${height - 8}" text-anchor="middle">${p}</text>`;
+        }
+
+        chart.setAttribute('aria-label', `Aportes por posición en escala ${usesLog ? 'logarítmica' : 'lineal'} en base ${base} para el número ${value.toString()}`);
+        chart.innerHTML = `<line class="chart-axis" x1="${left}" y1="${top + plotHeight}" x2="${width - right}" y2="${top + plotHeight}"></line>${bars}${labels}`;
+      }
+
+      function renderDecomposition() {
+        if (value === null) {
+          decomp.innerHTML = '<p class="small text-body-secondary mb-0">Ingresá un número para ver la cuenta.</p>';
+          return;
+        }
+
+        const base = baseForKey(activeKey);
+        const repr = formatValue(value, base);
+        const digits = repr.split('');
+        const len = digits.length;
+        const terms = new Array(len);
+        const contributions = new Array(len);
+        let power = 1n;
+
+        for (let i = len - 1; i >= 0; i--) {
+          const d = digitValue(digits[i]);
+          const p = len - 1 - i;
+          terms[i] = `${d} × ${base}<sup>${p}</sup>`;
+          contributions[i] = (BigInt(d) * power).toString();
+          power *= BigInt(base);
+        }
+
+        const sum = contributions.filter((c) => c !== '0').join(' + ') || '0';
+        const hasLetters = /[A-Z]/.test(repr);
+
+        decomp.innerHTML = `
+          <div class="decomp-scroll">
+            <div class="decomp-line"><span class="mono">${repr}<sub>${base}</sub></span> = ${terms.join(' + ')}</div>
+            <div class="decomp-line text-body-secondary">= ${sum} = <span class="mono">${value.toString()}<sub>10</sub></span></div>
+          </div>
+          ${hasLetters ? '<p class="form-text mb-0 mt-2">Las letras se reemplazan por su valor decimal: A = 10, B = 11, …, Z = 35.</p>' : ''}
+        `;
+      }
+
+      function renderAllBases() {
+        if (value === null) {
+          allbasesBody.innerHTML = '<tr><td colspan="2" class="small text-body-secondary">Ingresá un número para ver todas las bases.</td></tr>';
+          copyTableBtn.disabled = true;
+          return;
+        }
+
+        const activeBase = baseForKey(activeKey);
+        const rows = [];
+
+        for (let base = 2; base <= 36; base++) {
+          const repr = formatValue(value, base);
+          const name = BASE_NAMES[base] ? `<span class="small text-body-secondary">${BASE_NAMES[base]}</span>` : '';
+          rows.push(`<tr${base === activeBase ? ' class="table-active"' : ''}><td class="text-nowrap">${base} ${name}</td><td class="repr">${repr}</td></tr>`);
+        }
+
+        allbasesBody.innerHTML = rows.join('');
+        copyTableBtn.disabled = false;
+      }
+
+      function renderAll() {
+        updateActiveStyles();
+        renderChart();
+        renderDecomposition();
+        renderAllBases();
+
+        const base = baseForKey(activeKey);
+        compBadge.textContent = `base ${base}`;
+        if (value === null) {
+          compSubtitle.textContent = 'Ingresá un número entero para ver la composición.';
+        } else {
+          const repr = formatValue(value, base);
+          compSubtitle.textContent = `${repr.length} ${repr.length === 1 ? 'dígito' : 'dígitos'} en base ${base}. Mirá el aporte de cada posición.`;
+        }
+      }
+
+      function saveState() {
+        if (fromUrl) return;
+        try {
+          const base = baseForKey(activeKey);
+          const v = value === null ? '' : formatValue(value, base);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({ b: base, v, cb, sc: scale }));
+        } catch { /* Sin almacenamiento: el estado vive solo en la sesión. */ }
+      }
+
+      function applyLoadedState(b, vRaw, cbRaw, scaleRaw) {
+        if (!Number.isInteger(b) || b < 2 || b > 36) return false;
+
+        let custom = Number(cbRaw);
+        if (!Number.isInteger(custom) || custom < 2 || custom > 36) custom = 12;
+        if (!STANDARD.includes(b)) custom = b;
+
+        const parsed = vRaw === '' || vRaw == null ? { empty: true } : parseText(String(vRaw), b);
+        if (parsed.error) return false;
+
+        value = parsed.empty ? null : parsed.value;
+        cb = custom;
+        scale = scaleRaw === 'linear' ? 'linear' : 'log';
+        activeKey = keyForBase(b);
+        extraSelect.value = String(cb);
+        scaleSelect.value = scale;
+        return true;
+      }
+
+      function loadState() {
+        const params = new URLSearchParams(window.location.search);
+
+        if (params.has('b') || params.has('v')) {
+          const b = Number(params.get('b'));
+          const v = params.get('v') ?? '';
+          const custom = params.has('cb') ? Number(params.get('cb')) : 12;
+          const loadedScale = params.get('sc') ?? DEFAULT.sc;
+          if (applyLoadedState(b, v, custom, loadedScale)) {
+            fromUrl = true;
+            return;
+          }
+        }
+
+        try {
+          const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+          if (stored && applyLoadedState(Number(stored.b), stored.v == null ? '' : String(stored.v), stored.cb, stored.sc)) {
+            return;
+          }
+        } catch { /* Se usa el estado por defecto. */ }
+
+        applyLoadedState(DEFAULT.b, DEFAULT.v, DEFAULT.cb, DEFAULT.sc);
+      }
+
+      function populateBaseSelect() {
+        for (let base = 2; base <= 36; base++) {
+          const option = document.createElement('option');
+          option.value = String(base);
+          option.textContent = `Base ${base}${BASE_NAMES[base] ? ` · ${BASE_NAMES[base]}` : ''}`;
+          extraSelect.append(option);
+        }
+      }
+
+      async function copyText(text) {
+        if (!navigator.clipboard || !navigator.clipboard.writeText) {
+          throw new Error('Sin portapapeles');
+        }
+        await navigator.clipboard.writeText(text);
+      }
+
+      async function share() {
+        const url = new URL(window.location.href);
+        url.search = '';
+        const base = baseForKey(activeKey);
+        url.searchParams.set('b', String(base));
+        if (value !== null) url.searchParams.set('v', formatValue(value, base));
+        url.searchParams.set('cb', String(cb));
+        url.searchParams.set('sc', scale);
+
+        try {
+          await copyText(url.toString());
+          showNotice('Link copiado.');
+        } catch {
+          showNotice('No se pudo copiar el link.', 'error');
+        }
+      }
+
+      function disarmReset() {
+        resetArmed = false;
+        resetBtn.textContent = '🗑️ Reiniciar';
+        resetBtn.classList.remove('btn-danger');
+        resetBtn.classList.add('btn-outline-secondary');
+      }
+
+      function reset() {
+        try { localStorage.removeItem(STORAGE_KEY); } catch { /* Nada que borrar. */ }
+        fromUrl = false;
+        value = 42n;
+        activeKey = '2';
+        cb = 12;
+        scale = DEFAULT.sc;
+        scaleSelect.value = scale;
+        clearAllErrors();
+        refreshExtraUI();
+        syncFields(null);
+        renderAll();
+        try { window.history.replaceState(null, '', window.location.pathname); } catch { /* Sin historial. */ }
+        showNotice('Conversor reiniciado.');
+      }
+
+      function applyTheme(theme) {
+        document.documentElement.setAttribute('data-bs-theme', theme);
+        themeBtn.textContent = theme === 'dark' ? '☀️' : '🌙';
+        themeBtn.setAttribute('aria-label', theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro');
+      }
+
+      populateBaseSelect();
+      loadState();
+      refreshExtraUI();
+      syncFields(null);
+      clearAllErrors();
+      renderAll();
+
+      STANDARD.forEach((base) => {
+        const key = String(base);
+        inputs[base].addEventListener('focus', () => setActive(key));
+        inputs[base].addEventListener('pointerdown', () => setActive(key));
+        inputs[base].addEventListener('input', () => onFieldInput(key));
+        inputs[base].addEventListener('blur', () => normalizeField(key));
+        inputs[base].addEventListener('change', () => normalizeField(key));
+      });
+
+      extraInput.addEventListener('focus', () => setActive('extra'));
+      extraInput.addEventListener('pointerdown', () => setActive('extra'));
+      extraInput.addEventListener('input', () => onFieldInput('extra'));
+      extraInput.addEventListener('blur', () => normalizeField('extra'));
+      extraInput.addEventListener('change', () => normalizeField('extra'));
+      extraSelect.addEventListener('change', onExtraBaseChange);
+
+      scaleSelect.addEventListener('change', () => {
+        scale = scaleSelect.value === 'log' ? 'log' : 'linear';
+        renderChart();
+        saveState();
+      });
+
+      document.querySelectorAll('[data-copy]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const key = button.dataset.copy;
+          const input = fieldForKey(key);
+          if (!input || !input.value) {
+            showNotice('No hay nada para copiar.', 'warning');
+            return;
+          }
+          try {
+            await copyText(input.value);
+            showNotice('Copiado.');
+          } catch {
+            showNotice('No se pudo copiar.', 'error');
+          }
+        });
+      });
+
+      copyTableBtn.addEventListener('click', async () => {
+        if (value === null) return;
+        const lines = [];
+        for (let base = 2; base <= 36; base++) {
+          lines.push(`Base ${base}: ${formatValue(value, base)}`);
+        }
+        try {
+          await copyText(lines.join('\n'));
+          showNotice('Tabla copiada.');
+        } catch {
+          showNotice('No se pudo copiar la tabla.', 'error');
+        }
+      });
+
+      shareBtn.addEventListener('click', share);
+
+      resetBtn.addEventListener('click', () => {
+        if (!resetArmed) {
+          resetArmed = true;
+          resetBtn.textContent = '¿Seguro? Tocá de nuevo';
+          resetBtn.classList.remove('btn-outline-secondary');
+          resetBtn.classList.add('btn-danger');
+          clearTimeout(resetTimer);
+          resetTimer = setTimeout(disarmReset, 5000);
+          return;
+        }
+        clearTimeout(resetTimer);
+        disarmReset();
+        reset();
+      });
+
+      let storedTheme = null;
+      try { storedTheme = localStorage.getItem('theme'); } catch { /* Preferencia del sistema. */ }
+      const initialTheme = storedTheme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      applyTheme(initialTheme);
+
+      themeBtn.addEventListener('click', () => {
+        const next = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        try { localStorage.setItem('theme', next); } catch { /* Sin almacenamiento. */ }
+        applyTheme(next);
+      });
+    })();
+  </script>
+</body>
+</html>

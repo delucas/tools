@@ -60,6 +60,7 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`gardner`](./gardner) | ♟️ Gardner: ajedrez 5×5 para dos jugadores en el mismo celular. |
 | [`clippy`](./clippy) | 📋 Clippy: pegá algo y mirá qué hay adentro del portapapeles. |
 | [`asignatron`](./asignatron) | 🎲 Asignatron: repartí un elemento de cada lista por destinatario, al azar. |
+| [`cerrajero`](./cerrajero) | 🗝️ Cerrajero: perfilá una llave sobre la pantalla, con líneas ajustables y dibujo en vivo. |
 | [`metalicos`](./metalicos) | 🔩 Metálicos: los 10 ratios del platino al plomo, con calculadora y comparador. |
 | [`proporciones`](./proporciones) | ➗ Proporciones: porcentajes, variaciones, regla de tres y mezclas 3:1, al instante. |
 | [`escaner-pdf`](./escaner-pdf) | 📄 Escáner a PDF: fotos de cada hoja compiladas en un PDF A4 para compartir. |

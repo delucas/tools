@@ -9,6 +9,16 @@
 
   <title>Herramientas de Lucas Videla</title>
 
+  <script>
+    // Tema antes del CSS para evitar el parpadeo (clave global `theme`).
+    (() => {
+      let guardado = null;
+      try { guardado = localStorage.getItem('theme'); } catch { /* modo privado */ }
+      const tema = guardado || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-bs-theme', tema);
+    })();
+  </script>
+
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css"
     integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
     crossorigin="anonymous" referrerpolicy="no-referrer">
@@ -213,13 +223,11 @@
     (() => {
       const root = document.documentElement;
       const btn = document.getElementById('theme-toggle');
-      const stored = localStorage.getItem('theme');
-      const initial = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
       const apply = (t) => { root.setAttribute('data-bs-theme', t); btn.textContent = t === 'dark' ? '☀️' : '🌙'; };
-      apply(initial);
+      apply(document.documentElement.getAttribute('data-bs-theme') || 'light');
       btn.addEventListener('click', () => {
         const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
-        localStorage.setItem('theme', next);
+        try { localStorage.setItem('theme', next); } catch { /* modo privado */ }
         apply(next);
       });
     })();

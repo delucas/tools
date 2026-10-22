@@ -24,6 +24,7 @@ GET_ASIGNADO = re.compile(
     r"(?:URLSearchParams\([^)]*\)|[\w$.]+)\.get\(\s*['\"][^'\"]*['\"]\s*\)"
 )
 DECODE_VAR = re.compile(r"decodeURIComponent\(\s*([A-Za-z_$][\w$]*)\s*\)")
+TEMA = "Tema antes del CSS para evitar el parpadeo"
 
 
 def lineas_js(html):
@@ -50,6 +51,18 @@ def revisar_cdn(html, nombre, errores):
             errores.append(f"{nombre}: CDN sin integrity (SRI) -> {url}")
 
 
+def revisar_tema(html, nombre, errores):
+    posiciones = [m.start() for m in re.finditer(re.escape(TEMA), html)]
+    if len(posiciones) != 1:
+        errores.append(f"{nombre}: tiene {len(posiciones)} snippets de tema (debe haber 1)")
+        return
+    pos = posiciones[0]
+    body = html.lower().find("<body")
+    css = html.find("bootstrap.min.css")
+    if (body >= 0 and pos > body) or (css >= 0 and pos > css):
+        errores.append(f"{nombre}: el snippet de tema debe ir en el <head>, antes del CSS")
+
+
 def revisar(archivo, nombre, errores):
     html = archivo.read_text(encoding="utf-8")
     codigo = codigo_sin_comentarios(html)
@@ -60,6 +73,7 @@ def revisar(archivo, nombre, errores):
         errores.append(f"{nombre}: {lineas} líneas de JS inline (límite {limite})")
 
     revisar_cdn(html, nombre, errores)
+    revisar_tema(html, nombre, errores)
 
     variables = set(GET_ASIGNADO.findall(codigo))
     detectado = False
@@ -104,7 +118,9 @@ def main():
     # El índice raíz también carga CDN: mismas reglas de versión y SRI.
     indice = RAIZ / "index.html"
     if indice.is_file():
-        revisar_cdn(indice.read_text(encoding="utf-8"), "index.html raíz", errores)
+        html_indice = indice.read_text(encoding="utf-8")
+        revisar_cdn(html_indice, "index.html raíz", errores)
+        revisar_tema(html_indice, "index.html raíz", errores)
 
     if errores:
         for error in errores:

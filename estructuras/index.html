@@ -8,11 +8,12 @@
   <title>Estructuras</title>
 
   <script>
-    // Tema antes del CSS para evitar parpadeo (clave global `theme`).
-    (function () {
-      const stored = localStorage.getItem('theme');
-      const theme = stored || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-      document.documentElement.setAttribute('data-bs-theme', theme);
+    // Tema antes del CSS para evitar el parpadeo (clave global `theme`).
+    (() => {
+      let guardado = null;
+      try { guardado = localStorage.getItem('theme'); } catch { /* modo privado */ }
+      const tema = guardado || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-bs-theme', tema);
     })();
   </script>
 

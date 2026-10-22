@@ -7,6 +7,16 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f5dd%3B%26%23xfe0f%3B%3C/text%3E%3C/svg%3E">
   <title>Cerrajero — Perfil de llave en la pantalla</title>
 
+  <script>
+    // Tema antes del CSS para evitar el parpadeo (clave global `theme`).
+    (() => {
+      let guardado = null;
+      try { guardado = localStorage.getItem('theme'); } catch { /* modo privado */ }
+      const tema = guardado || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-bs-theme', tema);
+    })();
+  </script>
+
   <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
     integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
     crossorigin="anonymous" referrerpolicy="no-referrer">
@@ -644,11 +654,7 @@
         themeBtn.textContent = theme === 'dark' ? '☀️' : '🌙';
         themeBtn.setAttribute('aria-label', theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro');
       }
-
-      let storedTheme = null;
-      try { storedTheme = localStorage.getItem('theme'); } catch { /* Sin almacenamiento: se usa la preferencia del sistema. */ }
-      const initialTheme = storedTheme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-      applyTheme(initialTheme);
+      applyTheme(document.documentElement.getAttribute('data-bs-theme') || 'light');
       themeBtn.addEventListener('click', () => {
         const next = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
         try { localStorage.setItem('theme', next); } catch {}

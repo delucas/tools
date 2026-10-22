@@ -8,7 +8,7 @@ help:
 	@echo "Uso: make [target]"
 	@echo ""
 	@echo "  serve   Servidor local en http://localhost:$(PORT) (ej: make serve PORT=8080)"
-	@echo "  check   Valida el repo: estructura, catálogo, listados y sintaxis JS"
+	@echo "  check   Valida el repo: estructura, catálogo, listados, convenciones, sintaxis JS y pruebas puras"
 	@echo "  status  Estado del working tree y de la rama vs remoto"
 	@echo "  deploy  Pushea los commits y avisa si quedan cambios sin commitear"
 
@@ -18,6 +18,7 @@ serve:
 check:
 	@fail=0; \
 	python3 scripts/check-catalogo.py || fail=1; \
+	python3 scripts/check-convenciones.py || fail=1; \
 	for d in */; do \
 	slug=$${d%/}; \
 	[ -f "$$slug/index.html" ] || continue; \
@@ -36,6 +37,7 @@ check:
 	j=$$((j+1)); \
 	done; \
 	done; \
+	node scripts/test-pure.mjs || fail=1; \
 	else \
 	echo "AVISO: node no encontrado, se omite el chequeo de sintaxis JS"; \
 	fi; \

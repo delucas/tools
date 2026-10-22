@@ -981,7 +981,8 @@
         const q = new URLSearchParams(window.location.search).get('d');
         if (q) {
           try {
-            applyState(JSON.parse(decodeURIComponent(q)));
+            // URLSearchParams.get() ya decodifica: no volver a llamar decodeURIComponent().
+            applyState(JSON.parse(q));
             fromUrl.value = true;
             return;
           } catch { /* URL inválida: se sigue con lo guardado */ }

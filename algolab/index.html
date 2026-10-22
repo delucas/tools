@@ -1079,7 +1079,8 @@
       const shared = params.get('d');
       if (shared) {
         try {
-          const data = decodeState(decodeURIComponent(shared));
+          // URLSearchParams.get() ya decodifica: no volver a llamar decodeURIComponent().
+          const data = decodeState(shared);
           if (data) {
             fromUrl = true;
             Object.assign(state, data);

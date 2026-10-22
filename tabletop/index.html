@@ -697,7 +697,8 @@
       const shared = params.get('d');
       if (shared) {
         try {
-          const data = JSON.parse(decodeURIComponent(shared));
+          // URLSearchParams.get() ya decodifica: no volver a llamar decodeURIComponent().
+          const data = JSON.parse(shared);
           if (data && Array.isArray(data.rows) && data.rows.length) {
             fromUrl = true;
             state.rows = normalize(data.rows.map(r => (Array.isArray(r) ? r : [r]).slice(0, MAX_COLS))).slice(0, MAX_ROWS);

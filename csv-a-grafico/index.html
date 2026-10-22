@@ -154,10 +154,11 @@
             if (legacyTitle !== null) title = legacyTitle;
           }
         } catch { /* lectura solo: no tocar el storage */ }
+        // URLSearchParams.get() ya decodifica: no volver a llamar decodeURIComponent().
         return {
-          csv: urlData ? decodeURIComponent(urlData) : csv,
+          csv: urlData || csv,
           type: urlType || type,
-          title: urlTitle ? decodeURIComponent(urlTitle) : title,
+          title: urlTitle || title,
           fromURL: true
         };
       }

@@ -5,7 +5,7 @@
   <meta name="author" content="Lucas Videla">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f3b2%3B%3C/text%3E%3C/svg%3E">
-  <title>Roller — dado de N caras</title>
+  <title>Roller — tiradas de varios dados</title>
 
   <script>
     // Tema antes del CSS para evitar el parpadeo (clave global `theme`).
@@ -33,19 +33,6 @@
 
     .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
 
-    /* En desktop el historial ocupa la columna ancha y llena el alto visible:
-       la lista scrollea por dentro y nunca agranda el scroll de la página. */
-    @media (min-width: 992px) {
-      .history-aside {
-        position: sticky;
-        top: 1rem;
-      }
-
-      #history-list {
-        max-height: max(240px, calc(100vh - 320px));
-      }
-    }
-
     .preset-btn {
       min-width: 3rem;
     }
@@ -62,7 +49,7 @@
     <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
       <div>
         <h1 class="h3 mb-1">🎲 Roller</h1>
-        <p class="text-body-secondary mb-0">Tirá un dado de N caras, con historial y descarga.</p>
+        <p class="text-body-secondary mb-0">Tirá varios dados, sumá el resultado y mirá su distribución.</p>
       </div>
       <div class="d-flex flex-wrap gap-2">
         <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
@@ -92,31 +79,47 @@
         <div class="card mb-3">
           <div class="card-body">
             <div class="row g-2 align-items-end">
-              <div class="col-12 col-sm-5">
+              <div class="col-6">
+                <label for="dados" class="form-label">Dados por tirada</label>
+                <input id="dados" class="form-control" type="number" min="1" max="20" step="1" value="1" style="font-size:16px">
+              </div>
+              <div class="col-6">
                 <label for="cantidad" class="form-label">Tiradas</label>
                 <input id="cantidad" class="form-control" type="number" min="1" max="100" step="1" value="1" style="font-size:16px">
               </div>
-              <div class="col-12 col-sm-7">
-                <div class="d-flex flex-wrap gap-2">
-                  <button id="tirar" class="btn btn-primary" type="button">🎲 Tirar</button>
-                  <button id="tirar-varias" class="btn btn-outline-primary" type="button">Tirar N veces</button>
-                </div>
-              </div>
             </div>
-            <div class="form-text">Las tiradas múltiples salen de a una, cada 100 ms.</div>
+            <div class="d-flex flex-wrap gap-2 mt-2">
+              <button id="tirar" class="btn btn-primary" type="button">🎲 Tirar</button>
+              <button id="tirar-varias" class="btn btn-outline-primary" type="button">Tirar N veces</button>
+            </div>
+            <div class="form-text">Cada tirada suma sus dados (por ejemplo, 2d6 va de 2 a 12). Las tiradas múltiples salen de a una, cada 100 ms.</div>
           </div>
         </div>
 
         <div class="card mb-3">
           <div class="card-body text-center">
             <p id="last-result" class="display-3 fw-bold mb-0" aria-live="polite">–</p>
+            <p id="last-dice" class="font-monospace small text-body-secondary mb-1 d-none"></p>
             <p id="last-caption" class="text-body-secondary small mb-2">Todavía no tiraste.</p>
             <div id="notice" class="alert alert-success py-2 alert-flotante d-none" role="status"></div>
           </div>
         </div>
       </section>
 
-      <aside class="col-12 col-lg-8 align-self-start history-aside" aria-label="Historial de tiradas">
+      <aside class="col-12 col-lg-8 align-self-start history-aside" aria-label="Distribución e historial de tiradas">
+        <div class="card mb-3">
+          <div class="card-body">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+              <h2 class="h6 mb-0">📊 Distribución de la suma</h2>
+              <span id="dist-resumen" class="text-body-secondary small"></span>
+            </div>
+            <div style="position:relative;height:240px;">
+              <canvas id="chart-dist" aria-label="Probabilidad de cada suma posible" role="img"></canvas>
+            </div>
+            <p id="dist-note" class="form-text mb-0 mt-2"></p>
+          </div>
+        </div>
+
         <div class="card">
           <div class="card-body">
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
@@ -124,7 +127,7 @@
               <div class="d-flex flex-wrap gap-2">
                 <button id="copy-csv" class="btn btn-outline-secondary btn-sm" type="button">📋 Copiar CSV</button>
                 <button id="download-csv" class="btn btn-outline-secondary btn-sm" type="button">⬇️ Descargar CSV</button>
-                <button id="to-azar" class="btn btn-outline-secondary btn-sm" type="button">🎲 Analizar en ¿azar?</button>
+                <button id="to-azar" class="btn btn-outline-secondary btn-sm" type="button" title="Analiza las caras individuales de las tiradas">🎲 Analizar en ¿azar?</button>
                 <button id="clear-hist" class="btn btn-outline-danger btn-sm" type="button">🗑️ Borrar</button>
               </div>
             </div>
@@ -137,14 +140,18 @@
     </div>
 
     <div class="alert alert-info mt-3 mb-0 small" role="note">
-      🎲 <strong>Aleatoriedad:</strong> las tiradas usan <code>crypto.getRandomValues</code> con muestreo por
+      🎲 <strong>Aleatoriedad:</strong> cada dado usa <code>crypto.getRandomValues</code> con muestreo por
       rechazo — se descartan los valores que sesgarían el módulo, así cada cara sale con probabilidad
-      exactamente 1/N. Verificado con test chi-cuadrado en d6, d7, d20 y d100.
+      exactamente 1/N. La curva de la suma se calcula de forma exacta combinando las caras de cada dado.
     </div>
 
     <hr>
     <p class="signature">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
   </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"
+    integrity="sha512-WoViKhKD4qI2WruSZqv9+kvM4WfFhUMQCLN4QlDTt5aU56fLQy2gYoxWIqlEnXqJy/+Ac5q/hk1oWfqnMDhwMA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
   <script>
     (() => {
@@ -152,41 +159,53 @@
       const MIN_CARAS = 2;
       const MAX_CARAS = 1000;
       const MAX_TIRADAS = 100;
+      const MAX_DADOS = 20;
       const MAX_HISTORY = 500;
       const RENDER_LIMIT = 100;
-      const DEFAULT_STATE = { caras: 6, cantidad: 1, historial: [] };
+      const DEFAULT_STATE = { caras: 6, dados: 1, cantidad: 1, historial: [] };
 
       const carasInput = document.getElementById('caras');
+      const dadosInput = document.getElementById('dados');
       const cantidadInput = document.getElementById('cantidad');
       const presetsBox = document.getElementById('presets');
       const lastResult = document.getElementById('last-result');
+      const lastDice = document.getElementById('last-dice');
       const lastCaption = document.getElementById('last-caption');
       const historyList = document.getElementById('history-list');
       const historyEmpty = document.getElementById('history-empty');
       const historyMore = document.getElementById('history-more');
       const histCount = document.getElementById('hist-count');
+      const distResumen = document.getElementById('dist-resumen');
+      const distNote = document.getElementById('dist-note');
       const notice = document.getElementById('notice');
       let noticeTimeout;
 
       function normalizeEntry(e) {
         if (!e || typeof e !== 'object') return null;
         const caras = Math.floor(Number(e.caras));
-        const valor = Math.floor(Number(e.valor));
         const ts = typeof e.ts === 'string' ? e.ts : null;
         if (!Number.isFinite(caras) || caras < MIN_CARAS || caras > MAX_CARAS) return null;
-        if (!Number.isFinite(valor) || valor < 1 || valor > caras) return null;
         if (!ts || Number.isNaN(Date.parse(ts))) return null;
-        return { ts, caras, valor };
+        const dados = e.dados === undefined ? 1 : Math.floor(Number(e.dados));
+        if (!Number.isFinite(dados) || dados < 1 || dados > MAX_DADOS) return null;
+        const crudos = Array.isArray(e.valores) ? e.valores : [e.valor];
+        if (crudos.length !== dados) return null;
+        const valores = crudos.map(v => Math.floor(Number(v)));
+        if (valores.some(v => !Number.isFinite(v) || v < 1 || v > caras)) return null;
+        const valor = valores.reduce((a, b) => a + b, 0);
+        return { ts, caras, dados, valores, valor };
       }
 
       function normalizeState(value) {
         if (!value || typeof value !== 'object') return null;
         const caras = Math.floor(Number(value.caras));
         if (!Number.isFinite(caras) || caras < MIN_CARAS || caras > MAX_CARAS) return null;
+        const dados = value.dados === undefined ? 1 : Math.floor(Number(value.dados));
+        if (!Number.isFinite(dados) || dados < 1 || dados > MAX_DADOS) return null;
         const cantidad = value.cantidad === undefined ? 1 : Math.floor(Number(value.cantidad));
         if (!Number.isFinite(cantidad) || cantidad < 1 || cantidad > MAX_TIRADAS) return null;
         if (!Array.isArray(value.historial)) return null;
-        return { caras, cantidad, historial: value.historial.map(normalizeEntry).filter(Boolean).slice(0, MAX_HISTORY) };
+        return { caras, dados, cantidad, historial: value.historial.map(normalizeEntry).filter(Boolean).slice(0, MAX_HISTORY) };
       }
 
       function loadState() {
@@ -231,18 +250,34 @@
       let lastRolled = new Set();
       let batchRunning = false;
       let batchTimer = 0;
+      let lastSum = null;
 
       function pushRoll() {
-        const entry = { ts: new Date().toISOString(), caras: state.caras, valor: randInt(state.caras) };
+        const valores = Array.from({ length: state.dados }, () => randInt(state.caras));
+        const entry = {
+          ts: new Date().toISOString(),
+          caras: state.caras,
+          dados: state.dados,
+          valores,
+          valor: valores.reduce((a, b) => a + b, 0)
+        };
         state.historial.unshift(entry);
         if (state.historial.length > MAX_HISTORY) state.historial.length = MAX_HISTORY;
         persist();
         return entry;
       }
 
+      function notacion(caras, dados) {
+        return `${dados}d${caras}`;
+      }
+
       function showEntry(entry) {
         lastResult.textContent = entry.valor;
-        lastCaption.textContent = `d${entry.caras} · ${new Date(entry.ts).toLocaleTimeString()}`;
+        lastDice.textContent = entry.dados > 1 ? `${entry.valores.join(' + ')} = ${entry.valor}` : '';
+        lastDice.classList.toggle('d-none', entry.dados === 1);
+        lastCaption.textContent = `${notacion(entry.caras, entry.dados)} · ${new Date(entry.ts).toLocaleTimeString()}`;
+        lastSum = entry.caras === state.caras && entry.dados === state.dados ? entry.valor : null;
+        updateChartHighlight();
       }
 
       function doRoll() {
@@ -263,6 +298,7 @@
         document.getElementById('tirar-varias').disabled = running;
         document.getElementById('clear-hist').disabled = running;
         carasInput.disabled = running;
+        dadosInput.disabled = running;
       }
 
       function stopBatch() {
@@ -289,7 +325,7 @@
           else {
             batchTimer = 0;
             setBatchRunning(false);
-            showNotice(`Se tiraron ${k} veces el d${state.caras}.`);
+            showNotice(`Se tiraron ${k} veces ${notacion(state.caras, state.dados)}.`);
           }
         };
         step();
@@ -305,6 +341,21 @@
         state.caras = n;
         persist();
         renderPresets();
+        lastSum = null;
+        renderChart();
+      });
+
+      dadosInput.addEventListener('change', () => {
+        const n = Math.floor(Number(dadosInput.value));
+        if (!Number.isFinite(n) || n < 1 || n > MAX_DADOS) {
+          dadosInput.value = state.dados;
+          showNotice(`Elegí entre 1 y ${MAX_DADOS} dados.`);
+          return;
+        }
+        state.dados = n;
+        persist();
+        lastSum = null;
+        renderChart();
       });
 
       cantidadInput.addEventListener('change', () => {
@@ -333,6 +384,139 @@
         });
       }
 
+      // ---------- Distribución de la suma ----------
+      let chartDist = null;
+      let chartRanges = [];
+      let chartColor = '#2a78d6';
+
+      // Probabilidad exacta de cada suma, combinando dado por dado con una
+      // ventana deslizante (O(dados × sumas), sin calcular N^dados casos).
+      function probabilidadesSuma(caras, dados) {
+        let probs = new Float64Array(1);
+        probs[0] = 1;
+        for (let d = 0; d < dados; d++) {
+          const next = new Float64Array(probs.length + caras - 1);
+          let ventana = 0;
+          for (let s = 0; s < next.length; s++) {
+            if (s < probs.length) ventana += probs[s];
+            if (s - caras >= 0) ventana -= probs[s - caras];
+            next[s] = ventana / caras;
+          }
+          probs = next;
+        }
+        return probs;
+      }
+
+      function fmtNumero(x, dec = 1) {
+        return Number(x).toLocaleString('es', { maximumFractionDigits: dec });
+      }
+
+      function fmtPct(p) {
+        const v = p * 100;
+        const dec = v >= 10 ? 1 : v >= 1 ? 2 : 3;
+        return fmtNumero(v, dec);
+      }
+
+      function resumenDistribucion(probs, caras, dados) {
+        let maxP = 0;
+        for (let i = 0; i < probs.length; i++) if (probs[i] > maxP) maxP = probs[i];
+        const modas = [];
+        for (let i = 0; i < probs.length; i++) if (probs[i] >= maxP - maxP * 1e-9) modas.push(dados + i);
+        const media = dados * (caras + 1) / 2;
+        const pct = fmtPct(maxP);
+        if (modas.length === probs.length) return `Media ${fmtNumero(media)} · todas las sumas al ${pct} %`;
+        if (modas.length > 6) return `Media ${fmtNumero(media)} · ${modas.length} sumas empatadas al ${pct} %`;
+        return `Media ${fmtNumero(media)} · más probable: ${modas.join(' y ')} (${pct} %)`;
+      }
+
+      function coloresBarras() {
+        return chartRanges.map(([a, b]) => (lastSum !== null && lastSum >= a && lastSum <= b) ? '#e34948' : chartColor);
+      }
+
+      function updateChartHighlight() {
+        if (!chartDist) return;
+        chartDist.data.datasets[0].backgroundColor = coloresBarras();
+        chartDist.update('none');
+      }
+
+      function renderChart() {
+        const canvas = document.getElementById('chart-dist');
+        if (!canvas || typeof Chart === 'undefined') return;
+        const probs = probabilidadesSuma(state.caras, state.dados);
+        const minSuma = state.dados;
+        const maxSuma = state.dados * state.caras;
+        const MAX_BARRAS = 60;
+        const paso = Math.ceil(probs.length / MAX_BARRAS);
+        const labels = [];
+        const datos = [];
+        chartRanges = [];
+
+        for (let i = 0; i < probs.length; i += paso) {
+          const fin = Math.min(i + paso, probs.length);
+          let p = 0;
+          for (let j = i; j < fin; j++) p += probs[j];
+          const desde = minSuma + i;
+          const hasta = minSuma + fin - 1;
+          chartRanges.push([desde, hasta]);
+          labels.push(desde === hasta ? String(desde) : `${desde}–${hasta}`);
+          datos.push(p * 100);
+        }
+
+        const dark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+        chartColor = dark ? '#3987e5' : '#2a78d6';
+        const grid = dark ? '#444' : '#ddd';
+        const tick = dark ? '#dee2e6' : '#495057';
+
+        distResumen.textContent = resumenDistribucion(probs, state.caras, state.dados);
+        distNote.textContent = paso > 1
+          ? `Hay ${probs.length} sumas posibles (de ${minSuma} a ${maxSuma}); las barras agrupan rangos de ${paso}.`
+          : `Cada barra es una suma posible, de ${minSuma} a ${maxSuma}. La altura indica su probabilidad.`;
+
+        if (chartDist) chartDist.destroy();
+        chartDist = new Chart(canvas, {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [{
+              data: datos,
+              backgroundColor: coloresBarras(),
+              borderWidth: 0,
+              borderRadius: 2
+            }]
+          },
+          options: {
+            maintainAspectRatio: false,
+            animation: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  title: items => {
+                    const [a, b] = chartRanges[items[0].dataIndex];
+                    return a === b ? `Suma ${a}` : `Sumas ${a} a ${b}`;
+                  },
+                  label: item => `${fmtNumero(item.parsed.y, 2)} % de probabilidad`
+                }
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                title: { display: true, text: 'probabilidad (%)', color: tick },
+                ticks: { color: tick, callback: v => `${fmtNumero(v, 2)} %` },
+                grid: { color: grid }
+              },
+              x: {
+                title: { display: true, text: 'suma', color: tick },
+                grid: { display: false },
+                ticks: { color: tick, autoSkip: true, maxTicksLimit: 12, maxRotation: 0 }
+              }
+            }
+          }
+        });
+      }
+
       // ---------- Historial ----------
       function formatTs(ts) {
         const d = new Date(ts);
@@ -341,11 +525,11 @@
       }
 
       function csvText() {
-        const rows = ['fecha_hora,caras,resultado'];
+        const rows = ['fecha_hora,caras,dados,valores,resultado'];
         state.historial.forEach(e => {
           const d = new Date(e.ts);
           const pad = x => String(x).padStart(2, '0');
-          rows.push(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())},${e.caras},${e.valor}`);
+          rows.push(`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())},${e.caras},${e.dados},${e.valores.join(' ')},${e.valor}`);
         });
         return rows.join('\n');
       }
@@ -369,7 +553,11 @@
         historyList.innerHTML = shown.map((e, i) => {
           const num = state.historial.length - i;
           const fresh = lastRolled.has(e) ? ' list-group-item-primary' : '';
-          return `<div class="list-group-item${fresh} d-flex justify-content-between align-items-center gap-2"><span class="font-monospace">#${num} · d${e.caras} → <strong>${e.valor}</strong></span><small class="text-body-secondary">${escapeHtml(formatTs(e.ts))}</small></div>`;
+          const completo = e.valores.join(' + ');
+          const desglose = e.dados > 1
+            ? ` <span class="text-body-secondary">(${escapeHtml(e.dados <= 6 ? completo : `${e.valores.slice(0, 6).join(' + ')} + …`)})</span>`
+            : '';
+          return `<div class="list-group-item${fresh} d-flex flex-wrap justify-content-between align-items-center gap-2"><span class="font-monospace text-break" title="${escapeHtml(completo)}">#${num} · ${notacion(e.caras, e.dados)} → <strong>${e.valor}</strong>${desglose}</span><small class="text-body-secondary">${escapeHtml(formatTs(e.ts))}</small></div>`;
         }).join('');
         const rest = state.historial.length - shown.length;
         historyMore.classList.toggle('d-none', rest <= 0);
@@ -398,9 +586,18 @@
       });
 
       document.getElementById('to-azar').addEventListener('click', () => {
-        // Últimas 500 del dado actual: ¿azar? las contrasta contra 1/caras.
-        const vals = state.historial.filter(e => e.caras === state.caras).slice(0, 500).map(e => e.valor);
-        if (vals.length < 2) { showNotice('Tirá al menos 2 veces con este dado.'); return; }
+        // ¿azar? contrasta caras contra 1/caras: se envían los dados individuales,
+        // no las sumas (que no son uniformes cuando hay más de un dado).
+        const vals = [];
+        for (const e of state.historial) {
+          if (e.caras !== state.caras) continue;
+          for (const v of e.valores) {
+            vals.push(v);
+            if (vals.length >= 500) break;
+          }
+          if (vals.length >= 500) break;
+        }
+        if (vals.length < 2) { showNotice('Tirá al menos 2 dados con estas caras.'); return; }
         const url = new URL('../azar/', window.location.href);
         url.searchParams.set('seq', vals.join(','));
         url.searchParams.set('caras', String(state.caras));
@@ -443,13 +640,18 @@
         try { localStorage.removeItem(STORAGE_KEY); } catch {}
         state = structuredClone(DEFAULT_STATE);
         lastRolled = new Set();
+        lastSum = null;
         carasInput.value = state.caras;
+        dadosInput.value = state.dados;
         cantidadInput.value = state.cantidad;
         lastResult.textContent = '–';
+        lastDice.textContent = '';
+        lastDice.classList.add('d-none');
         lastCaption.textContent = 'Todavía no tiraste.';
         renderPresets();
+        renderChart();
         renderHistory();
-        showNotice('Se restauró el dado de 6 caras.');
+        showNotice('Se restauró el d6 con un dado.');
       }
       resetBtn.addEventListener('click', () => {
         if (!resetArmada) { resetArmada = true; resetBtn.textContent = '¿Seguro? Tocá de nuevo'; resetBtn.classList.remove('btn-outline-secondary'); resetBtn.classList.add('btn-danger'); clearTimeout(resetTimer); resetTimer = setTimeout(resetDesarmar, 5000); return; }
@@ -465,11 +667,14 @@
         const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
         try { localStorage.setItem('theme', next); } catch { /* modo privado */ }
         applyTheme(next);
+        renderChart();
       });
 
       carasInput.value = state.caras;
+      dadosInput.value = state.dados;
       cantidadInput.value = state.cantidad;
       renderPresets();
+      renderChart();
       renderHistory();
     })();
   </script>

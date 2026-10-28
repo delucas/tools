@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f3e0%3B%3C/text%3E%3C/svg%3E">
+  <title>Localhostificalo — Convertí URLs online a localhost</title>
+
+  <script>
+    // Tema antes del CSS para evitar el parpadeo (clave global `theme`).
+    (() => {
+      let guardado = null;
+      try { guardado = localStorage.getItem('theme'); } catch { /* modo privado */ }
+      const tema = guardado || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-bs-theme', tema);
+    })();
+  </script>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    p.signature { font-size: 0.8em; }
+
+    .alert-flotante {
+      position: fixed;
+      bottom: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1050;
+      max-width: min(92vw, 560px);
+      margin-bottom: 0;
+      box-shadow: var(--bs-box-shadow);
+    }
+
+    .resultado {
+      font-family: var(--bs-font-monospace);
+      font-size: 0.95rem;
+      overflow-wrap: anywhere;
+    }
+
+    .seg {
+      display: inline-block;
+      max-width: 100%;
+      padding: 0.05rem 0.3rem;
+      border-radius: 0.35rem;
+      font-family: var(--bs-font-monospace);
+      font-size: 0.82rem;
+      overflow-wrap: anywhere;
+      word-break: break-all;
+    }
+
+    .seg + .seg { margin-left: 0.15rem; }
+    .seg-origen { background: var(--bs-tertiary-bg); }
+    .seg-cambia { background: var(--bs-warning-bg-subtle); color: var(--bs-warning-text-emphasis); }
+    .seg-igual { background: var(--bs-secondary-bg); }
+    .seg-quita { background: var(--bs-danger-bg-subtle); color: var(--bs-danger-text-emphasis); text-decoration: line-through; }
+
+    @media (max-width: 575.98px) {
+      .resultado { font-size: 0.85rem; }
+      .seg { font-size: 0.78rem; }
+    }
+  </style>
+</head>
+<body>
+  <main class="container py-4" style="max-width: 960px;">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">🏠 Localhostificalo</h1>
+        <p class="text-body-secondary mb-0">Convertí una URL online en su versión local para depurar más rápido.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="share" class="btn btn-outline-secondary btn-sm" type="button">🔗 Compartir</button>
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div id="notice" class="alert alert-success py-2 alert-flotante d-none" role="status"></div>
+
+    <div class="alert alert-info py-2 small" role="note">
+      Al cambiar de origen, cookies, <code>localStorage</code>, CORS y service workers pueden comportarse distinto.
+      Esta herramienta no verifica si el servidor local está corriendo.
+    </div>
+
+    <noscript>
+      <div class="alert alert-warning" role="alert">Esta herramienta necesita JavaScript para convertir la URL.</div>
+    </noscript>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <h2 class="h6 mb-3">🔁 Conversión</h2>
+
+        <div class="row g-3">
+          <div class="col-12">
+            <label for="url" class="form-label">URL online</label>
+            <input id="url" class="form-control" type="text" inputmode="url" autocomplete="off" autocapitalize="off"
+              spellcheck="false" maxlength="2048" placeholder="https://app.ejemplo.com/panel?tab=1#top"
+              aria-describedby="url-hint err-url">
+            <div id="url-hint" class="form-text">Si no ponés esquema, se asume <code>https://</code>.</div>
+            <div id="err-url" class="small text-danger mt-1 d-none" role="alert"></div>
+            <div id="aviso-puerto" class="form-text d-none">
+              <span id="aviso-puerto-texto"></span>
+              <button id="usar-puerto" class="btn btn-link btn-sm p-0 align-baseline" type="button"></button>
+            </div>
+          </div>
+
+          <div class="col-12 col-sm-4">
+            <label for="puerto" class="form-label">Puerto local</label>
+            <input id="puerto" class="form-control" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="5"
+              autocomplete="off" placeholder="3000" aria-describedby="err-puerto">
+            <div id="err-puerto" class="small text-danger mt-1 d-none" role="alert"></div>
+          </div>
+
+          <div class="col-6 col-sm-4">
+            <label for="host" class="form-label">Host</label>
+            <select id="host" class="form-select">
+              <option value="localhost">localhost</option>
+              <option value="127.0.0.1">127.0.0.1</option>
+              <option value="[::1]">::1 (IPv6)</option>
+            </select>
+          </div>
+
+          <div class="col-6 col-sm-4">
+            <label for="proto" class="form-label">Protocolo</label>
+            <select id="proto" class="form-select">
+              <option value="http">http</option>
+              <option value="https">https</option>
+            </select>
+          </div>
+
+          <div class="col-12">
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="checkbox" id="query" checked>
+              <label class="form-check-label" for="query">Conservar query</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="checkbox" id="hash" checked>
+              <label class="form-check-label" for="hash">Conservar hash</label>
+            </div>
+          </div>
+
+          <div class="col-12">
+            <div class="border rounded-3 bg-body-tertiary p-3">
+              <div class="small text-body-secondary mb-1">URL local</div>
+              <code id="salida" class="resultado d-block">Completá la URL y el puerto.</code>
+              <div class="d-flex flex-wrap gap-2 mt-3">
+                <button id="copiar" class="btn btn-primary btn-sm" type="button" disabled>📋 Copiar</button>
+                <button id="abrir" class="btn btn-outline-secondary btn-sm" type="button" disabled>↗ Abrir</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+          <h2 class="h6 mb-0">⚡ Puertos rápidos</h2>
+          <span class="small text-body-secondary">Un clic cambia el puerto</span>
+        </div>
+
+        <div id="puertos" class="d-flex flex-wrap gap-2"></div>
+
+        <form id="form-puerto" class="row g-2 align-items-end mt-3">
+          <div class="col-6 col-sm-3">
+            <label for="nuevo-puerto" class="form-label small mb-1">Puerto</label>
+            <input id="nuevo-puerto" class="form-control" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="5"
+              autocomplete="off" placeholder="4000">
+          </div>
+          <div class="col-6 col-sm-5">
+            <label for="nuevo-nombre" class="form-label small mb-1">Nombre <span class="text-body-secondary fw-normal">(opcional)</span></label>
+            <input id="nuevo-nombre" class="form-control" type="text" maxlength="24" autocomplete="off" placeholder="Mi app">
+          </div>
+          <div class="col-12 col-sm-4">
+            <button class="btn btn-outline-secondary w-100" type="submit">➕ Agregar puerto</button>
+          </div>
+        </form>
+        <div id="err-nuevo-puerto" class="small text-danger mt-1 d-none" role="alert"></div>
+      </div>
+    </section>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <h2 class="h6 mb-3">🧬 Qué cambia</h2>
+        <div class="small text-body-secondary mb-1">Original</div>
+        <div id="anatomia-origen" class="mb-3"></div>
+        <div class="small text-body-secondary mb-1">Resultado</div>
+        <div id="anatomia-destino" class="mb-2"></div>
+        <p class="small text-body-secondary mb-0">
+          <span class="badge text-bg-warning">cambia</span>
+          <span class="badge text-bg-secondary">se conserva</span>
+          <span class="badge text-bg-danger">se quita</span>
+        </p>
+      </div>
+    </section>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+          <h2 class="h6 mb-0">🕘 Recientes</h2>
+          <button id="vaciar-historial" class="btn btn-outline-secondary btn-sm" type="button" disabled>Vaciar</button>
+        </div>
+        <p class="small text-body-secondary">Se guardan solo en este navegador.</p>
+        <div id="historial" class="list-group list-group-flush"></div>
+      </div>
+    </section>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <h2 class="h6 mb-2">🔖 Bookmarklet</h2>
+        <p class="small text-body-secondary">
+          Arrastrá el botón a tu barra de favoritos. Desde cualquier página, abrirá la versión local
+          con este puerto y estas opciones. Si cambiás algo, arrastralo de nuevo.
+        </p>
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+          <a id="bookmarklet" class="btn btn-outline-primary" href="#" draggable="true">🏠 Abrir local</a>
+          <button id="copiar-bookmarklet" class="btn btn-outline-secondary" type="button">📋 Copiar código</button>
+        </div>
+        <p class="small text-body-secondary mt-2 mb-0">
+          Algunos navegadores no aceptan pegar <code>javascript:</code> a mano: hay que arrastrarlo.
+        </p>
+      </div>
+    </section>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <h2 class="h6 mb-3">🧠 Trivias</h2>
+        <details class="mb-2">
+          <summary class="fw-semibold">¿Qué es <code>localhost</code>?</summary>
+          <p class="small text-body-secondary mb-0 mt-1">Es el nombre de la interfaz de loopback: tu propia máquina (127.0.0.1). No sale a la red.</p>
+        </details>
+        <details class="mb-2">
+          <summary class="fw-semibold">¿Por qué cambiar de origen puede romper la sesión?</summary>
+          <p class="small text-body-secondary mb-0 mt-1">Cookies, <code>localStorage</code> y CORS están atados al origen (protocolo + host + puerto). Cambiarlos te deja en otro contexto.</p>
+        </details>
+        <details>
+          <summary class="fw-semibold">¿Qué puertos son los predeterminados de HTTP y HTTPS?</summary>
+          <p class="small text-body-secondary mb-0 mt-1">80 y 443. Por eso el navegador los omite en la URL cuando no hace falta escribirlos.</p>
+        </details>
+      </div>
+    </section>
+
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const STORAGE_KEY = 'localhostificalo';
+      const MAX_HISTORIAL = 8;
+      const MAX_PUERTOS = 12;
+
+      const PRESETS = [
+        { p: '3000', n: 'Next / Express' },
+        { p: '4200', n: 'Angular' },
+        { p: '4321', n: 'Astro' },
+        { p: '5000', n: 'Flask' },
+        { p: '5173', n: 'Vite' },
+        { p: '8000', n: 'Django / Laravel' },
+        { p: '8080', n: 'Vue CLI / Spring' }
+      ];
+
+      const HOSTS = ['localhost', '127.0.0.1', '[::1]'];
+
+      const DEFAULTS = {
+        url: '',
+        puerto: '3000',
+        host: 'localhost',
+        proto: 'http',
+        query: true,
+        hash: true,
+        puertos: [],
+        historial: []
+      };
+
+      const $ = (id) => document.getElementById(id);
+
+      const urlInput = $('url');
+      const puertoInput = $('puerto');
+      const hostSelect = $('host');
+      const protoSelect = $('proto');
+      const queryCheck = $('query');
+      const hashCheck = $('hash');
+      const errUrl = $('err-url');
+      const errPuerto = $('err-puerto');
+      const avisoPuerto = $('aviso-puerto');
+      const avisoPuertoTexto = $('aviso-puerto-texto');
+      const usarPuerto = $('usar-puerto');
+      const salidaTexto = $('salida');
+      const copiarBtn = $('copiar');
+      const abrirBtn = $('abrir');
+      const shareBtn = $('share');
+      const resetBtn = $('reset');
+      const themeBtn = $('theme-toggle');
+      const notice = $('notice');
+      const puertosEl = $('puertos');
+      const formPuerto = $('form-puerto');
+      const nuevoPuerto = $('nuevo-puerto');
+      const nuevoNombre = $('nuevo-nombre');
+      const errNuevoPuerto = $('err-nuevo-puerto');
+      const anatomiaOrigen = $('anatomia-origen');
+      const anatomiaDestino = $('anatomia-destino');
+      const historialEl = $('historial');
+      const vaciarHistorialBtn = $('vaciar-historial');
+      const bookmarkletEl = $('bookmarklet');
+      const copiarBookmarkletBtn = $('copiar-bookmarklet');
+
+      let state = normalizarEstado(null);
+      let iniciando = true;
+      let bookmarkletCodigo = '';
+      let noticeTimer;
+      let resetArmada = false;
+      let resetTimer;
+
+      function puertoValido(valor) {
+        const texto = String(valor == null ? '' : valor).trim();
+        return /^\d{1,5}$/.test(texto) && Number(texto) >= 1 && Number(texto) <= 65535;
+      }
+
+      function normalizarPuertoCustom(entrada) {
+        if (!entrada || typeof entrada !== 'object' || !puertoValido(entrada.p)) return null;
+        const p = String(Number(entrada.p));
+        if (PRESETS.some((preset) => preset.p === p)) return null;
+        const n = typeof entrada.n === 'string' ? entrada.n.trim().slice(0, 24) : '';
+        return { p, n: n || `Puerto ${p}` };
+      }
+
+      function normalizarHistorial(entrada) {
+        if (!entrada || typeof entrada !== 'object') return null;
+        if (typeof entrada.u !== 'string' || !entrada.u.trim() || !puertoValido(entrada.p)) return null;
+        return { u: entrada.u, p: String(Number(entrada.p)) };
+      }
+
+      function normalizarEstado(obj) {
+        const base = {
+          url: DEFAULTS.url,
+          puerto: DEFAULTS.puerto,
+          host: DEFAULTS.host,
+          proto: DEFAULTS.proto,
+          query: DEFAULTS.query,
+          hash: DEFAULTS.hash,
+          puertos: [],
+          historial: []
+        };
+        const e = Object.assign(base, obj && typeof obj === 'object' ? obj : {});
+
+        e.url = typeof e.url === 'string' ? e.url.slice(0, 2048) : '';
+        e.puerto = puertoValido(e.puerto) ? String(Number(e.puerto)) : DEFAULTS.puerto;
+        e.host = HOSTS.includes(e.host) ? e.host : DEFAULTS.host;
+        e.proto = e.proto === 'https' ? 'https' : 'http';
+        e.query = e.query !== false;
+        e.hash = e.hash !== false;
+
+        const vistos = new Set();
+        e.puertos = (Array.isArray(e.puertos) ? e.puertos : [])
+          .map(normalizarPuertoCustom)
+          .filter((entrada) => {
+            if (!entrada || vistos.has(entrada.p)) return false;
+            vistos.add(entrada.p);
+            return true;
+          })
+          .slice(0, MAX_PUERTOS);
+
+        const vistosHistorial = new Set();
+        e.historial = (Array.isArray(e.historial) ? e.historial : [])
+          .map(normalizarHistorial)
+          .filter((entrada) => {
+            if (!entrada) return false;
+            const clave = `${entrada.u}|${entrada.p}`;
+            if (vistosHistorial.has(clave)) return false;
+            vistosHistorial.add(clave);
+            return true;
+          })
+          .slice(0, MAX_HISTORIAL);
+
+        return e;
+      }
+
+      function leerGuardado() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return null;
+          const obj = JSON.parse(raw);
+          return obj && typeof obj === 'object' ? obj : null;
+        } catch {
+          return null;
+        }
+      }
+
+      function cargarEstado() {
+        const guardado = leerGuardado();
+        const params = new URLSearchParams(window.location.search);
+        const claves = ['url', 'puerto', 'host', 'proto', 'q', 'h'];
+        const desdeUrl = claves.some((clave) => params.has(clave));
+
+        if (!desdeUrl) return normalizarEstado(guardado);
+
+        return normalizarEstado(Object.assign({}, guardado || {}, {
+          url: params.has('url') ? params.get('url') : (guardado ? guardado.url : DEFAULTS.url),
+          puerto: params.has('puerto') ? params.get('puerto') : (guardado ? guardado.puerto : DEFAULTS.puerto),
+          host: params.has('host') ? params.get('host') : (guardado ? guardado.host : DEFAULTS.host),
+          proto: params.has('proto') ? params.get('proto') : (guardado ? guardado.proto : DEFAULTS.proto),
+          query: params.has('q') ? params.get('q') !== '0' : (guardado ? guardado.query : DEFAULTS.query),
+          hash: params.has('h') ? params.get('h') !== '0' : (guardado ? guardado.hash : DEFAULTS.hash)
+        }));
+      }
+
+      function estadoActual() {
+        return {
+          url: urlInput.value.trim().slice(0, 2048),
+          puerto: puertoInput.value.trim(),
+          host: hostSelect.value,
+          proto: protoSelect.value,
+          query: queryCheck.checked,
+          hash: hashCheck.checked,
+          puertos: state.puertos,
+          historial: state.historial
+        };
+      }
+
+      function guardar() {
+        if (iniciando) return;
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(estadoActual()));
+        } catch { /* Sin almacenamiento: el estado vive solo en la sesión. */ }
+      }
+
+      function evaluar() {
+        const urlCruda = urlInput.value.trim();
+        const puertoCrudo = puertoInput.value.trim();
+        const errores = { url: '', puerto: '' };
+        let origen = null;
+
+        if (!urlCruda) {
+          errores.url = 'Pegá una URL para convertir.';
+        } else {
+          let candidato = urlCruda;
+          let esquemaInvalido = false;
+
+          if (/^\/\//.test(candidato)) {
+            candidato = `https:${candidato}`;
+          } else {
+            const conEsquema = /^([a-z][a-z0-9+.-]*):/i.exec(candidato);
+            if (conEsquema) {
+              const esquema = conEsquema[1].toLowerCase();
+              const resto = candidato.slice(conEsquema[0].length);
+              if (esquema !== 'http' && esquema !== 'https') {
+                if (/^\d+([/?#]|$)/.test(resto)) {
+                  candidato = `https://${candidato}`;
+                } else {
+                  esquemaInvalido = true;
+                }
+              }
+            } else {
+              candidato = `https://${candidato}`;
+            }
+          }
+
+          if (esquemaInvalido) {
+            errores.url = 'Solo se aceptan URLs http o https.';
+          } else {
+            try {
+              const u = new URL(candidato);
+              if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+                errores.url = 'Solo se aceptan URLs http o https.';
+              } else if (!u.hostname) {
+                errores.url = 'La URL no tiene un dominio válido.';
+              } else {
+                origen = u;
+              }
+            } catch {
+              errores.url = 'No es una URL válida. Ejemplo: https://app.ejemplo.com/panel';
+            }
+          }
+        }
+
+        let puerto = '';
+        if (!puertoCrudo) {
+          errores.puerto = 'Ingresá un puerto entre 1 y 65535.';
+        } else if (!puertoValido(puertoCrudo)) {
+          errores.puerto = 'Tiene que ser un entero entre 1 y 65535.';
+        } else {
+          puerto = String(Number(puertoCrudo));
+        }
+
+        let salida = null;
+        if (origen && puerto) {
+          try {
+            const u = new URL(origen.href);
+            u.protocol = `${protoSelect.value}:`;
+            u.hostname = hostSelect.value;
+            u.port = puerto;
+            if (!queryCheck.checked) u.search = '';
+            if (!hashCheck.checked) u.hash = '';
+            salida = u;
+          } catch {
+            errores.puerto = 'No se pudo construir la URL con ese host y puerto.';
+          }
+        }
+
+        return { errores, origen, salida, puerto, puertoOriginal: origen ? origen.port : '' };
+      }
+
+      function mostrarError(el, mensaje) {
+        el.textContent = mensaje;
+        el.classList.toggle('d-none', !mensaje);
+      }
+
+      function mostrarAvisoPuerto(resultado) {
+        const original = resultado.puertoOriginal;
+        if (!resultado.salida || !original || original === resultado.puerto) {
+          avisoPuerto.classList.add('d-none');
+          return;
+        }
+        avisoPuertoTexto.textContent = `La URL original usa el puerto :${original}.`;
+        usarPuerto.textContent = `Usar :${original}`;
+        usarPuerto.dataset.puerto = original;
+        avisoPuerto.classList.remove('d-none');
+      }
+
+      function pintarSalida(resultado) {
+        const valido = Boolean(resultado.salida);
+        salidaTexto.textContent = valido ? resultado.salida.href : 'Completá la URL y el puerto.';
+        salidaTexto.classList.toggle('text-body-secondary', !valido);
+        copiarBtn.disabled = !valido;
+        abrirBtn.disabled = !valido;
+      }
+
+      function agregarSegmento(contenedor, texto, clase) {
+        const codigo = document.createElement('code');
+        codigo.className = `seg ${clase}`;
+        codigo.textContent = texto;
+        contenedor.append(codigo);
+      }
+
+      function pintarSegmentos(contenedor, url, esDestino, resultado) {
+        contenedor.textContent = '';
+        if (!url) {
+          const vacio = document.createElement('span');
+          vacio.className = 'text-body-secondary';
+          vacio.textContent = '—';
+          contenedor.append(vacio);
+          return;
+        }
+
+        const claseCambia = esDestino ? 'seg-cambia' : 'seg-origen';
+        const claseIgual = esDestino ? 'seg-igual' : 'seg-origen';
+
+        agregarSegmento(contenedor, `${url.protocol}//`, claseCambia);
+        agregarSegmento(contenedor, url.hostname, claseCambia);
+        if (url.port) agregarSegmento(contenedor, `:${url.port}`, claseCambia);
+        agregarSegmento(contenedor, url.pathname, claseIgual);
+
+        if (esDestino && resultado.origen) {
+          if (queryCheck.checked) {
+            if (url.search) agregarSegmento(contenedor, url.search, claseIgual);
+          } else if (resultado.origen.search) {
+            agregarSegmento(contenedor, resultado.origen.search, 'seg-quita');
+          }
+
+          if (hashCheck.checked) {
+            if (url.hash) agregarSegmento(contenedor, url.hash, claseIgual);
+          } else if (resultado.origen.hash) {
+            agregarSegmento(contenedor, resultado.origen.hash, 'seg-quita');
+          }
+        } else {
+          if (url.search) agregarSegmento(contenedor, url.search, claseIgual);
+          if (url.hash) agregarSegmento(contenedor, url.hash, claseIgual);
+        }
+      }
+
+      function pintarAnatomia(resultado) {
+        pintarSegmentos(anatomiaOrigen, resultado.origen, false, resultado);
+        pintarSegmentos(anatomiaDestino, resultado.salida, true, resultado);
+      }
+
+      function renderSalida(resultado) {
+        mostrarError(errUrl, resultado.errores.url);
+        mostrarError(errPuerto, resultado.errores.puerto);
+        urlInput.setAttribute('aria-invalid', String(Boolean(resultado.errores.url)));
+        puertoInput.setAttribute('aria-invalid', String(Boolean(resultado.errores.puerto)));
+        mostrarAvisoPuerto(resultado);
+        pintarSalida(resultado);
+        pintarAnatomia(resultado);
+      }
+
+      function renderPuertos() {
+        puertosEl.textContent = '';
+        const actual = puertoValido(puertoInput.value) ? String(Number(puertoInput.value)) : '';
+        const items = PRESETS.map((preset) => ({ ...preset, custom: false }))
+          .concat(state.puertos.map((personalizado) => ({ ...personalizado, custom: true })));
+
+        items.forEach(({ p, n, custom }) => {
+          const grupo = document.createElement('span');
+          grupo.className = 'd-inline-flex align-items-stretch';
+
+          const boton = document.createElement('button');
+          boton.type = 'button';
+          boton.dataset.puerto = p;
+          boton.className = `btn btn-sm ${p === actual ? 'btn-secondary' : 'btn-outline-secondary'}`;
+          if (custom) boton.classList.add('rounded-end-0');
+          boton.setAttribute('aria-pressed', String(p === actual));
+          boton.title = `${n} · puerto ${p}`;
+
+          const numero = document.createElement('span');
+          numero.className = 'fw-semibold';
+          numero.textContent = p;
+          boton.append(numero);
+
+          if (n) {
+            const nombre = document.createElement('span');
+            nombre.className = 'ms-1 fw-normal d-none d-sm-inline';
+            nombre.textContent = n;
+            boton.append(nombre);
+          }
+
+          grupo.append(boton);
+
+          if (custom) {
+            const quitar = document.createElement('button');
+            quitar.type = 'button';
+            quitar.dataset.quitar = p;
+            quitar.className = 'btn btn-sm btn-outline-secondary rounded-start-0 border-start-0';
+            quitar.setAttribute('aria-label', `Quitar el puerto ${p}`);
+            quitar.title = `Quitar ${p}`;
+            quitar.textContent = '×';
+            grupo.append(quitar);
+          }
+
+          puertosEl.append(grupo);
+        });
+      }
+
+      function renderHistorial() {
+        historialEl.textContent = '';
+        vaciarHistorialBtn.disabled = state.historial.length === 0;
+
+        if (!state.historial.length) {
+          const vacio = document.createElement('p');
+          vacio.className = 'small text-body-secondary mb-0';
+          vacio.textContent = 'Todavía no hay conversiones recientes.';
+          historialEl.append(vacio);
+          return;
+        }
+
+        state.historial.forEach((entrada) => {
+          const boton = document.createElement('button');
+          boton.type = 'button';
+          boton.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-start gap-2';
+
+          const texto = document.createElement('span');
+          texto.className = 'small text-break';
+          texto.textContent = entrada.u;
+
+          const puerto = document.createElement('span');
+          puerto.className = 'badge text-bg-secondary flex-shrink-0';
+          puerto.textContent = `:${entrada.p}`;
+
+          boton.append(texto, puerto);
+          boton.addEventListener('click', () => {
+            urlInput.value = entrada.u;
+            puertoInput.value = entrada.p;
+            refrescar();
+            urlInput.focus();
+          });
+          historialEl.append(boton);
+        });
+      }
+
+      function generarBookmarklet(puerto) {
+        const partes = [
+          'javascript:(()=>{try{',
+          'const u=new URL(location.href);',
+          `u.protocol=${JSON.stringify(`${protoSelect.value}:`)};`,
+          `u.hostname=${JSON.stringify(hostSelect.value)};`,
+          `u.port=${JSON.stringify(puerto)};`
+        ];
+        if (!queryCheck.checked) partes.push("u.search='';");
+        if (!hashCheck.checked) partes.push("u.hash='';");
+        partes.push("location.href=u.href;}catch(e){alert('No se pudo convertir esta URL.');}})()");
+        return partes.join('');
+      }
+
+      function renderBookmarklet(resultado) {
+        if (!resultado.puerto) {
+          bookmarkletCodigo = '';
+          bookmarkletEl.setAttribute('href', '#');
+          bookmarkletEl.classList.add('disabled');
+          bookmarkletEl.setAttribute('aria-disabled', 'true');
+          copiarBookmarkletBtn.disabled = true;
+          return;
+        }
+        bookmarkletCodigo = generarBookmarklet(resultado.puerto);
+        bookmarkletEl.setAttribute('href', bookmarkletCodigo);
+        bookmarkletEl.classList.remove('disabled');
+        bookmarkletEl.removeAttribute('aria-disabled');
+        copiarBookmarkletBtn.disabled = false;
+      }
+
+      function refrescar() {
+        const resultado = evaluar();
+        renderSalida(resultado);
+        renderPuertos();
+        renderBookmarklet(resultado);
+        guardar();
+        return resultado;
+      }
+
+      async function copiarTexto(texto) {
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(texto);
+            return;
+          }
+        } catch { /* Se intenta el método clásico. */ }
+
+        const area = document.createElement('textarea');
+        area.value = texto;
+        area.setAttribute('readonly', '');
+        area.style.position = 'fixed';
+        area.style.top = '-1000px';
+        document.body.append(area);
+        area.select();
+        const copiado = document.execCommand('copy');
+        area.remove();
+        if (!copiado) throw new Error('Sin portapapeles');
+      }
+
+      function showNotice(mensaje, tipo = 'success') {
+        clearTimeout(noticeTimer);
+        notice.textContent = mensaje;
+        notice.className = `alert py-2 alert-flotante alert-${tipo === 'error' ? 'danger' : 'success'}`;
+        notice.classList.remove('d-none');
+        noticeTimer = setTimeout(() => notice.classList.add('d-none'), 2600);
+      }
+
+      function registrarHistorial(resultado) {
+        if (!resultado || !resultado.origen || !resultado.salida) return;
+        const entrada = { u: resultado.origen.href, p: resultado.puerto };
+        state.historial = [entrada, ...state.historial.filter((h) => !(h.u === entrada.u && h.p === entrada.p))]
+          .slice(0, MAX_HISTORIAL);
+        guardar();
+        renderHistorial();
+      }
+
+      async function copiarDestino() {
+        const resultado = evaluar();
+        if (!resultado.salida) return;
+        try {
+          await copiarTexto(resultado.salida.href);
+          registrarHistorial(resultado);
+          showNotice('URL copiada.');
+        } catch {
+          showNotice('No se pudo copiar la URL.', 'error');
+        }
+      }
+
+      function abrirDestino() {
+        const resultado = evaluar();
+        if (!resultado.salida) return;
+        window.open(resultado.salida.href, '_blank', 'noopener');
+        registrarHistorial(resultado);
+      }
+
+      async function compartir() {
+        const resultado = evaluar();
+        if (!resultado.salida) {
+          showNotice('Completá una URL válida para compartir.', 'error');
+          return;
+        }
+
+        const url = new URL(window.location.href);
+        url.search = '';
+        url.hash = '';
+        url.searchParams.set('url', resultado.origen.href);
+        url.searchParams.set('puerto', resultado.puerto);
+        url.searchParams.set('host', hostSelect.value);
+        url.searchParams.set('proto', protoSelect.value);
+        url.searchParams.set('q', queryCheck.checked ? '1' : '0');
+        url.searchParams.set('h', hashCheck.checked ? '1' : '0');
+
+        try {
+          await copiarTexto(url.href);
+          registrarHistorial(resultado);
+          showNotice('Link copiado.');
+        } catch {
+          showNotice('No se pudo copiar el link.', 'error');
+        }
+      }
+
+      function agregarPuerto(evento) {
+        evento.preventDefault();
+        const crudo = nuevoPuerto.value.trim();
+        const nombre = nuevoNombre.value.trim().slice(0, 24);
+
+        if (!puertoValido(crudo)) {
+          mostrarError(errNuevoPuerto, 'Ingresá un puerto entre 1 y 65535.');
+          nuevoPuerto.focus();
+          return;
+        }
+        mostrarError(errNuevoPuerto, '');
+
+        const p = String(Number(crudo));
+        if (PRESETS.some((preset) => preset.p === p)) {
+          showNotice('Ese puerto ya está entre los rápidos.', 'error');
+          return;
+        }
+
+        const existente = state.puertos.find((entrada) => entrada.p === p);
+        if (existente) {
+          existente.n = nombre || existente.n;
+          showNotice('Puerto actualizado.');
+        } else {
+          if (state.puertos.length >= MAX_PUERTOS) {
+            showNotice(`Máximo ${MAX_PUERTOS} puertos personalizados.`, 'error');
+            return;
+          }
+          state.puertos.push({ p, n: nombre || `Puerto ${p}` });
+          showNotice('Puerto agregado.');
+        }
+
+        nuevoPuerto.value = '';
+        nuevoNombre.value = '';
+        refrescar();
+      }
+
+      function manejarChip(evento) {
+        const quitar = evento.target.closest('[data-quitar]');
+        if (quitar) {
+          state.puertos = state.puertos.filter((entrada) => entrada.p !== quitar.dataset.quitar);
+          refrescar();
+          showNotice('Puerto quitado.');
+          return;
+        }
+
+        const chip = evento.target.closest('[data-puerto]');
+        if (!chip) return;
+        puertoInput.value = chip.dataset.puerto;
+        refrescar();
+      }
+
+      function aplicarTema(tema) {
+        document.documentElement.setAttribute('data-bs-theme', tema);
+        themeBtn.textContent = tema === 'dark' ? '☀️' : '🌙';
+        themeBtn.setAttribute('aria-label', tema === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro');
+      }
+
+      function aplicarEstado(estado) {
+        urlInput.value = estado.url;
+        puertoInput.value = estado.puerto;
+        hostSelect.value = estado.host;
+        protoSelect.value = estado.proto;
+        queryCheck.checked = estado.query;
+        hashCheck.checked = estado.hash;
+      }
+
+      function desarmarReset() {
+        resetArmada = false;
+        resetBtn.textContent = '🗑️ Reiniciar';
+        resetBtn.classList.remove('btn-danger');
+        resetBtn.classList.add('btn-outline-secondary');
+      }
+
+      function reiniciar() {
+        try { localStorage.removeItem(STORAGE_KEY); } catch { /* Nada que borrar. */ }
+        state = normalizarEstado(null);
+        aplicarEstado(state);
+        try { window.history.replaceState(null, '', window.location.pathname); } catch { /* Sin historial. */ }
+
+        iniciando = true;
+        renderHistorial();
+        refrescar();
+        iniciando = false;
+        showNotice('Herramienta reiniciada.');
+      }
+
+      resetBtn.addEventListener('click', () => {
+        if (!resetArmada) {
+          resetArmada = true;
+          resetBtn.textContent = '¿Seguro? Tocá de nuevo';
+          resetBtn.classList.remove('btn-outline-secondary');
+          resetBtn.classList.add('btn-danger');
+          clearTimeout(resetTimer);
+          resetTimer = setTimeout(desarmarReset, 5000);
+          return;
+        }
+        clearTimeout(resetTimer);
+        desarmarReset();
+        reiniciar();
+      });
+
+      [urlInput, puertoInput].forEach((input) => input.addEventListener('input', refrescar));
+      [hostSelect, protoSelect, queryCheck, hashCheck].forEach((control) => control.addEventListener('change', refrescar));
+
+      copiarBtn.addEventListener('click', copiarDestino);
+      abrirBtn.addEventListener('click', abrirDestino);
+      shareBtn.addEventListener('click', compartir);
+      formPuerto.addEventListener('submit', agregarPuerto);
+      puertosEl.addEventListener('click', manejarChip);
+
+      usarPuerto.addEventListener('click', () => {
+        const puerto = usarPuerto.dataset.puerto;
+        if (!puerto) return;
+        puertoInput.value = puerto;
+        refrescar();
+      });
+
+      vaciarHistorialBtn.addEventListener('click', () => {
+        state.historial = [];
+        guardar();
+        renderHistorial();
+        showNotice('Historial vaciado.');
+      });
+
+      bookmarkletEl.addEventListener('click', (evento) => {
+        evento.preventDefault();
+        showNotice('Arrastralo a tu barra de favoritos y usalo desde la página online.');
+      });
+
+      copiarBookmarkletBtn.addEventListener('click', async () => {
+        if (!bookmarkletCodigo) return;
+        try {
+          await copiarTexto(bookmarkletCodigo);
+          showNotice('Código copiado.');
+        } catch {
+          showNotice('No se pudo copiar el código.', 'error');
+        }
+      });
+
+      themeBtn.addEventListener('click', () => {
+        const actual = document.documentElement.getAttribute('data-bs-theme');
+        const siguiente = actual === 'dark' ? 'light' : 'dark';
+        try { localStorage.setItem('theme', siguiente); } catch { /* Sin almacenamiento. */ }
+        aplicarTema(siguiente);
+      });
+
+      state = cargarEstado();
+      aplicarEstado(state);
+      aplicarTema(document.documentElement.getAttribute('data-bs-theme') || 'light');
+      renderHistorial();
+      refrescar();
+      iniciando = false;
+    })();
+  </script>
+</body>
+</html>

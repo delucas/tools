@@ -67,5 +67,6 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`escaner-pdf`](./escaner-pdf) | 📄 Escáner a PDF: fotos de cada hoja compiladas en un PDF A4 para compartir. |
 | [`papeles`](./papeles) | 📐 Papeles: tamaños de papel ISO (series A, B y C) a escala, con píxeles, peso y sobres. |
 | [`estructuras`](./estructuras) | 🧱 Estructuras: dibujá arreglos, matrices, pilas, colas, listas, árboles y grafos para tus clases, con salida a SVG, PNG, PPTX o Excalidraw. |
+| [`localhostificalo`](./localhostificalo) | 🏠 Localhostificalo: convertí una URL online en su versión local para depurar tus apps. |
 
 Cada carpeta tiene su propio `README.md` con el detalle de uso.

@@ -2,18 +2,24 @@ PORT ?= 5050
 
 .DEFAULT_GOAL := help
 
-.PHONY: help serve check status deploy
+.PHONY: help serve open check status deploy
 
 help:
 	@echo "Uso: make [target]"
 	@echo ""
 	@echo "  serve   Servidor local en http://localhost:$(PORT) (ej: make serve PORT=8080)"
+	@echo "  open    Abre http://localhost:$(PORT) en una ventana nueva"
 	@echo "  check   Valida el repo: estructura, catálogo, listados, convenciones, sintaxis JS y pruebas puras"
 	@echo "  status  Estado del working tree y de la rama vs remoto"
 	@echo "  deploy  Pushea los commits y avisa si quedan cambios sin commitear"
 
 serve:
 	python3 -m http.server $(PORT)
+
+open:
+	@url="http://localhost:$(PORT)/"; \
+	echo "Abriendo $$url"; \
+	./scripts/open-browser.sh "$$url"
 
 check:
 	@fail=0; \

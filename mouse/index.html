@@ -1,0 +1,1448 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f5b1%3B%26%23xfe0f%3B%3C/text%3E%3C/svg%3E">
+  <title>Mouse — Testeá clicks, velocidad, reacción y movimiento</title>
+
+  <script>
+    // Tema antes del CSS para evitar el parpadeo (clave global `theme`).
+    (() => {
+      let guardado = null;
+      try { guardado = localStorage.getItem('theme'); } catch { /* modo privado */ }
+      const tema = guardado || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-bs-theme', tema);
+    })();
+  </script>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    p.signature { font-size: 0.8em; }
+
+    .alert-flotante {
+      position: fixed;
+      bottom: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1050;
+      max-width: min(92vw, 560px);
+      margin-bottom: 0;
+      box-shadow: var(--bs-box-shadow);
+    }
+
+    #app select,
+    #app input,
+    #app textarea { font-size: 16px; }
+
+    .pad {
+      position: relative;
+      height: 300px;
+      border: 2px dashed var(--bs-border-color);
+      border-radius: 0.75rem;
+      background: var(--bs-tertiary-bg);
+      overflow: hidden;
+      cursor: crosshair;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .pad:focus {
+      outline: none;
+      border-color: var(--bs-primary);
+      box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.2);
+    }
+
+    .pad canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .pad-pista {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      text-align: center;
+      pointer-events: none;
+      color: var(--bs-secondary-color);
+      font-size: 0.9rem;
+    }
+
+    .zona {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 140px;
+      padding: 1rem;
+      border: 2px dashed var(--bs-border-color);
+      border-radius: 0.75rem;
+      background: var(--bs-tertiary-bg);
+      text-align: center;
+      cursor: pointer;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+      transition: background-color 0.12s ease, border-color 0.12s ease;
+    }
+
+    .zona:focus { outline: none; border-color: var(--bs-primary); }
+
+    .zona.activa {
+      border-style: solid;
+      border-color: var(--bs-primary);
+      background: var(--bs-primary-bg-subtle);
+    }
+
+    .zona.lista {
+      border-style: solid;
+      border-color: var(--bs-success);
+      background: var(--bs-success-bg-subtle);
+      cursor: pointer;
+    }
+
+    .zona.fallo {
+      border-color: var(--bs-danger);
+      background: var(--bs-danger-bg-subtle);
+    }
+
+    .zona-icono { font-size: 1.9rem; line-height: 1; }
+
+    .pista {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 110px;
+      border: 2px dashed var(--bs-border-color);
+      border-radius: 0.75rem;
+      background: var(--bs-tertiary-bg);
+      cursor: ew-resize;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      overflow: hidden;
+    }
+
+    .pista .pista-linea {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      border-top: 2px solid var(--bs-border-color);
+    }
+
+    .pista .pista-marca {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: var(--bs-primary);
+      border-radius: 2px;
+      transform: translateX(-50%);
+      display: none;
+    }
+
+    .pista .pista-texto { position: relative; z-index: 1; pointer-events: none; }
+
+    .stat {
+      height: 100%;
+      border: 1px solid var(--bs-border-color);
+      border-radius: 0.5rem;
+      padding: 0.5rem 0.65rem;
+      background: var(--bs-body-bg);
+    }
+
+    .stat .stat-valor {
+      display: block;
+      font-size: 1.25rem;
+      font-weight: 600;
+      line-height: 1.2;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat .stat-nombre {
+      display: block;
+      font-size: 0.72rem;
+      color: var(--bs-secondary-color);
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+
+    .historial {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+      min-height: 1.9rem;
+    }
+
+    .historial .chip {
+      font-size: 0.72rem;
+      padding: 0.1rem 0.4rem;
+      border-radius: 999px;
+      border: 1px solid var(--bs-border-color);
+      background: var(--bs-tertiary-bg);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .chip-0 { border-color: var(--bs-primary) !important; }
+    .chip-1 { border-color: var(--bs-warning) !important; }
+    .chip-2 { border-color: var(--bs-danger) !important; }
+    .chip-3 { border-color: var(--bs-info) !important; }
+    .chip-4 { border-color: var(--bs-success) !important; }
+
+    .grafico {
+      display: block;
+      width: 100%;
+      height: 160px;
+      border: 1px solid var(--bs-border-color);
+      border-radius: 0.5rem;
+      background: var(--bs-body-bg);
+    }
+
+    .mono { font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+
+<body>
+  <main id="app" class="container py-4" style="max-width: 1000px;">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">🖱️ Mouse</h1>
+        <p class="text-body-secondary mb-0">Clicks, velocidad, reacción, movimiento, rueda y sensibilidad efectiva.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="share" class="btn btn-outline-secondary btn-sm" type="button">🔗 Compartir</button>
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div id="notice" class="alert alert-flotante py-2 d-none" role="status"></div>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <h2 class="h6 mb-1">1. Panel libre</h2>
+        <p class="small text-body-secondary mb-3">
+          Mové el mouse y hacé clic en cualquier botón. El panel registra botones, distancia y velocidad del
+          puntero. El clic derecho y el botón central no abren menús acá.
+        </p>
+
+        <div id="pad" class="pad mb-3" tabindex="0" role="application"
+          aria-label="Panel para mover el mouse y probar todos sus botones">
+          <canvas id="pad-canvas" aria-hidden="true"></canvas>
+          <div id="pad-pista" class="pad-pista">
+            <div>
+              <div class="fs-3" aria-hidden="true">🖱️</div>
+              <p class="mb-0">Mové el mouse por acá</p>
+              <p class="small mb-0">Clic izquierdo, central y derecho · arrastrá para dibujar</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="row row-cols-2 row-cols-sm-3 row-cols-lg-6 g-2 mb-3">
+          <div class="col"><div class="stat"><span class="stat-nombre">Izquierdo</span><span id="cnt-0" class="stat-valor">0</span></div></div>
+          <div class="col"><div class="stat"><span class="stat-nombre">Central</span><span id="cnt-1" class="stat-valor">0</span></div></div>
+          <div class="col"><div class="stat"><span class="stat-nombre">Derecho</span><span id="cnt-2" class="stat-valor">0</span></div></div>
+          <div class="col"><div class="stat"><span class="stat-nombre">Atrás</span><span id="cnt-3" class="stat-valor">0</span></div></div>
+          <div class="col"><div class="stat"><span class="stat-nombre">Adelante</span><span id="cnt-4" class="stat-valor">0</span></div></div>
+          <div class="col"><div class="stat"><span class="stat-nombre">Total</span><span id="cnt-total" class="stat-valor">0</span></div></div>
+        </div>
+
+        <div class="row g-2 mb-3">
+          <div class="col-6 col-lg-3"><div class="stat"><span class="stat-nombre">CPS (último segundo)</span><span id="tasa-cps" class="stat-valor">0,0</span></div></div>
+          <div class="col-6 col-lg-3"><div class="stat"><span class="stat-nombre">CPM (último minuto)</span><span id="tasa-cpm" class="stat-valor">0</span></div></div>
+          <div class="col-6 col-lg-3"><div class="stat"><span class="stat-nombre">Pico CPS</span><span id="tasa-pico" class="stat-valor">0,0</span></div></div>
+          <div class="col-6 col-lg-3"><div class="stat"><span class="stat-nombre">Ráfagas dudosas</span><span id="cnt-sospechosos" class="stat-valor">0</span></div></div>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-12 col-lg-6">
+            <h3 class="h6 mb-2">Último clic</h3>
+            <div id="ultimo-click" class="small text-body-secondary">Todavía no hay clicks.</div>
+            <p class="small text-body-secondary mt-2 mb-0">
+              Los <strong>dobles</strong> son dos clicks con menos de 100 ms de diferencia; las
+              <strong>ráfagas dudosas</strong> agrupan 3 o más en 150 ms, algo típico de un botón que rebota.
+            </p>
+          </div>
+          <div class="col-12 col-lg-6">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h3 class="h6 mb-0">Últimos clicks</h3>
+              <span class="small text-body-secondary">dobles: <span id="cnt-dobles" class="mono">0</span></span>
+            </div>
+            <div id="historial" class="historial" aria-live="polite"></div>
+            <button id="pad-limpiar" class="btn btn-outline-secondary btn-sm mt-2" type="button">🧹 Limpiar panel</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <h2 class="h6 mb-1">2. Velocidad de clicks (CPS)</h2>
+        <p class="small text-body-secondary mb-3">
+          Elegí una duración, tocá <strong>Empezar</strong> y hacé clic izquierdo dentro de la zona. Hay una
+          cuenta regresiva corta para que el clic de inicio no sume.
+        </p>
+
+        <div class="d-flex flex-wrap align-items-end gap-2 mb-3">
+          <div>
+            <label for="cps-duracion" class="form-label small mb-1">Duración</label>
+            <select id="cps-duracion" class="form-select" style="max-width: 11rem;">
+              <option value="5">5 segundos</option>
+              <option value="10">10 segundos</option>
+              <option value="30">30 segundos</option>
+            </select>
+          </div>
+          <button id="cps-empezar" class="btn btn-primary" type="button">Empezar</button>
+          <span id="cps-estado" class="small text-body-secondary" role="status"></span>
+        </div>
+
+        <div id="cps-zona" class="zona mb-3" tabindex="0" role="button"
+          aria-label="Zona de prueba de clicks por segundo">
+          <div class="zona-icono" aria-hidden="true">👆</div>
+          <p class="mb-0 fw-semibold" id="cps-zona-texto">Elegí la duración y tocá Empezar</p>
+          <p class="small text-body-secondary mb-0" id="cps-zona-sub">Los clicks de acá se cuentan aparte del panel libre</p>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-12 col-lg-5">
+            <h3 class="h6 mb-2">Resultado</h3>
+            <div id="cps-resultado" class="small text-body-secondary">Sin prueba todavía.</div>
+          </div>
+          <div class="col-12 col-lg-7">
+            <h3 class="h6 mb-2">Clicks por segundo</h3>
+            <canvas id="cps-canvas" class="grafico" aria-label="Gráfico de clicks por segundo durante la prueba"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <h2 class="h6 mb-1">3. Tiempo de reacción</h2>
+        <p class="small text-body-secondary mb-3">
+          Tocá <strong>Empezar</strong>, esperá y hacé clic izquierdo apenas la zona se ponga verde. Si hacés
+          clic antes, cuenta como salida en falso.
+        </p>
+
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+          <button id="reaccion-empezar" class="btn btn-primary" type="button">Empezar</button>
+          <span id="reaccion-estado" class="small text-body-secondary" role="status">Sin prueba todavía.</span>
+        </div>
+
+        <div id="reaccion-zona" class="zona mb-3" tabindex="0" role="button"
+          aria-label="Zona de prueba de tiempo de reacción">
+          <div class="zona-icono" aria-hidden="true">⏱️</div>
+          <p class="mb-0 fw-semibold" id="reaccion-zona-texto">Tocá Empezar para prepararte</p>
+          <p class="small text-body-secondary mb-0" id="reaccion-zona-sub">No hace falta apurarse: el verde llega solo</p>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-12 col-lg-5">
+            <h3 class="h6 mb-2">Resultado</h3>
+            <div id="reaccion-resultado" class="small text-body-secondary">Sin intentos.</div>
+          </div>
+          <div class="col-12 col-lg-7">
+            <h3 class="h6 mb-2">Últimos intentos</h3>
+            <canvas id="reaccion-canvas" class="grafico" aria-label="Gráfico de tiempos de reacción"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <h2 class="h6 mb-1">4. Movimiento y sondeo</h2>
+        <p class="small text-body-secondary mb-3">
+          Se mide mientras movés el mouse sobre el <a href="#pad" class="text-decoration-none">panel libre</a>.
+          La tasa de sondeo (polling) es una <strong>estimación</strong> a partir de los eventos que entrega el
+          navegador: no reemplaza una medición de hardware.
+        </p>
+
+        <div class="row row-cols-2 row-cols-sm-3 row-cols-lg-6 g-2 mb-3">
+          <div class="col"><div class="stat"><span class="stat-nombre">Distancia</span><span id="mov-distancia" class="stat-valor">0 px</span></div></div>
+          <div class="col"><div class="stat"><span class="stat-nombre">Velocidad</span><span id="mov-velocidad" class="stat-valor">0 px/s</span></div></div>
+          <div class="col"><div class="stat"><span class="stat-nombre">Máxima</span><span id="mov-max" class="stat-valor">0 px/s</span></div></div>
+          <div class="col"><div class="stat"><span class="stat-nombre">Promedio</span><span id="mov-promedio" class="stat-valor">0 px/s</span></div></div>
+          <div class="col"><div class="stat"><span class="stat-nombre">Eventos</span><span id="mov-eventos" class="stat-valor">0</span></div></div>
+          <div class="col"><div class="stat"><span class="stat-nombre">Sondeo est.</span><span id="mov-poll" class="stat-valor">—</span></div></div>
+        </div>
+
+        <h3 class="h6 mb-2">Velocidad de los últimos 10 segundos</h3>
+        <canvas id="velocidad-canvas" class="grafico mb-3" aria-label="Gráfico de velocidad del puntero en los últimos diez segundos"></canvas>
+
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <button id="mov-limpiar" class="btn btn-outline-secondary btn-sm" type="button">🧹 Reiniciar movimiento</button>
+          <span class="small text-body-secondary">La distancia está en píxeles de pantalla (CSS px).</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <h2 class="h6 mb-1">5. Rueda y desplazamiento</h2>
+        <p class="small text-body-secondary mb-3">
+          Pasá la rueda sobre la zona. Se cuentan los eventos, el desplazamiento acumulado y la dirección.
+          Algunos navegadores redondean o aceleran el scroll según el sistema.
+        </p>
+
+        <div id="scroll-zona" class="zona mb-3" tabindex="0" role="group"
+          aria-label="Zona para probar la rueda del mouse">
+          <div class="zona-icono" aria-hidden="true">🖲️</div>
+          <p class="mb-0 fw-semibold">Pasá la rueda acá</p>
+          <p class="small text-body-secondary mb-0">Arriba, abajo o de costado</p>
+        </div>
+
+        <div class="row row-cols-2 row-cols-sm-3 row-cols-lg-5 g-2 mb-3">
+          <div class="col"><div class="stat"><span class="stat-nombre">Eventos</span><span id="scroll-eventos" class="stat-valor">0</span></div></div>
+          <div class="col"><div class="stat"><span class="stat-nombre">Desplazamiento</span><span id="scroll-total" class="stat-valor">0 px</span></div></div>
+          <div class="col"><div class="stat"><span class="stat-nombre">Mayor salto</span><span id="scroll-max" class="stat-valor">0 px</span></div></div>
+          <div class="col"><div class="stat"><span class="stat-nombre">Dirección</span><span id="scroll-direccion" class="stat-valor">—</span></div></div>
+          <div class="col"><div class="stat"><span class="stat-nombre">Equivalente</span><span id="scroll-lineas" class="stat-valor">0 líneas</span></div></div>
+        </div>
+
+        <button id="scroll-limpiar" class="btn btn-outline-secondary btn-sm" type="button">🧹 Reiniciar rueda</button>
+      </div>
+    </section>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <h2 class="h6 mb-1">6. Sensibilidad efectiva</h2>
+        <p class="small text-body-secondary mb-3">
+          Esta prueba mide cuántos píxeles recorre el puntero por cada centímetro físico. Poné una regla
+          sobre la mesa, apoyá el mouse y arrastrá en línea recta la distancia elegida.
+        </p>
+
+        <div class="alert alert-info py-2 small" role="note">
+          No es el DPI del sensor: el navegador aplica la escala y la aceleración del sistema operativo.
+          El resultado es la <strong>sensibilidad efectiva</strong> del conjunto mouse + sistema + navegador.
+        </div>
+
+        <div class="d-flex flex-wrap align-items-end gap-2 mb-3">
+          <div>
+            <label for="sens-dist" class="form-label small mb-1">Distancia física</label>
+            <select id="sens-dist" class="form-select" style="max-width: 11rem;">
+              <option value="2">2 cm</option>
+              <option value="5">5 cm</option>
+              <option value="10">10 cm</option>
+              <option value="20">20 cm</option>
+            </select>
+          </div>
+          <span class="small text-body-secondary mb-2">Después arrastrá de izquierda a derecha dentro de la pista.</span>
+        </div>
+
+        <div id="sens-pista" class="pista mb-3" role="application"
+          aria-label="Pista para medir la sensibilidad efectiva arrastrando el mouse">
+          <div class="pista-linea" aria-hidden="true"></div>
+          <div id="sens-marca" class="pista-marca" aria-hidden="true"></div>
+          <div class="pista-texto text-center small text-body-secondary">
+            <div class="fs-4" aria-hidden="true">📏</div>
+            Mantené el clic izquierdo y arrastrá <strong id="sens-pista-texto">5 cm</strong>
+          </div>
+        </div>
+
+        <div id="sens-resultado" class="small text-body-secondary">Sin mediciones todavía.</div>
+      </div>
+    </section>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <h2 class="h6 mb-3">🧠 Trivias</h2>
+        <details class="mb-2">
+          <summary class="fw-semibold">¿Qué significa DPI y por qué no lo mide esta herramienta?</summary>
+          <p class="small text-body-secondary mb-0 mt-1">
+            DPI (dots per inch) es cuántas cuentas del sensor recorre el mouse por pulgada física. El navegador
+            no tiene acceso a esas cuentas: recibe píxeles ya escalados por el sistema. Por eso acá hablamos de
+            sensibilidad efectiva en píxeles por centímetro.
+          </p>
+        </details>
+        <details class="mb-2">
+          <summary class="fw-semibold">¿Por qué el CPS puede superar los 20 clicks por segundo?</summary>
+          <p class="small text-body-secondary mb-0 mt-1">
+            Algunos mouses permiten hacer doble clic con un solo toque, y los que rebotan registran pulsaciones
+            extra. Las ráfagas dudosas del panel libre ayudan a detectar ese segundo caso.
+          </p>
+        </details>
+        <details>
+          <summary class="fw-semibold">¿La tasa de sondeo cambia la sensación del mouse?</summary>
+          <p class="small text-body-secondary mb-0 mt-1">
+            Sí. Un mouse de 125 Hz entrega una muestra cada 8 ms y uno de 1000 Hz cada 1 ms. A más Hz, el
+            movimiento se siente más continuo y el cursor responde con menos latencia, aunque el DPI no cambie.
+          </p>
+        </details>
+      </div>
+    </section>
+
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const $ = (id) => document.getElementById(id);
+      const STORAGE_KEY = 'mouse';
+      const DURACIONES = new Set([5, 10, 30]);
+      const DISTANCIAS = new Set([2, 5, 10, 20]);
+      const BOTONES = ['Izquierdo', 'Central', 'Derecho', 'Atrás', 'Adelante'];
+      const BOTONES_CORTOS = ['Izq', 'Cen', 'Der', 'Atr', 'Adel'];
+      const root = document.documentElement;
+
+      const fmt = (n, dec = 0) => (Number.isFinite(n) ? n : 0)
+        .toLocaleString('es-AR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+
+      const mediana = (valores) => {
+        if (!valores.length) return 0;
+        const orden = [...valores].sort((a, b) => a - b);
+        const medio = Math.floor(orden.length / 2);
+        return orden.length % 2 ? orden[medio] : (orden[medio - 1] + orden[medio]) / 2;
+      };
+
+      const percentil = (valores, p) => {
+        if (!valores.length) return 0;
+        const orden = [...valores].sort((a, b) => a - b);
+        const indice = Math.min(orden.length - 1, Math.max(0, Math.ceil((p / 100) * orden.length) - 1));
+        return orden[indice];
+      };
+
+      const colorVar = (nombre) => getComputedStyle(root).getPropertyValue(nombre).trim();
+      const colorPrimario = (alfa = 1) => {
+        const rgb = colorVar('--bs-primary-rgb') || '13, 110, 253';
+        return `rgba(${rgb}, ${alfa})`;
+      };
+
+      // ---------- Ajustes persistentes ----------
+
+      const ajustes = { v: 1, cps: 10, dist: 5 };
+
+      function leerAjustes() {
+        try {
+          const guardado = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+          if (!guardado || typeof guardado !== 'object') return;
+          if (DURACIONES.has(Number(guardado.cps))) ajustes.cps = Number(guardado.cps);
+          if (DISTANCIAS.has(Number(guardado.dist))) ajustes.dist = Number(guardado.dist);
+        } catch { /* sin estado guardado */ }
+      }
+
+      function guardarAjustes() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({ v: 1, cps: ajustes.cps, dist: ajustes.dist }));
+        } catch { /* sin persistencia */ }
+      }
+
+      function leerURL() {
+        const params = new URLSearchParams(window.location.search);
+        const cps = Number(params.get('cps'));
+        const dist = Number(params.get('dist'));
+        let desdeURL = false;
+        if (DURACIONES.has(cps)) { ajustes.cps = cps; desdeURL = true; }
+        if (DISTANCIAS.has(dist)) { ajustes.dist = dist; desdeURL = true; }
+        return desdeURL;
+      }
+
+      // ---------- Avisos y portapapeles ----------
+
+      let noticeTimer = null;
+
+      function notificar(texto, tipo) {
+        const notice = $('notice');
+        notice.textContent = texto;
+        notice.className = 'alert alert-flotante py-2 alert-' + (tipo === 'error' ? 'danger' : 'success');
+        notice.classList.remove('d-none');
+        clearTimeout(noticeTimer);
+        noticeTimer = setTimeout(() => notice.classList.add('d-none'), 2600);
+      }
+
+      function copiarTexto(texto) {
+        if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(texto);
+        return new Promise((resolve, reject) => {
+          const area = document.createElement('textarea');
+          area.value = texto;
+          area.style.position = 'fixed';
+          area.style.opacity = '0';
+          document.body.append(area);
+          area.select();
+          try {
+            document.execCommand('copy') ? resolve() : reject(new Error('copy'));
+          } catch (error) {
+            reject(error);
+          } finally {
+            area.remove();
+          }
+        });
+      }
+
+      // ---------- Gráficos en canvas ----------
+
+      const graficos = [];
+
+      function prepararCanvas(canvas) {
+        const rect = canvas.getBoundingClientRect();
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const ancho = Math.max(1, Math.round(rect.width));
+        const alto = Math.max(1, Math.round(rect.height));
+        if (canvas.width !== Math.round(ancho * dpr) || canvas.height !== Math.round(alto * dpr)) {
+          canvas.width = Math.round(ancho * dpr);
+          canvas.height = Math.round(alto * dpr);
+        }
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, ancho, alto);
+        return { ctx, ancho, alto };
+      }
+
+      function dibujarEjes(ctx, ancho, alto, maxY, sufijo) {
+        const margenIzq = 38;
+        const margenDer = 8;
+        const margenSup = 10;
+        const margenInf = 20;
+        const utilAncho = ancho - margenIzq - margenDer;
+        const utilAlto = alto - margenSup - margenInf;
+        ctx.strokeStyle = colorVar('--bs-border-color') || '#dee2e6';
+        ctx.fillStyle = colorVar('--bs-secondary-color') || '#6c757d';
+        ctx.lineWidth = 1;
+        ctx.font = '10px system-ui, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+
+        for (let i = 0; i <= 4; i += 1) {
+          const y = margenSup + (utilAlto * i) / 4;
+          ctx.beginPath();
+          ctx.moveTo(margenIzq, y);
+          ctx.lineTo(ancho - margenDer, y);
+          ctx.stroke();
+          const valor = maxY * (1 - i / 4);
+          ctx.fillText(fmt(valor, valor < 10 && valor % 1 !== 0 ? 1 : 0) + sufijo, margenIzq - 5, y);
+        }
+        return { margenIzq, margenDer, margenSup, margenInf, utilAncho, utilAlto };
+      }
+
+      function dibujarVacio(canvas, texto) {
+        const { ctx, ancho, alto } = prepararCanvas(canvas);
+        ctx.fillStyle = colorVar('--bs-secondary-color') || '#6c757d';
+        ctx.font = '12px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(texto, ancho / 2, alto / 2);
+      }
+
+      function dibujarBarras(canvas, valores, sufijo, textoVacio) {
+        if (!valores.length) {
+          dibujarVacio(canvas, textoVacio);
+          return;
+        }
+        const { ctx, ancho, alto } = prepararCanvas(canvas);
+        const maxY = Math.max(1, ...valores);
+        const area = dibujarEjes(ctx, ancho, alto, maxY, sufijo);
+        const paso = area.utilAncho / valores.length;
+        const anchoBarra = Math.max(2, Math.min(28, paso * 0.66));
+        ctx.fillStyle = colorPrimario(0.75);
+        valores.forEach((valor, i) => {
+          const h = (Math.max(0, valor) / maxY) * area.utilAlto;
+          const x = area.margenIzq + paso * i + (paso - anchoBarra) / 2;
+          const y = area.margenSup + area.utilAlto - h;
+          ctx.fillRect(x, y, anchoBarra, h);
+        });
+      }
+
+      function dibujarLinea(canvas, puntos, sufijo, textoVacio) {
+        if (puntos.length < 2) {
+          dibujarVacio(canvas, textoVacio);
+          return;
+        }
+        const { ctx, ancho, alto } = prepararCanvas(canvas);
+        const maxY = Math.max(1, percentil(puntos.map((p) => p.v), 95) * 1.15);
+        const area = dibujarEjes(ctx, ancho, alto, maxY, sufijo);
+        const t0 = puntos[0].t;
+        const t1 = puntos[puntos.length - 1].t;
+        const rango = Math.max(1, t1 - t0);
+
+        ctx.beginPath();
+        puntos.forEach((punto, i) => {
+          const x = area.margenIzq + ((punto.t - t0) / rango) * area.utilAncho;
+          const y = area.margenSup + area.utilAlto - (Math.min(punto.v, maxY) / maxY) * area.utilAlto;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.strokeStyle = colorPrimario(0.95);
+        ctx.lineWidth = 2;
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+
+        ctx.lineTo(area.margenIzq + area.utilAncho, area.margenSup + area.utilAlto);
+        ctx.lineTo(area.margenIzq, area.margenSup + area.utilAlto);
+        ctx.closePath();
+        ctx.fillStyle = colorPrimario(0.14);
+        ctx.fill();
+      }
+
+      // ---------- Panel libre ----------
+
+      const pad = $('pad');
+      const padCanvas = $('pad-canvas');
+      const padCtx = padCanvas.getContext('2d');
+      let padAncho = 1;
+      let padAlto = 1;
+
+      const clicks = { tiempos: [], historial: [], porBoton: [0, 0, 0, 0, 0], total: 0, dobles: 0, sospechosos: 0, racha: [], rachaContada: false, ultimoPorBoton: new Map(), ultimo: null };
+      const trazo = [];
+      const movimiento = { distancia: 0, eventos: 0, max: 0, ultimo: null, muestras: [], intervalos: [], inicio: 0 };
+      let arrastrando = false;
+      let movVivo = false;
+
+      function ajustarPad() {
+        const rect = pad.getBoundingClientRect();
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        padAncho = Math.max(1, rect.width);
+        padAlto = Math.max(1, rect.height);
+        padCanvas.width = Math.round(padAncho * dpr);
+        padCanvas.height = Math.round(padAlto * dpr);
+        padCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        dibujarPad();
+      }
+
+      function dibujarPad() {
+        padCtx.clearRect(0, 0, padAncho, padAlto);
+        if (trazo.length > 1) {
+          padCtx.beginPath();
+          trazo.forEach((punto, i) => {
+            if (i === 0) padCtx.moveTo(punto.x, punto.y);
+            else padCtx.lineTo(punto.x, punto.y);
+          });
+          padCtx.strokeStyle = colorPrimario(0.75);
+          padCtx.lineWidth = 2;
+          padCtx.lineJoin = 'round';
+          padCtx.lineCap = 'round';
+          padCtx.stroke();
+        }
+        const ultimo = trazo[trazo.length - 1];
+        if (ultimo) {
+          padCtx.beginPath();
+          padCtx.arc(ultimo.x, ultimo.y, 5, 0, Math.PI * 2);
+          padCtx.fillStyle = colorPrimario(0.95);
+          padCtx.fill();
+        }
+      }
+
+      function posicionPad(evento) {
+        const rect = pad.getBoundingClientRect();
+        return { x: evento.clientX - rect.left, y: evento.clientY - rect.top };
+      }
+
+      function podarTiempos() {
+        const ahora = performance.now();
+        clicks.tiempos = clicks.tiempos.filter((t) => ahora - t <= 60000);
+      }
+
+      function tasaActual() {
+        const ahora = performance.now();
+        const ultimoSegundo = clicks.tiempos.filter((t) => ahora - t <= 1000).length;
+        const ultimoMinuto = clicks.tiempos.filter((t) => ahora - t <= 60000).length;
+        let pico = 0;
+        for (const inicio of clicks.tiempos) {
+          const enVentana = clicks.tiempos.filter((t) => t >= inicio && t <= inicio + 1000).length;
+          if (enVentana > pico) pico = enVentana;
+        }
+        return { cps: ultimoSegundo, cpm: ultimoMinuto, pico };
+      }
+
+      function actualizarTasas() {
+        const tasa = tasaActual();
+        $('tasa-cps').textContent = fmt(tasa.cps, 1);
+        $('tasa-cpm').textContent = fmt(tasa.cpm);
+        $('tasa-pico').textContent = fmt(tasa.pico, 1);
+      }
+
+      function renderHistorial() {
+        const cont = $('historial');
+        cont.replaceChildren();
+        const ultimos = clicks.historial.slice(-12);
+        ultimos.forEach((entrada, i) => {
+          const anterior = i > 0 ? entrada.t - ultimos[i - 1].t : null;
+          const chip = document.createElement('span');
+          chip.className = 'chip chip-' + entrada.boton;
+          chip.title = BOTONES[entrada.boton];
+          chip.textContent = anterior == null ? '—' : `${fmt(anterior)} ms`;
+          cont.append(chip);
+        });
+        if (!ultimos.length) {
+          const vacio = document.createElement('span');
+          vacio.className = 'small text-body-secondary';
+          vacio.textContent = 'Sin clicks todavía.';
+          cont.append(vacio);
+        }
+      }
+
+      function registrarClic(evento) {
+        const ahora = performance.now();
+        const boton = evento.button >= 0 && evento.button <= 4 ? evento.button : 0;
+        const anteriorMismo = clicks.ultimoPorBoton.get(boton);
+        const delta = anteriorMismo == null ? null : ahora - anteriorMismo;
+
+        clicks.porBoton[boton] += 1;
+        clicks.total += 1;
+        clicks.ultimoPorBoton.set(boton, ahora);
+        clicks.tiempos.push(ahora);
+        clicks.historial.push({ t: ahora, boton });
+        if (clicks.tiempos.length > 400) clicks.tiempos.shift();
+        if (clicks.historial.length > 40) clicks.historial.shift();
+        podarTiempos();
+
+        if (delta != null && delta < 100) clicks.dobles += 1;
+
+        if (!clicks.racha.length || ahora - clicks.racha[clicks.racha.length - 1] > 150) {
+          clicks.racha = [ahora];
+          clicks.rachaContada = false;
+        } else {
+          clicks.racha.push(ahora);
+          if (clicks.racha.length >= 3 && !clicks.rachaContada) {
+            clicks.sospechosos += 1;
+            clicks.rachaContada = true;
+          }
+        }
+
+        const pos = posicionPad(evento);
+        clicks.ultimo = { boton, x: pos.x, y: pos.y, delta, tipo: evento.pointerType || 'mouse', presion: evento.pressure };
+
+        $('cnt-' + boton).textContent = fmt(clicks.porBoton[boton]);
+        $('cnt-total').textContent = fmt(clicks.total);
+        $('cnt-dobles').textContent = fmt(clicks.dobles);
+        $('cnt-sospechosos').textContent = fmt(clicks.sospechosos);
+        actualizarTasas();
+        renderHistorial();
+
+        const detalle = [
+          BOTONES[boton],
+          `x=${fmt(pos.x)} · y=${fmt(pos.y)}`,
+          delta == null ? 'primer clic de ese botón' : `${fmt(delta)} ms desde el anterior`,
+          `tipo: ${clicks.ultimo.tipo}`,
+        ];
+        if (clicks.ultimo.presion > 0) detalle.push(`presión: ${fmt(clicks.ultimo.presion, 2)}`);
+        $('ultimo-click').textContent = detalle.join(' · ');
+      }
+
+      function muestraMovimiento(x, y, t) {
+        if (!movimiento.inicio) movimiento.inicio = t;
+        const anterior = movimiento.ultimo;
+        movimiento.ultimo = { x, y, t };
+        if (!anterior) return;
+
+        const dt = t - anterior.t;
+        if (!(dt > 0) || dt > 1000) return;
+        const distancia = Math.hypot(x - anterior.x, y - anterior.y);
+        movimiento.distancia += distancia;
+        movimiento.eventos += 1;
+        movimiento.intervalos.push(dt);
+        if (movimiento.intervalos.length > 240) movimiento.intervalos.shift();
+
+        const velocidad = distancia / (dt / 1000);
+        if (velocidad < 30000) {
+          movimiento.muestras.push({ t, v: velocidad });
+          movVivo = true;
+          if (velocidad > movimiento.max) movimiento.max = velocidad;
+        }
+        const corte = t - 10000;
+        while (movimiento.muestras.length && movimiento.muestras[0].t < corte) movimiento.muestras.shift();
+      }
+
+      function renderMovimiento() {
+        const muestras = movimiento.muestras;
+        const promedio = muestras.length
+          ? muestras.reduce((suma, muestra) => suma + muestra.v, 0) / muestras.length
+          : 0;
+        const ultima = muestras[muestras.length - 1];
+        const actual = ultima && performance.now() - ultima.t < 500 ? ultima.v : 0;
+        const intervalo = mediana(movimiento.intervalos.filter((dt) => dt >= 0.2 && dt <= 60));
+        const hz = intervalo > 0 ? 1000 / intervalo : 0;
+
+        $('mov-distancia').textContent = `${fmt(movimiento.distancia)} px`;
+        $('mov-velocidad').textContent = `${fmt(actual)} px/s`;
+        $('mov-max').textContent = `${fmt(movimiento.max)} px/s`;
+        $('mov-promedio').textContent = `${fmt(promedio)} px/s`;
+        $('mov-eventos').textContent = fmt(movimiento.eventos);
+        $('mov-poll').textContent = hz ? `≈ ${fmt(hz)} Hz` : '—';
+
+        dibujarLinea($('velocidad-canvas'), muestras, ' px/s', 'Mové el mouse sobre el panel libre');
+      }
+
+      pad.addEventListener('pointerdown', (evento) => {
+        pad.focus({ preventScroll: true });
+        evento.preventDefault();
+        if (evento.pointerType === 'mouse' || evento.pointerType === 'pen') {
+          try { pad.setPointerCapture(evento.pointerId); } catch { /* sin captura */ }
+        }
+        arrastrando = true;
+        const pos = posicionPad(evento);
+        trazo.length = 0;
+        trazo.push({ ...pos, t: performance.now() });
+        dibujarPad();
+        registrarClic(evento);
+      });
+
+      pad.addEventListener('pointermove', (evento) => {
+        const crudos = typeof evento.getCoalescedEvents === 'function'
+          ? evento.getCoalescedEvents()
+          : [];
+        const lista = crudos.length ? crudos : [evento];
+        lista.forEach((crudo) => {
+          const pos = posicionPad(crudo);
+          muestraMovimiento(pos.x, pos.y, crudo.timeStamp || performance.now());
+          if (arrastrando) {
+            trazo.push({ ...pos, t: performance.now() });
+            if (trazo.length > 400) trazo.shift();
+          }
+        });
+        if (arrastrando) dibujarPad();
+        $('pad-pista').classList.add('d-none');
+        renderMovimiento();
+      });
+
+      const soltar = () => { arrastrando = false; };
+      window.addEventListener('pointerup', soltar);
+      pad.addEventListener('pointercancel', soltar);
+      pad.addEventListener('pointerleave', () => { if (!arrastrando) movimiento.ultimo = null; });
+      pad.addEventListener('contextmenu', (evento) => evento.preventDefault());
+      pad.addEventListener('auxclick', (evento) => evento.preventDefault());
+      pad.addEventListener('dragstart', (evento) => evento.preventDefault());
+
+      function limpiarPanel() {
+        clicks.tiempos = [];
+        clicks.historial = [];
+        clicks.porBoton = [0, 0, 0, 0, 0];
+        clicks.total = 0;
+        clicks.dobles = 0;
+        clicks.sospechosos = 0;
+        clicks.racha = [];
+        clicks.rachaContada = false;
+        clicks.ultimoPorBoton.clear();
+        clicks.ultimo = null;
+        trazo.length = 0;
+        BOTONES.forEach((_, i) => { $('cnt-' + i).textContent = '0'; });
+        $('cnt-total').textContent = '0';
+        $('cnt-dobles').textContent = '0';
+        $('cnt-sospechosos').textContent = '0';
+        $('ultimo-click').textContent = 'Todavía no hay clicks.';
+        $('pad-pista').classList.remove('d-none');
+        actualizarTasas();
+        renderHistorial();
+        dibujarPad();
+      }
+
+      function limpiarMovimiento() {
+        movimiento.distancia = 0;
+        movimiento.eventos = 0;
+        movimiento.max = 0;
+        movimiento.ultimo = null;
+        movimiento.muestras = [];
+        movimiento.intervalos = [];
+        movimiento.inicio = 0;
+        movVivo = false;
+        renderMovimiento();
+      }
+
+      $('pad-limpiar').addEventListener('click', limpiarPanel);
+      $('mov-limpiar').addEventListener('click', limpiarMovimiento);
+
+      setInterval(() => {
+        if (!movVivo) return;
+        const corte = performance.now() - 10000;
+        while (movimiento.muestras.length && movimiento.muestras[0].t < corte) movimiento.muestras.shift();
+        renderMovimiento();
+        if (!movimiento.muestras.length) movVivo = false;
+      }, 1000);
+
+      new ResizeObserver(ajustarPad).observe(pad);
+      ajustarPad();
+      renderHistorial();
+      renderMovimiento();
+
+      // ---------- Prueba de CPS ----------
+
+      const cpsZona = $('cps-zona');
+      const cpsSelect = $('cps-duracion');
+      const cps = { estado: 'inactiva', duracion: ajustes.cps, inicio: 0, clicks: [], prep: null, fin: null, ticker: null };
+
+      cpsSelect.value = String(ajustes.cps);
+
+      function renderCpsResultado() {
+        const cont = $('cps-resultado');
+        if (!cps.clicks.length) {
+          cont.textContent = 'Sin prueba todavía.';
+          return;
+        }
+        const duracion = cps.duracion;
+        const total = cps.clicks.length;
+        const cpsPromedio = total / duracion;
+        let pico = 0;
+        cps.clicks.forEach((inicio) => {
+          const enVentana = cps.clicks.filter((t) => t >= inicio && t <= inicio + 1000).length;
+          if (enVentana > pico) pico = enVentana;
+        });
+        const intervalos = cps.clicks.slice(1).map((t, i) => t - cps.clicks[i]);
+        const promedioIntervalo = intervalos.length
+          ? intervalos.reduce((a, b) => a + b, 0) / intervalos.length
+          : 0;
+        const minimoIntervalo = intervalos.length ? Math.min(...intervalos) : 0;
+
+        cont.innerHTML = `
+          <p class="mb-1"><strong class="fs-4">${fmt(cpsPromedio, 2)} CPS</strong> · ${fmt(cpsPromedio * 60, 0)} CPM</p>
+          <p class="mb-1">${fmt(total)} clicks en ${fmt(duracion)} s · pico de ${fmt(pico, 1)} CPS</p>
+          <p class="mb-1">Intervalo promedio: ${fmt(promedioIntervalo)} ms · más rápido: ${fmt(minimoIntervalo)} ms</p>
+          <p class="mb-0 text-body-secondary">${fmt(1000 / Math.max(1, cpsPromedio), 0)} ms por click en promedio.</p>
+        `;
+      }
+
+      function dibujarCps(parcial) {
+        if (!cps.clicks.length) {
+          dibujarVacio($('cps-canvas'), parcial ? 'Empezá la prueba para ver el gráfico' : 'Sin datos');
+          return;
+        }
+        const valores = new Array(cps.duracion).fill(0);
+        cps.clicks.forEach((t) => {
+          const indice = Math.min(cps.duracion - 1, Math.floor(t / 1000));
+          valores[indice] += 1;
+        });
+        dibujarBarras($('cps-canvas'), valores, '', parcial ? 'Empezá la prueba para ver el gráfico' : 'Sin datos');
+      }
+
+      function finalizarCps() {
+        clearInterval(cps.ticker);
+        cps.estado = 'inactiva';
+        cpsZona.classList.remove('lista', 'activa');
+        $('cps-zona-texto').textContent = 'Terminado';
+        $('cps-zona-sub').textContent = 'Mirá el resultado y el gráfico';
+        $('cps-estado').textContent = `${fmt(cps.clicks.length)} clicks en ${fmt(cps.duracion)} s.`;
+        $('cps-empezar').textContent = 'Empezar';
+        renderCpsResultado();
+        dibujarCps(false);
+      }
+
+      function empezarCps() {
+        clearTimeout(cps.prep);
+        clearTimeout(cps.fin);
+        clearInterval(cps.ticker);
+        cps.estado = 'preparando';
+        cps.clicks = [];
+        cps.duracion = Number(cpsSelect.value);
+        cpsZona.classList.add('activa');
+        cpsZona.classList.remove('lista');
+        $('cps-zona-texto').textContent = 'Preparate…';
+        $('cps-zona-sub').textContent = 'En un momento arranca la cuenta';
+        $('cps-estado').textContent = 'Preparando…';
+        $('cps-empezar').textContent = 'Reiniciar';
+        renderCpsResultado();
+        dibujarCps(true);
+
+        cps.prep = setTimeout(() => {
+          cps.estado = 'activa';
+          cps.inicio = performance.now();
+          cpsZona.classList.remove('activa');
+          cpsZona.classList.add('lista');
+          $('cps-zona-texto').textContent = '¡Dale!';
+          $('cps-zona-sub').textContent = 'Clic izquierdo dentro de la zona';
+          $('cps-estado').textContent = `${fmt(cps.duracion)} segundos…`;
+
+          cps.ticker = setInterval(() => {
+            const restante = Math.max(0, cps.duracion - (performance.now() - cps.inicio) / 1000);
+            $('cps-estado').textContent = `Quedan ${fmt(restante, 1)} s · ${fmt(cps.clicks.length)} clicks`;
+          }, 100);
+
+          cps.fin = setTimeout(finalizarCps, cps.duracion * 1000);
+        }, 600);
+      }
+
+      cpsSelect.addEventListener('change', () => {
+        ajustes.cps = Number(cpsSelect.value);
+        guardarAjustes();
+        if (cps.estado === 'inactiva') {
+          cps.duracion = ajustes.cps;
+          dibujarCps(true);
+        }
+      });
+
+      $('cps-empezar').addEventListener('click', empezarCps);
+      cpsZona.addEventListener('contextmenu', (evento) => evento.preventDefault());
+      cpsZona.addEventListener('pointerdown', (evento) => {
+        if (evento.button !== 0 || cps.estado !== 'activa') return;
+        evento.preventDefault();
+        const t = performance.now() - cps.inicio;
+        if (t <= cps.duracion * 1000) {
+          cps.clicks.push(t);
+          $('cps-zona-texto').textContent = `${fmt(cps.clicks.length)} clicks`;
+          dibujarCps(true);
+        }
+      });
+
+      // ---------- Tiempo de reacción ----------
+
+      const reaccionZona = $('reaccion-zona');
+      const reaccion = { estado: 'inactiva', inicio: 0, espera: null, intentos: [], falsos: 0, falloTimer: null };
+
+      function renderReaccion() {
+        const cont = $('reaccion-resultado');
+        if (!reaccion.intentos.length && !reaccion.falsos) {
+          cont.textContent = 'Sin intentos.';
+        } else {
+          const ultimo = reaccion.intentos[reaccion.intentos.length - 1];
+          const mejor = reaccion.intentos.length ? Math.min(...reaccion.intentos) : 0;
+          const promedio = reaccion.intentos.length
+            ? reaccion.intentos.reduce((a, b) => a + b, 0) / reaccion.intentos.length
+            : 0;
+          const partes = [];
+          if (ultimo) partes.push(`<p class="mb-1"><strong class="fs-4">${fmt(ultimo)} ms</strong> en el último intento</p>`);
+          partes.push(`<p class="mb-1">Mejor: ${fmt(mejor)} ms · promedio: ${fmt(promedio)} ms</p>`);
+          partes.push(`<p class="mb-0 text-body-secondary">${fmt(reaccion.intentos.length)} intentos válidos · ${fmt(reaccion.falsos)} salidas en falso</p>`);
+          cont.innerHTML = partes.join('');
+        }
+        dibujarBarras($('reaccion-canvas'), reaccion.intentos.slice(-8), ' ms', 'Completá un intento para ver el gráfico');
+      }
+
+      function prepararReaccion() {
+        clearTimeout(reaccion.espera);
+        clearTimeout(reaccion.falloTimer);
+        reaccion.estado = 'esperando';
+        reaccionZona.classList.remove('lista', 'fallo');
+        reaccionZona.classList.add('activa');
+        $('reaccion-zona-texto').textContent = 'Esperá el verde…';
+        $('reaccion-zona-sub').textContent = 'Todavía no hagas clic';
+        $('reaccion-estado').textContent = 'Esperando el estímulo…';
+
+        const demora = 1200 + Math.random() * 2300;
+        reaccion.espera = setTimeout(() => {
+          reaccion.estado = 'listo';
+          reaccion.inicio = performance.now();
+          reaccionZona.classList.remove('activa');
+          reaccionZona.classList.add('lista');
+          $('reaccion-zona-texto').textContent = '¡Ahora!';
+          $('reaccion-zona-sub').textContent = 'Clic izquierdo';
+          $('reaccion-estado').textContent = '¡Clic!';
+        }, demora);
+      }
+
+      $('reaccion-empezar').addEventListener('click', () => {
+        if (reaccion.estado !== 'inactiva') return;
+        prepararReaccion();
+      });
+
+      reaccionZona.addEventListener('contextmenu', (evento) => evento.preventDefault());
+      reaccionZona.addEventListener('pointerdown', (evento) => {
+        if (evento.button !== 0) return;
+        evento.preventDefault();
+
+        if (reaccion.estado === 'esperando') {
+          clearTimeout(reaccion.espera);
+          reaccion.estado = 'inactiva';
+          reaccion.falsos += 1;
+          reaccionZona.classList.remove('activa');
+          reaccionZona.classList.add('fallo');
+          $('reaccion-zona-texto').textContent = 'Te adelantaste';
+          $('reaccion-zona-sub').textContent = 'Tocá Empezar para reintentar';
+          $('reaccion-estado').textContent = 'Salida en falso.';
+          renderReaccion();
+          reaccion.falloTimer = setTimeout(() => {
+            reaccionZona.classList.remove('fallo');
+            $('reaccion-zona-texto').textContent = 'Tocá Empezar para prepararte';
+            $('reaccion-zona-sub').textContent = 'No hace falta apurarse: el verde llega solo';
+          }, 1200);
+          return;
+        }
+
+        if (reaccion.estado !== 'listo') return;
+        const ms = performance.now() - reaccion.inicio;
+        reaccion.estado = 'inactiva';
+        reaccion.intentos.push(ms);
+        if (reaccion.intentos.length > 30) reaccion.intentos.shift();
+        reaccionZona.classList.remove('lista');
+        $('reaccion-zona-texto').textContent = `${fmt(ms)} ms`;
+        $('reaccion-zona-sub').textContent = 'Tocá Empezar para otro intento';
+        $('reaccion-estado').textContent = `Último intento: ${fmt(ms)} ms.`;
+        renderReaccion();
+      });
+
+      renderReaccion();
+
+      // ---------- Rueda ----------
+
+      const scroll = { eventos: 0, total: 0, max: 0, arriba: 0, abajo: 0, lateral: 0 };
+
+      function renderScroll() {
+        $('scroll-eventos').textContent = fmt(scroll.eventos);
+        $('scroll-total').textContent = `${fmt(scroll.total)} px`;
+        $('scroll-max').textContent = `${fmt(scroll.max)} px`;
+        $('scroll-lineas').textContent = `${fmt(scroll.total / 16, 1)} líneas`;
+        const partes = [];
+        if (scroll.arriba) partes.push(`↑ ${fmt(scroll.arriba)}`);
+        if (scroll.abajo) partes.push(`↓ ${fmt(scroll.abajo)}`);
+        if (scroll.lateral) partes.push(`↔ ${fmt(scroll.lateral)}`);
+        $('scroll-direccion').textContent = partes.length ? partes.join(' · ') : '—';
+      }
+
+      $('scroll-zona').addEventListener('wheel', (evento) => {
+        evento.preventDefault();
+        const factor = evento.deltaMode === 1 ? 16 : evento.deltaMode === 2 ? 400 : 1;
+        const dy = evento.deltaY * factor;
+        const dx = evento.deltaX * factor;
+        const salto = Math.abs(dy) + Math.abs(dx);
+        if (!salto) return;
+
+        scroll.eventos += 1;
+        scroll.total += salto;
+        scroll.max = Math.max(scroll.max, salto);
+        if (dy < 0) scroll.arriba += 1;
+        if (dy > 0) scroll.abajo += 1;
+        if (dx !== 0) scroll.lateral += 1;
+        renderScroll();
+      }, { passive: false });
+
+      $('scroll-limpiar').addEventListener('click', () => {
+        scroll.eventos = 0;
+        scroll.total = 0;
+        scroll.max = 0;
+        scroll.arriba = 0;
+        scroll.abajo = 0;
+        scroll.lateral = 0;
+        renderScroll();
+      });
+
+      renderScroll();
+
+      // ---------- Sensibilidad efectiva ----------
+
+      const pista = $('sens-pista');
+      const marca = $('sens-marca');
+      const sensSelect = $('sens-dist');
+      const sens = { cm: ajustes.dist, midiendo: false, inicioX: 0, medidas: [] };
+
+      sensSelect.value = String(ajustes.dist);
+
+      function renderSens() {
+        $('sens-pista-texto').textContent = `${fmt(sens.cm)} cm`;
+        const cont = $('sens-resultado');
+        if (!sens.medidas.length) {
+          cont.textContent = 'Sin mediciones todavía.';
+          return;
+        }
+        const ultima = sens.medidas[sens.medidas.length - 1];
+        const promedio = sens.medidas.reduce((suma, m) => suma + m.pxcm, 0) / sens.medidas.length;
+        cont.innerHTML = `
+          <p class="mb-1"><strong class="fs-4">${fmt(ultima.pxcm, 1)} px/cm</strong> · ${fmt(ultima.pxcm * 2.54, 0)} px/pulgada</p>
+          <p class="mb-0 text-body-secondary">Promedio de ${fmt(sens.medidas.length)} medición${sens.medidas.length === 1 ? '' : 'es'}: ${fmt(promedio, 1)} px/cm.</p>
+        `;
+      }
+
+      function moverMarca(clientX) {
+        const rect = pista.getBoundingClientRect();
+        const x = Math.min(rect.width, Math.max(0, clientX - rect.left));
+        marca.style.display = 'block';
+        marca.style.left = x + 'px';
+      }
+
+      pista.addEventListener('pointerdown', (evento) => {
+        if (evento.button !== 0) return;
+        evento.preventDefault();
+        try { pista.setPointerCapture(evento.pointerId); } catch { /* sin captura */ }
+        sens.midiendo = true;
+        sens.inicioX = evento.clientX;
+        moverMarca(evento.clientX);
+        pista.classList.add('activa');
+      });
+
+      pista.addEventListener('pointermove', (evento) => {
+        if (sens.midiendo) moverMarca(evento.clientX);
+      });
+
+      const terminarSens = (evento) => {
+        if (!sens.midiendo) return;
+        sens.midiendo = false;
+        pista.classList.remove('activa');
+        const dx = Math.abs(evento.clientX - sens.inicioX);
+        if (dx < 40) {
+          notificar('El arrastre fue muy corto: probá de nuevo.', 'error');
+          return;
+        }
+        const pxcm = dx / sens.cm;
+        sens.medidas.push({ cm: sens.cm, pxcm });
+        if (sens.medidas.length > 20) sens.medidas.shift();
+        renderSens();
+      };
+
+      pista.addEventListener('pointerup', terminarSens);
+      pista.addEventListener('pointercancel', () => {
+        sens.midiendo = false;
+        pista.classList.remove('activa');
+      });
+
+      sensSelect.addEventListener('change', () => {
+        ajustes.dist = Number(sensSelect.value);
+        sens.cm = ajustes.dist;
+        sens.medidas = [];
+        marca.style.display = 'none';
+        guardarAjustes();
+        renderSens();
+      });
+
+      renderSens();
+
+      // ---------- Tema, compartir y reiniciar ----------
+
+      function redibujar() {
+        dibujarPad();
+        actualizarTasas();
+        renderHistorial();
+        if (cps.clicks.length) dibujarCps(cps.estado !== 'inactiva');
+        else dibujarVacio($('cps-canvas'), 'Empezá la prueba para ver el gráfico');
+        renderReaccion();
+        renderMovimiento();
+      }
+
+      (() => {
+        const boton = $('theme-toggle');
+        const aplicar = (tema) => {
+          root.setAttribute('data-bs-theme', tema);
+          boton.textContent = tema === 'dark' ? '☀️' : '🌙';
+          redibujar();
+        };
+        aplicar(root.getAttribute('data-bs-theme') || 'light');
+        boton.addEventListener('click', () => {
+          const siguiente = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+          try { localStorage.setItem('theme', siguiente); } catch { /* modo privado */ }
+          aplicar(siguiente);
+        });
+      })();
+
+      $('share').addEventListener('click', async () => {
+        const url = new URL(window.location.href);
+        url.search = '';
+        url.searchParams.set('cps', String(cpsSelect.value));
+        url.searchParams.set('dist', String(sensSelect.value));
+        try {
+          await copiarTexto(url.toString());
+          notificar('Link copiado.');
+        } catch {
+          window.prompt('Copiá el enlace:', url.toString());
+        }
+      });
+
+      let resetArmado = false;
+      let resetTimer = null;
+
+      function reiniciarTodo() {
+        clearTimeout(cps.prep);
+        clearTimeout(cps.fin);
+        clearInterval(cps.ticker);
+        clearTimeout(reaccion.espera);
+        clearTimeout(reaccion.falloTimer);
+        try { localStorage.removeItem(STORAGE_KEY); } catch { /* sin persistencia */ }
+
+        ajustes.cps = 10;
+        ajustes.dist = 5;
+        cpsSelect.value = '10';
+        sensSelect.value = '5';
+
+        cps.estado = 'inactiva';
+        cps.duracion = 10;
+        cps.clicks = [];
+        cpsZona.classList.remove('activa', 'lista');
+        $('cps-zona-texto').textContent = 'Elegí la duración y tocá Empezar';
+        $('cps-zona-sub').textContent = 'Los clicks de acá se cuentan aparte del panel libre';
+        $('cps-estado').textContent = '';
+        $('cps-empezar').textContent = 'Empezar';
+        $('cps-resultado').textContent = 'Sin prueba todavía.';
+        dibujarVacio($('cps-canvas'), 'Empezá la prueba para ver el gráfico');
+
+        reaccion.estado = 'inactiva';
+        reaccion.intentos = [];
+        reaccion.falsos = 0;
+        reaccionZona.classList.remove('activa', 'lista', 'fallo');
+        $('reaccion-zona-texto').textContent = 'Tocá Empezar para prepararte';
+        $('reaccion-zona-sub').textContent = 'No hace falta apurarse: el verde llega solo';
+        $('reaccion-estado').textContent = 'Sin prueba todavía.';
+        renderReaccion();
+
+        limpiarPanel();
+        limpiarMovimiento();
+
+        scroll.eventos = 0;
+        scroll.total = 0;
+        scroll.max = 0;
+        scroll.arriba = 0;
+        scroll.abajo = 0;
+        scroll.lateral = 0;
+        renderScroll();
+
+        sens.cm = 5;
+        sens.medidas = [];
+        sens.midiendo = false;
+        marca.style.display = 'none';
+        pista.classList.remove('activa');
+        renderSens();
+
+        history.replaceState(null, '', window.location.pathname);
+        notificar('Herramienta reiniciada.');
+      }
+
+      $('reset').addEventListener('click', () => {
+        const boton = $('reset');
+        const desarmar = () => {
+          resetArmado = false;
+          boton.textContent = '🗑️ Reiniciar';
+          boton.classList.remove('btn-danger');
+          boton.classList.add('btn-outline-secondary');
+        };
+
+        if (!resetArmado) {
+          resetArmado = true;
+          boton.textContent = '¿Seguro? Tocá de nuevo';
+          boton.classList.remove('btn-outline-secondary');
+          boton.classList.add('btn-danger');
+          clearTimeout(resetTimer);
+          resetTimer = setTimeout(desarmar, 5000);
+          return;
+        }
+
+        clearTimeout(resetTimer);
+        desarmar();
+        reiniciarTodo();
+      });
+
+      let resizeTimer = null;
+      window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(redibujar, 150);
+      });
+
+      // ---------- Arranque ----------
+
+      leerAjustes();
+      const desdeURL = leerURL();
+      cpsSelect.value = String(ajustes.cps);
+      cps.duracion = ajustes.cps;
+      sensSelect.value = String(ajustes.dist);
+      sens.cm = ajustes.dist;
+      cps.duracion = ajustes.cps;
+      renderSens();
+      renderCpsResultado();
+      dibujarVacio($('cps-canvas'), 'Empezá la prueba para ver el gráfico');
+      dibujarVacio($('reaccion-canvas'), 'Completá un intento para ver el gráfico');
+      renderMovimiento();
+      if (desdeURL) notificar('Vista compartida: los ajustes de la URL mandan por ahora.');
+    })();
+  </script>
+</body>
+
+</html>

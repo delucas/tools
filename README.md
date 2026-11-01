@@ -69,5 +69,6 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`estructuras`](./estructuras) | 🧱 Estructuras: dibujá arreglos, matrices, pilas, colas, listas, árboles y grafos para tus clases, con salida a SVG, PNG, PPTX o Excalidraw. |
 | [`localhostificalo`](./localhostificalo) | 🏠 Localhostificalo: convertí una URL online en su versión local para depurar tus apps. |
 | [`teclado`](./teclado) | ⌨️ Teclado: detectá la distribución de tu teclado y probá que todas las teclas respondan. |
+| [`mouse`](./mouse) | 🖱️ Mouse: testeá clicks, CPS, reacción, movimiento, rueda y sensibilidad efectiva. |
 
 Cada carpeta tiene su propio `README.md` con el detalle de uso.

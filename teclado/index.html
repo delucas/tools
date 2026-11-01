@@ -1,0 +1,1285 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x2328%3B%26%23xfe0f%3B%3C/text%3E%3C/svg%3E">
+  <title>Teclado — Detectá tu distribución y probá las teclas</title>
+
+  <script>
+    // Tema antes del CSS para evitar el parpadeo (clave global `theme`).
+    (() => {
+      let guardado = null;
+      try { guardado = localStorage.getItem('theme'); } catch { /* modo privado */ }
+      const tema = guardado || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-bs-theme', tema);
+    })();
+  </script>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    p.signature { font-size: 0.8em; }
+
+    .alert-flotante {
+      position: fixed;
+      bottom: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1050;
+      max-width: min(92vw, 560px);
+      margin-bottom: 0;
+      box-shadow: var(--bs-box-shadow);
+    }
+
+    #app select,
+    #app textarea,
+    #app input { font-size: 16px; }
+
+    .captura {
+      border: 2px dashed var(--bs-border-color);
+      border-radius: 0.75rem;
+      padding: 1.25rem 1rem;
+      background: var(--bs-tertiary-bg);
+      cursor: pointer;
+      text-align: center;
+      transition: border-color 0.15s ease, background-color 0.15s ease;
+    }
+
+    .captura:hover { border-color: var(--bs-secondary-color); }
+
+    .captura:focus {
+      outline: none;
+      border-style: solid;
+      border-color: var(--bs-primary);
+      background: var(--bs-primary-bg-subtle);
+      box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.2);
+    }
+
+    .captura .captura-icono { font-size: 1.75rem; line-height: 1; }
+
+    .teclado {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+      min-width: 680px;
+      padding: 0.5rem;
+      border-radius: 0.5rem;
+      background: var(--bs-tertiary-bg);
+    }
+
+    .krow { display: flex; gap: 0.3rem; }
+
+    .kkey {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 1 1 0;
+      min-width: 0;
+      height: 2.25rem;
+      border: 1px solid var(--bs-border-color);
+      border-radius: 0.35rem;
+      background: var(--bs-body-bg);
+      font-size: 0.78rem;
+      line-height: 1;
+      user-select: none;
+      -webkit-user-select: none;
+      transition: background-color 0.08s ease, border-color 0.08s ease;
+    }
+
+    .kkey .kshift {
+      position: absolute;
+      top: 0.12rem;
+      left: 0.25rem;
+      font-size: 0.55rem;
+      color: var(--bs-secondary-color);
+      line-height: 1;
+    }
+
+    .kkey .kbase { font-weight: 600; }
+
+    .kkey.probada {
+      border-color: var(--bs-success-border-subtle);
+      background: var(--bs-success-bg-subtle);
+    }
+
+    .kkey.activa {
+      border-color: var(--bs-primary);
+      background: var(--bs-primary);
+      color: #fff;
+    }
+
+    .kkey.activa .kshift { color: rgba(255, 255, 255, 0.8); }
+
+    .kkey.mal {
+      border-color: var(--bs-danger);
+      background: var(--bs-danger-bg-subtle);
+    }
+
+    .kkey.activa.mal {
+      background: var(--bs-danger);
+      border-color: var(--bs-danger);
+      color: #fff;
+    }
+
+    .tabla-dist td,
+    .tabla-dist th { white-space: nowrap; }
+
+    .tabla-dist .muerta { text-decoration: underline dotted; cursor: help; }
+
+    .lista-testigos li:last-child { border-bottom: 0 !important; }
+  </style>
+</head>
+
+<body>
+
+  <main class="container py-4" id="app" style="max-width: 960px;">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">⌨️ Teclado</h1>
+        <p class="text-body-secondary mb-0">Detectá la distribución de tu teclado y probá que todas las teclas respondan.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="share" class="btn btn-outline-secondary btn-sm" type="button">🔗 Compartir</button>
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div id="notice" class="alert alert-flotante py-2 d-none" role="status"></div>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <h2 class="h6 mb-1">1. Detectá tu distribución</h2>
+        <p class="small text-body-secondary mb-3">
+          El navegador no puede leer el nombre del layout del sistema. Lo deducimos comparando la
+          <strong>posición física</strong> de cada tecla con el <strong>carácter</strong> que produce tu sistema.
+          Todo pasa acá: no se guarda ni se envía nada.
+        </p>
+
+        <div id="captura" class="captura mb-3" tabindex="0" role="application"
+          aria-label="Zona de captura de teclas para detectar la distribución">
+          <div class="captura-icono" aria-hidden="true">⌨️</div>
+          <p class="mb-1 fw-semibold">Hacé clic acá y presioná teclas</p>
+          <p id="captura-estado" class="small text-body-secondary mb-0">Hacé clic para activar</p>
+          <div id="muestras" class="d-flex flex-wrap justify-content-center gap-1 mt-2"></div>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-12 col-lg-6">
+            <h3 class="h6 mb-2">Resultado</h3>
+            <div id="resultado" aria-live="polite"></div>
+            <div id="candidatos" class="mt-3 d-none"></div>
+          </div>
+          <div class="col-12 col-lg-6">
+            <h3 class="h6 mb-2">Teclas testigo</h3>
+            <p class="small text-body-secondary mb-2">
+              Son las teclas que más diferencian una distribución de otra. Con 2 o 3 alcanza para empezar.
+            </p>
+            <ul id="testigos" class="list-unstyled mb-0 lista-testigos"></ul>
+          </div>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 mt-3">
+          <button id="limpiar-muestras" class="btn btn-outline-secondary btn-sm" type="button">🧹 Borrar muestras</button>
+          <button id="usar-detectada" class="btn btn-primary btn-sm" type="button" disabled>Usar esta distribución</button>
+        </div>
+
+        <details class="mt-3">
+          <summary class="small fw-semibold">Ver qué espera cada distribución</summary>
+          <p class="small text-body-secondary mt-2 mb-2">
+            Cada celda muestra el carácter sin Shift / con Shift. El símbolo <span class="muerta">◌</span>
+            indica tecla muerta: no escribe sola, se combina con la siguiente.
+          </p>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered tabla-dist small mb-0">
+              <thead id="comparativa-head"></thead>
+              <tbody id="comparativa-body"></tbody>
+            </table>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section class="card mb-3" id="probar">
+      <div class="card-body">
+        <h2 class="h6 mb-1">2. Probá tus teclas</h2>
+        <p class="small text-body-secondary mb-3">
+          El dibujo sigue la posición física de las teclas. Al presionar una, se ilumina y te mostramos
+          qué código y qué carácter produjo. Si elegís (o detectás) una distribución, también marcamos
+          las que no coinciden.
+        </p>
+
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+          <label for="esperado" class="form-label mb-0">Comparar con</label>
+          <select id="esperado" class="form-select" style="max-width: 19rem;">
+            <option value="auto">Automática (la detectada)</option>
+          </select>
+          <span id="etiquetas" class="badge text-bg-secondary">Sin detectar · referencia US</span>
+        </div>
+
+        <div class="table-responsive">
+          <div id="teclado" class="teclado" aria-label="Dibujo del teclado"></div>
+        </div>
+        <p class="form-text mt-2">
+          Deslizá horizontalmente si no entra entero. Las teclas de función, flechas y teclado numérico
+          no están dibujadas, pero igual se muestran abajo cuando las presionás.
+        </p>
+
+        <div class="row g-3 mt-1">
+          <div class="col-12 col-md-5">
+            <h3 class="h6 mb-2">Última tecla</h3>
+            <div id="ultima"></div>
+          </div>
+          <div class="col-12 col-md-7">
+            <h3 class="h6 mb-2">Zona para escribir</h3>
+            <textarea id="texto" class="form-control font-monospace" rows="3" spellcheck="false"
+              placeholder="Escribí acá para ver el resultado…" aria-label="Zona de prueba para escribir"></textarea>
+            <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mt-1">
+              <span class="form-text">Lo que escribís no se guarda ni se envía.</span>
+              <button id="limpiar-texto" class="btn btn-link btn-sm p-0" type="button">Limpiar</button>
+            </div>
+
+            <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mt-3 small">
+              <span id="progreso-texto">Probaste 0 de 0 teclas.</span>
+            </div>
+            <div class="progress mt-1" role="progressbar" aria-label="Teclas probadas"
+              aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progreso-barra-caja" style="height: .5rem;">
+              <div id="progreso-barra" class="progress-bar bg-success" style="width: 0%"></div>
+            </div>
+            <details class="mt-2">
+              <summary id="faltantes-resumen" class="small">Ver teclas sin probar</summary>
+              <p id="faltantes" class="small text-body-secondary mt-1 mb-0"></p>
+            </details>
+
+            <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mt-3">
+              <h3 class="h6 mb-0">Diferencias</h3>
+              <span id="fallos-count" class="badge text-bg-danger d-none">0</span>
+            </div>
+            <div id="fallos" class="mt-1"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <h2 class="h6 mb-3">🧠 Trivias</h2>
+        <details class="mb-2">
+          <summary class="fw-semibold">¿Por qué el teclado es QWERTY?</summary>
+          <p class="small text-body-secondary mb-0 mt-1">Lo diseñó Christopher Sholes en los años 1870 para las máquinas de escribir. Buscaba separar las letras que suelen ir juntas y evitar que se trabaran las varillas. No hay pruebas de que el orden esté pensado para hacer escribir más lento.</p>
+        </details>
+        <details class="mb-2">
+          <summary class="fw-semibold">¿Por qué la Ñ tiene tecla propia?</summary>
+          <p class="small text-body-secondary mb-0 mt-1">Es una letra del alfabeto español desde el siglo XVIII. Las distribuciones de España y de Latinoamérica la ubican a la derecha de la L, donde el teclado US tiene el punto y coma.</p>
+        </details>
+        <details>
+          <summary class="fw-semibold">¿Qué es una tecla muerta?</summary>
+          <p class="small text-body-secondary mb-0 mt-1">Una tecla que no escribe nada por sí sola y espera a la siguiente para combinarse. Por ejemplo, en español la tecla del acento agudo más la A producen Á. El navegador la reporta como <code>Dead</code>.</p>
+        </details>
+      </div>
+    </section>
+
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const STORAGE_KEY = 'teclado';
+
+      // ---------- Datos de las distribuciones ----------
+
+      const muerta = (glifo) => ({ muerta: glifo });
+
+      const QWERTY = {
+        KeyQ: ['q', 'Q'], KeyW: ['w', 'W'], KeyE: ['e', 'E'], KeyR: ['r', 'R'], KeyT: ['t', 'T'],
+        KeyY: ['y', 'Y'], KeyU: ['u', 'U'], KeyI: ['i', 'I'], KeyO: ['o', 'O'], KeyP: ['p', 'P'],
+        KeyA: ['a', 'A'], KeyS: ['s', 'S'], KeyD: ['d', 'D'], KeyF: ['f', 'F'], KeyG: ['g', 'G'],
+        KeyH: ['h', 'H'], KeyJ: ['j', 'J'], KeyK: ['k', 'K'], KeyL: ['l', 'L'],
+        KeyZ: ['z', 'Z'], KeyX: ['x', 'X'], KeyC: ['c', 'C'], KeyV: ['v', 'V'], KeyB: ['b', 'B'],
+        KeyN: ['n', 'N'], KeyM: ['m', 'M'],
+        Space: [' ', ' ']
+      };
+
+      const LAYOUTS = [
+        {
+          id: 'us',
+          nombre: 'Inglés (EE. UU.)',
+          corto: 'US',
+          bandera: '🇺🇸',
+          mapa: {
+            ...QWERTY,
+            Backquote: ['`', '~'],
+            Digit1: ['1', '!'], Digit2: ['2', '@'], Digit3: ['3', '#'], Digit4: ['4', '$'], Digit5: ['5', '%'],
+            Digit6: ['6', '^'], Digit7: ['7', '&'], Digit8: ['8', '*'], Digit9: ['9', '('], Digit0: ['0', ')'],
+            Minus: ['-', '_'], Equal: ['=', '+'],
+            BracketLeft: ['[', '{'], BracketRight: [']', '}'], Backslash: ['\\', '|'],
+            Semicolon: [';', ':'], Quote: ["'", '"'],
+            Comma: [',', '<'], Period: ['.', '>'], Slash: ['/', '?'],
+            IntlBackslash: ['\\', '|']
+          }
+        },
+        {
+          id: 'es',
+          nombre: 'Español (España)',
+          corto: 'ES',
+          bandera: '🇪🇸',
+          mapa: {
+            ...QWERTY,
+            Backquote: ['º', 'ª'],
+            Digit1: ['1', '!'], Digit2: ['2', '"'], Digit3: ['3', '·'], Digit4: ['4', '$'], Digit5: ['5', '%'],
+            Digit6: ['6', '&'], Digit7: ['7', '/'], Digit8: ['8', '('], Digit9: ['9', ')'], Digit0: ['0', '='],
+            Minus: ["'", '?'], Equal: ['¡', '¿'],
+            BracketLeft: [muerta('`'), muerta('^')], BracketRight: ['+', '*'], Backslash: ['ç', 'Ç'],
+            Semicolon: ['ñ', 'Ñ'], Quote: [muerta('´'), muerta('¨')],
+            Comma: [',', ';'], Period: ['.', ':'], Slash: ['-', '_'],
+            IntlBackslash: ['<', '>']
+          }
+        },
+        {
+          id: 'latam',
+          nombre: 'Español (Latinoamérica)',
+          corto: 'LatAm',
+          bandera: '🌎',
+          mapa: {
+            ...QWERTY,
+            Backquote: ['|', '°'],
+            Digit1: ['1', '!'], Digit2: ['2', '"'], Digit3: ['3', '#'], Digit4: ['4', '$'], Digit5: ['5', '%'],
+            Digit6: ['6', '&'], Digit7: ['7', '/'], Digit8: ['8', '('], Digit9: ['9', ')'], Digit0: ['0', '='],
+            Minus: ["'", '?'], Equal: ['¿', '¡'],
+            BracketLeft: [muerta('´'), muerta('¨')], BracketRight: ['+', '*'], Backslash: ['}', ']'],
+            Semicolon: ['ñ', 'Ñ'], Quote: ['{', '['],
+            Comma: [',', ';'], Period: ['.', ':'], Slash: ['-', '_'],
+            IntlBackslash: ['>', '<']
+          }
+        },
+        {
+          id: 'uk',
+          nombre: 'Inglés (Reino Unido)',
+          corto: 'UK',
+          bandera: '🇬🇧',
+          mapa: {
+            ...QWERTY,
+            Backquote: ['`', '¬'],
+            Digit1: ['1', '!'], Digit2: ['2', '"'], Digit3: ['3', '£'], Digit4: ['4', '$'], Digit5: ['5', '%'],
+            Digit6: ['6', '^'], Digit7: ['7', '&'], Digit8: ['8', '*'], Digit9: ['9', '('], Digit0: ['0', ')'],
+            Minus: ['-', '_'], Equal: ['=', '+'],
+            BracketLeft: ['[', '{'], BracketRight: [']', '}'], Backslash: ['#', '~'],
+            Semicolon: [';', ':'], Quote: ["'", '@'],
+            Comma: [',', '<'], Period: ['.', '>'], Slash: ['/', '?'],
+            IntlBackslash: ['\\', '|']
+          }
+        },
+        {
+          id: 'de',
+          nombre: 'Alemán (Alemania)',
+          corto: 'DE',
+          bandera: '🇩🇪',
+          mapa: {
+            ...QWERTY,
+            KeyY: ['z', 'Z'], KeyZ: ['y', 'Y'],
+            Backquote: [muerta('^'), '°'],
+            Digit1: ['1', '!'], Digit2: ['2', '"'], Digit3: ['3', '§'], Digit4: ['4', '$'], Digit5: ['5', '%'],
+            Digit6: ['6', '&'], Digit7: ['7', '/'], Digit8: ['8', '('], Digit9: ['9', ')'], Digit0: ['0', '='],
+            Minus: ['ß', '?'], Equal: [muerta('´'), muerta('`')],
+            BracketLeft: ['ü', 'Ü'], BracketRight: ['+', '*'], Backslash: ['#', "'"],
+            Semicolon: ['ö', 'Ö'], Quote: ['ä', 'Ä'],
+            Comma: [',', ';'], Period: ['.', ':'], Slash: ['-', '_'],
+            IntlBackslash: ['<', '>']
+          }
+        }
+      ];
+
+      const TESTIGOS = [
+        { code: 'Semicolon', pos: 'A la derecha de la L' },
+        { code: 'Quote', pos: 'Entre la anterior y Enter' },
+        { code: 'Backslash', pos: 'Arriba de Enter' },
+        { code: 'Equal', pos: 'Junto a Retroceso' },
+        { code: 'Minus', pos: 'A la izquierda de la anterior' },
+        { code: 'Backquote', pos: 'A la izquierda del 1' },
+        { code: 'BracketLeft', pos: 'A la derecha de la P' },
+        { code: 'BracketRight', pos: 'A la derecha de la anterior' },
+        { code: 'IntlBackslash', pos: 'Entre Shift izquierdo y Z (solo ISO)' },
+        { code: 'Slash', pos: 'A la izquierda del Shift derecho' }
+      ];
+
+      // ---------- Dibujo del teclado ----------
+
+      const FILAS = [
+        [
+          { c: 'Escape', l: 'Esc', w: 1.4 },
+          { c: 'F1', l: 'F1' }, { c: 'F2', l: 'F2' }, { c: 'F3', l: 'F3' }, { c: 'F4', l: 'F4' },
+          { c: 'F5', l: 'F5' }, { c: 'F6', l: 'F6' }, { c: 'F7', l: 'F7' }, { c: 'F8', l: 'F8' },
+          { c: 'F9', l: 'F9' }, { c: 'F10', l: 'F10' }, { c: 'F11', l: 'F11' }, { c: 'F12', l: 'F12' }
+        ],
+        [
+          { c: 'Backquote' }, { c: 'Digit1' }, { c: 'Digit2' }, { c: 'Digit3' }, { c: 'Digit4' },
+          { c: 'Digit5' }, { c: 'Digit6' }, { c: 'Digit7' }, { c: 'Digit8' }, { c: 'Digit9' },
+          { c: 'Digit0' }, { c: 'Minus' }, { c: 'Equal' }, { c: 'Backspace', l: '⌫', w: 2 }
+        ],
+        [
+          { c: 'Tab', l: 'Tab', w: 1.5 },
+          { c: 'KeyQ' }, { c: 'KeyW' }, { c: 'KeyE' }, { c: 'KeyR' }, { c: 'KeyT' },
+          { c: 'KeyY' }, { c: 'KeyU' }, { c: 'KeyI' }, { c: 'KeyO' }, { c: 'KeyP' },
+          { c: 'BracketLeft' }, { c: 'BracketRight' }, { c: 'Backslash', w: 1.5 }
+        ],
+        [
+          { c: 'CapsLock', l: 'Caps', w: 1.75 },
+          { c: 'KeyA' }, { c: 'KeyS' }, { c: 'KeyD' }, { c: 'KeyF' }, { c: 'KeyG' },
+          { c: 'KeyH' }, { c: 'KeyJ' }, { c: 'KeyK' }, { c: 'KeyL' },
+          { c: 'Semicolon' }, { c: 'Quote' }, { c: 'Enter', l: 'Enter', w: 2.25 }
+        ],
+        [
+          { c: 'ShiftLeft', l: 'Shift', w: 1.25 }, { c: 'IntlBackslash' },
+          { c: 'KeyZ' }, { c: 'KeyX' }, { c: 'KeyC' }, { c: 'KeyV' }, { c: 'KeyB' },
+          { c: 'KeyN' }, { c: 'KeyM' }, { c: 'Comma' }, { c: 'Period' }, { c: 'Slash' },
+          { c: 'ShiftRight', l: 'Shift', w: 2.75 }
+        ],
+        [
+          { c: 'ControlLeft', l: 'Ctrl', w: 1.25 }, { c: 'MetaLeft', l: 'Win', w: 1.25 },
+          { c: 'AltLeft', l: 'Alt', w: 1.25 }, { c: 'Space', l: '␣', w: 6.25 },
+          { c: 'AltRight', l: 'AltGr', w: 1.25 }, { c: 'MetaRight', l: 'Win', w: 1.25 },
+          { c: 'ContextMenu', l: 'Menú', w: 1.25 }, { c: 'ControlRight', l: 'Ctrl', w: 1.25 }
+        ]
+      ];
+
+      const TECLAS_POR_CODIGO = {};
+      FILAS.forEach((fila) => fila.forEach((tecla) => { TECLAS_POR_CODIGO[tecla.c] = tecla; }));
+      const TODAS_LAS_TECLAS = Object.keys(TECLAS_POR_CODIGO);
+
+      // ---------- Utilidades ----------
+
+      const $ = (id) => document.getElementById(id);
+
+      function normKey(valor) {
+        if (typeof valor !== 'string') return '';
+        return valor.length === 1 ? valor.toLowerCase() : valor;
+      }
+
+      function valorEsperado(layout, code, shift) {
+        const par = layout.mapa[code];
+        if (!par) return null;
+        const valor = par[shift ? 1 : 0];
+        if (valor == null || valor === '') return null;
+        return typeof valor === 'object' ? 'Dead' : valor;
+      }
+
+      function glifoEsperado(layout, code, shift) {
+        const par = layout.mapa[code];
+        if (!par) return '';
+        const valor = par[shift ? 1 : 0];
+        if (valor == null || valor === '') return '';
+        return typeof valor === 'object' ? valor.muerta : valor;
+      }
+
+      function simbolo(key) {
+        if (key === 'Dead') return '◌';
+        if (key === ' ') return '␣';
+        return key;
+      }
+
+      function mostrarKey(key) {
+        if (key === 'Dead') return 'muerta';
+        if (key === ' ') return 'espacio';
+        return key;
+      }
+
+      function etiquetaLocation(location) {
+        if (location === 1) return 'izquierda';
+        if (location === 2) return 'derecha';
+        if (location === 3) return 'numérico';
+        return 'estándar';
+      }
+
+      function celdaLayout(layout, code) {
+        return [0, 1].map((shift) => {
+          const par = layout.mapa[code];
+          if (!par) return '—';
+          const valor = par[shift];
+          if (valor == null || valor === '') return '—';
+          return typeof valor === 'object' ? '◌' + valor.muerta : valor;
+        }).join(' / ');
+      }
+
+      // ---------- Estado ----------
+
+      const LAYOUTS_VALIDOS = new Set(['auto', ...LAYOUTS.map((layout) => layout.id)]);
+
+      function cargarLayout() {
+        const params = new URLSearchParams(window.location.search);
+        const param = params.get('layout');
+        if (param && LAYOUTS_VALIDOS.has(param)) return { layout: param, fromUrl: true };
+        try {
+          const guardado = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+          if (guardado && LAYOUTS_VALIDOS.has(guardado.layout)) {
+            return { layout: guardado.layout, fromUrl: false };
+          }
+        } catch { /* sin estado guardado */ }
+        return { layout: 'auto', fromUrl: false };
+      }
+
+      const cargado = cargarLayout();
+      let esperadoSel = cargado.layout;
+      const fromUrl = cargado.fromUrl;
+
+      let muestras = new Map();
+      let probadas = new Set();
+      let estados = new Map();
+      let fallos = new Map();
+      let ultima = null;
+      let activaCode = null;
+      let activaTimer = null;
+      let layoutEtiquetaActual = null;
+      let resetArmado = false;
+      let resetTimer = null;
+      let noticeTimer = null;
+
+      function guardar() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({ v: 1, layout: esperadoSel }));
+        } catch { /* sin persistencia */ }
+      }
+
+      function notificar(texto, tipo) {
+        const notice = $('notice');
+        notice.textContent = texto;
+        notice.className = 'alert alert-flotante py-2 alert-' + (tipo === 'error' ? 'danger' : 'success');
+        notice.classList.remove('d-none');
+        clearTimeout(noticeTimer);
+        noticeTimer = setTimeout(() => notice.classList.add('d-none'), 2600);
+      }
+
+      function copiarTexto(texto) {
+        if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(texto);
+        return new Promise((resolve, reject) => {
+          const area = document.createElement('textarea');
+          area.value = texto;
+          area.style.position = 'fixed';
+          area.style.opacity = '0';
+          document.body.append(area);
+          area.select();
+          try {
+            document.execCommand('copy') ? resolve() : reject(new Error('copy'));
+          } catch (error) {
+            reject(error);
+          } finally {
+            area.remove();
+          }
+        });
+      }
+
+      // ---------- Evaluación de la distribución ----------
+
+      function evaluar() {
+        const observaciones = [];
+
+        for (const [code, valores] of muestras) {
+          for (const shift of [0, 1]) {
+            if (valores[shift] == null) continue;
+            const esperados = [];
+            for (const layout of LAYOUTS) {
+              const esperado = valorEsperado(layout, code, shift);
+              if (esperado != null) esperados.push(normKey(esperado));
+            }
+            if (new Set(esperados).size < 2) continue;
+            observaciones.push({ code, shift, actual: valores[shift] });
+          }
+        }
+
+        const productos = LAYOUTS.map((layout) => {
+          let producto = 1;
+          let definidas = 0;
+          let aciertos = 0;
+          const fallosLayout = [];
+
+          for (const obs of observaciones) {
+            const esperado = valorEsperado(layout, obs.code, obs.shift);
+            if (esperado == null) continue;
+            definidas += 1;
+            const coincide = normKey(esperado) === normKey(obs.actual);
+            producto *= coincide ? 0.9 : 0.1;
+            if (coincide) aciertos += 1;
+            else fallosLayout.push({ ...obs, esperado });
+          }
+
+          return { layout, producto, definidas, aciertos, fallos: fallosLayout };
+        });
+
+        const suma = productos.reduce((total, item) => total + (item.definidas ? item.producto : 0), 0);
+        const orden = productos
+          .map((item) => ({ ...item, post: suma && item.definidas ? item.producto / suma : 0 }))
+          .sort((a, b) => b.post - a.post || b.aciertos - a.aciertos);
+
+        const mejor = orden[0] || null;
+        const segunda = orden[1] || null;
+        const concluyente = observaciones.length >= 2
+          && !!mejor
+          && mejor.post >= 0.85
+          && (!segunda || mejor.post - segunda.post >= 0.4);
+
+        return { orden, observaciones, informativas: observaciones.length, mejor, segunda, concluyente };
+      }
+
+      function layoutComparacion() {
+        if (esperadoSel !== 'auto') {
+          return LAYOUTS.find((layout) => layout.id === esperadoSel) || null;
+        }
+        const resultado = evaluar();
+        return resultado.concluyente ? resultado.mejor.layout : null;
+      }
+
+      function layoutEtiqueta() {
+        return layoutComparacion() || LAYOUTS.find((layout) => layout.id === 'us');
+      }
+
+      // ---------- Render ----------
+
+      function renderMuestras() {
+        const cont = $('muestras');
+        cont.replaceChildren();
+        const entradas = [...muestras].slice(-18);
+        entradas.forEach(([code, valores]) => {
+          const badge = document.createElement('span');
+          badge.className = 'badge text-bg-light border font-monospace';
+          badge.title = code;
+          const partes = [];
+          if (valores[0] != null) partes.push(simbolo(valores[0]));
+          if (valores[1] != null) partes.push(simbolo(valores[1]));
+          badge.textContent = partes.join(' ');
+          cont.append(badge);
+        });
+      }
+
+      function renderDeteccion() {
+        const resultado = evaluar();
+        const cont = $('resultado');
+        cont.replaceChildren();
+        const usar = $('usar-detectada');
+
+        if (!resultado.informativas) {
+          const aviso = document.createElement('div');
+          aviso.className = 'alert alert-secondary py-2 mb-0';
+          aviso.setAttribute('role', 'note');
+          aviso.textContent = muestras.size
+            ? 'Probá alguna tecla testigo de la lista de al lado para poder comparar.'
+            : 'Todavía no hay muestras. Activá la zona de arriba y presioná teclas.';
+          cont.append(aviso);
+          usar.disabled = true;
+          renderCandidatos(resultado);
+          return;
+        }
+
+        const top = resultado.mejor;
+        const porcentaje = Math.round(top.post * 100);
+        const caja = document.createElement('div');
+        caja.className = 'border rounded-3 p-3 ' + (resultado.concluyente ? 'bg-body-tertiary' : '');
+
+        const fila = document.createElement('div');
+        fila.className = 'd-flex align-items-center gap-3';
+
+        const icono = document.createElement('div');
+        icono.className = 'fs-2';
+        icono.setAttribute('aria-hidden', 'true');
+        icono.textContent = top.layout.bandera;
+
+        const texto = document.createElement('div');
+        texto.className = 'flex-grow-1';
+
+        const kicker = document.createElement('div');
+        kicker.className = 'small text-body-secondary';
+        kicker.textContent = resultado.concluyente ? 'Distribución detectada' : 'Todavía no se puede concluir';
+
+        const nombre = document.createElement('div');
+        nombre.className = 'fs-5 fw-semibold';
+        nombre.textContent = resultado.concluyente ? top.layout.nombre : 'Mejor candidato: ' + top.layout.nombre;
+
+        const detalle = document.createElement('div');
+        detalle.className = 'small text-body-secondary';
+        if (resultado.concluyente) {
+          detalle.textContent = `Coincide en ${top.aciertos} de ${resultado.informativas} teclas informativas.`;
+        } else if (resultado.segunda && top.post - resultado.segunda.post < 0.2) {
+          detalle.textContent = `Empate con ${resultado.segunda.layout.nombre}. Probá 2 o 3 teclas más.`;
+        } else {
+          detalle.textContent = 'Probá 2 o 3 teclas más de la lista. Si tu distribución no está entre las opciones, no va a cerrar.';
+        }
+
+        texto.append(kicker, nombre, detalle);
+
+        const badge = document.createElement('span');
+        badge.className = 'badge ' + (resultado.concluyente ? 'text-bg-success' : 'text-bg-secondary');
+        badge.textContent = porcentaje + '%';
+
+        fila.append(icono, texto, badge);
+        caja.append(fila);
+        cont.append(caja);
+
+        usar.disabled = !resultado.concluyente;
+        renderCandidatos(resultado);
+      }
+
+      function renderCandidatos(resultado) {
+        const cont = $('candidatos');
+        cont.replaceChildren();
+        if (!resultado.informativas) {
+          cont.classList.add('d-none');
+          return;
+        }
+        cont.classList.remove('d-none');
+
+        resultado.orden.forEach((item) => {
+          const fila = document.createElement('div');
+          fila.className = 'mb-2';
+
+          const cabecera = document.createElement('div');
+          cabecera.className = 'd-flex justify-content-between align-items-baseline gap-2 small';
+
+          const nombre = document.createElement('span');
+          nombre.textContent = item.layout.bandera + ' ' + item.layout.nombre;
+          if (item === resultado.mejor) nombre.className = 'fw-semibold';
+
+          const pct = document.createElement('span');
+          pct.className = 'text-body-secondary font-monospace';
+          pct.textContent = Math.round(item.post * 100) + '%';
+
+          cabecera.append(nombre, pct);
+
+          const barra = document.createElement('div');
+          barra.className = 'progress mt-1';
+          barra.style.height = '.4rem';
+
+          const relleno = document.createElement('div');
+          relleno.className = 'progress-bar ' + (item === resultado.mejor ? 'bg-success' : 'bg-secondary');
+          relleno.style.width = Math.max(1, item.post * 100) + '%';
+          barra.append(relleno);
+
+          fila.append(cabecera, barra);
+          cont.append(fila);
+        });
+      }
+
+      function renderTestigos() {
+        const resultado = evaluar();
+        const cont = $('testigos');
+        cont.replaceChildren();
+
+        TESTIGOS.forEach((testigo) => {
+          const valores = muestras.get(testigo.code);
+          const fila = document.createElement('li');
+          fila.className = 'd-flex flex-wrap align-items-center justify-content-between gap-2 py-2 border-bottom';
+
+          const izquierda = document.createElement('div');
+          izquierda.className = 'me-auto';
+
+          const posicion = document.createElement('div');
+          posicion.className = 'small';
+          posicion.textContent = testigo.pos;
+
+          const codigo = document.createElement('code');
+          codigo.className = 'text-body-secondary';
+          codigo.style.fontSize = '.68rem';
+          codigo.textContent = testigo.code;
+
+          izquierda.append(posicion, codigo);
+
+          const derecha = document.createElement('div');
+          derecha.className = 'd-flex align-items-center gap-2';
+
+          if (!valores) {
+            const estado = document.createElement('span');
+            estado.className = 'badge text-bg-secondary';
+            estado.textContent = 'sin probar';
+            derecha.append(estado);
+          } else {
+            const muestrasTecla = [];
+            for (const shift of [0, 1]) {
+              if (valores[shift] != null) muestrasTecla.push({ shift, key: valores[shift] });
+            }
+
+            const kbd = document.createElement('kbd');
+            kbd.textContent = muestrasTecla.map((item) => simbolo(item.key)).join(' ');
+            kbd.title = muestrasTecla.map((item) => (item.shift ? 'con Shift: ' : 'sin Shift: ') + mostrarKey(item.key)).join(' · ');
+            derecha.append(kbd);
+
+            const estado = document.createElement('span');
+            if (!resultado.informativas) {
+              estado.className = 'badge text-bg-secondary';
+              estado.textContent = 'registrada';
+            } else {
+              const coincide = muestrasTecla.every((item) => {
+                const esperado = valorEsperado(resultado.mejor.layout, testigo.code, item.shift);
+                return esperado != null && normKey(esperado) === normKey(item.key);
+              });
+              estado.className = 'badge ' + (coincide ? 'text-bg-success' : 'text-bg-danger');
+              estado.textContent = coincide ? '✓ coincide' : '✗ no coincide';
+            }
+            derecha.append(estado);
+          }
+
+          fila.append(izquierda, derecha);
+          cont.append(fila);
+        });
+      }
+
+      function renderComparativa() {
+        const head = $('comparativa-head');
+        const body = $('comparativa-body');
+        head.replaceChildren();
+        body.replaceChildren();
+
+        const filaHead = document.createElement('tr');
+        const thVacio = document.createElement('th');
+        thVacio.scope = 'col';
+        thVacio.className = 'text-start';
+        thVacio.textContent = 'Tecla';
+        filaHead.append(thVacio);
+        LAYOUTS.forEach((layout) => {
+          const th = document.createElement('th');
+          th.scope = 'col';
+          th.className = 'text-center';
+          th.textContent = layout.corto;
+          th.title = layout.nombre;
+          filaHead.append(th);
+        });
+        head.append(filaHead);
+
+        TESTIGOS.forEach((testigo) => {
+          const fila = document.createElement('tr');
+          const th = document.createElement('th');
+          th.scope = 'row';
+          th.className = 'text-start fw-normal';
+          th.textContent = testigo.pos;
+          fila.append(th);
+          LAYOUTS.forEach((layout) => {
+            const td = document.createElement('td');
+            td.className = 'text-center font-monospace';
+            td.textContent = celdaLayout(layout, testigo.code);
+            if (td.textContent.includes('◌')) td.title = 'Incluye tecla muerta';
+            fila.append(td);
+          });
+          body.append(fila);
+        });
+      }
+
+      function nombreTecla(code) {
+        const tecla = TECLAS_POR_CODIGO[code];
+        if (tecla && tecla.l !== undefined) return tecla.l === '␣' ? 'espacio' : tecla.l;
+        const glifo = glifoEsperado(layoutEtiqueta(), code, 0);
+        return glifo || code;
+      }
+
+      function renderTeclado() {
+        const cont = $('teclado');
+        cont.replaceChildren();
+        const layout = layoutEtiqueta();
+
+        FILAS.forEach((fila) => {
+          const row = document.createElement('div');
+          row.className = 'krow';
+
+          fila.forEach((tecla) => {
+            const key = document.createElement('div');
+            key.className = 'kkey';
+            key.dataset.code = tecla.c;
+            key.style.flexGrow = String(tecla.w || 1);
+            key.setAttribute('role', 'img');
+            key.setAttribute('aria-label', nombreTecla(tecla.c));
+
+            if (tecla.l !== undefined) {
+              const label = document.createElement('span');
+              label.className = 'kbase';
+              label.textContent = tecla.l;
+              key.append(label);
+            } else {
+              const shift = glifoEsperado(layout, tecla.c, 1);
+              const base = glifoEsperado(layout, tecla.c, 0);
+              if (shift && shift !== ' ') {
+                const sup = document.createElement('span');
+                sup.className = 'kshift';
+                sup.textContent = shift;
+                key.append(sup);
+              }
+              const label = document.createElement('span');
+              label.className = 'kbase';
+              label.textContent = base || '·';
+              key.append(label);
+            }
+
+            row.append(key);
+          });
+
+          cont.append(row);
+        });
+      }
+
+      function actualizarTeclado() {
+        document.querySelectorAll('.kkey').forEach((key) => {
+          const code = key.dataset.code;
+          key.classList.toggle('probada', probadas.has(code));
+          key.classList.toggle('activa', code === activaCode);
+          key.classList.toggle('mal', estados.get(code) === 'mal');
+        });
+      }
+
+      function renderUltima() {
+        const cont = $('ultima');
+        cont.replaceChildren();
+
+        if (!ultima) {
+          const vacio = document.createElement('p');
+          vacio.className = 'small text-body-secondary mb-0';
+          vacio.textContent = 'Todavía no presionaste ninguna tecla.';
+          cont.append(vacio);
+          return;
+        }
+
+        const fila = document.createElement('div');
+        fila.className = 'd-flex align-items-center gap-3';
+
+        const kbd = document.createElement('kbd');
+        kbd.className = 'fs-3 px-3 py-2';
+        kbd.textContent = mostrarKey(ultima.key);
+
+        const datos = document.createElement('div');
+        datos.className = 'small flex-grow-1';
+        const pares = [
+          ['code', ultima.code],
+          ['key', mostrarKey(ultima.key)],
+          ['Shift', ultima.shift ? 'sí' : 'no'],
+          ['Caps', ultima.caps ? 'sí' : 'no'],
+          ['AltGr', ultima.altgr ? 'sí' : 'no'],
+          ['Posición', etiquetaLocation(ultima.location)],
+          ['keyCode', String(ultima.keyCode)]
+        ];
+        pares.forEach(([etiqueta, valor]) => {
+          const linea = document.createElement('div');
+          linea.className = 'd-flex justify-content-between gap-2';
+          const nombre = document.createElement('span');
+          nombre.className = 'text-body-secondary';
+          nombre.textContent = etiqueta;
+          const dato = document.createElement('code');
+          dato.className = 'text-end text-body';
+          dato.textContent = valor;
+          linea.append(nombre, dato);
+          datos.append(linea);
+        });
+
+        fila.append(kbd, datos);
+        cont.append(fila);
+
+        if (ultima.cmp) {
+          const aviso = document.createElement('div');
+          aviso.className = 'alert py-1 px-2 small mt-2 mb-0 alert-' + (ultima.cmp.ok ? 'success' : 'danger');
+          if (ultima.cmp.ok) {
+            aviso.textContent = `Coincide: ${ultima.cmp.layout} espera «${mostrarKey(ultima.cmp.esperado)}».`;
+          } else {
+            aviso.textContent = `No coincide: ${ultima.cmp.layout} espera «${mostrarKey(ultima.cmp.esperado)}» y produjo «${mostrarKey(ultima.cmp.actual)}».`;
+          }
+          cont.append(aviso);
+        }
+      }
+
+      function renderProgreso() {
+        const total = TODAS_LAS_TECLAS.length;
+        const hechas = TODAS_LAS_TECLAS.filter((code) => probadas.has(code)).length;
+        const pct = total ? Math.round(hechas / total * 100) : 0;
+
+        $('progreso-texto').textContent = `Probaste ${hechas} de ${total} teclas del dibujo.`;
+        $('progreso-barra').style.width = pct + '%';
+        $('progreso-barra-caja').setAttribute('aria-valuenow', String(pct));
+
+        const faltan = TODAS_LAS_TECLAS.filter((code) => !probadas.has(code));
+        const resumen = $('faltantes-resumen');
+        const detalle = $('faltantes');
+        if (!faltan.length) {
+          resumen.textContent = 'Todas las teclas del dibujo fueron probadas';
+          detalle.textContent = 'No queda ninguna pendiente.';
+        } else {
+          resumen.textContent = `Ver ${faltan.length} tecla${faltan.length === 1 ? '' : 's'} sin probar`;
+          detalle.textContent = faltan.map(nombreTecla).join(' · ');
+        }
+      }
+
+      function renderFallos() {
+        const cont = $('fallos');
+        const count = $('fallos-count');
+        cont.replaceChildren();
+
+        if (!layoutComparacion()) {
+          count.classList.add('d-none');
+          const aviso = document.createElement('p');
+          aviso.className = 'small text-body-secondary mb-0';
+          aviso.textContent = 'Detectá tu distribución o elegí una para comparar lo que producen tus teclas.';
+          cont.append(aviso);
+          return;
+        }
+
+        if (!fallos.size) {
+          count.classList.add('d-none');
+          const aviso = document.createElement('p');
+          aviso.className = 'small text-body-secondary mb-0';
+          aviso.textContent = estados.size
+            ? 'Sin diferencias: lo que producen tus teclas coincide con la distribución esperada.'
+            : 'Todavía no comparaste ninguna tecla. Presioná las teclas del dibujo.';
+          cont.append(aviso);
+          return;
+        }
+
+        count.classList.remove('d-none');
+        count.textContent = String(fallos.size);
+
+        const lista = document.createElement('ul');
+        lista.className = 'list-unstyled small mb-0';
+        fallos.forEach((fallo, code) => {
+          const item = document.createElement('li');
+          item.className = 'py-1 border-bottom';
+          item.textContent = `${nombreTecla(code)} (${code}): esperaba «${mostrarKey(fallo.esperado)}» y produjo «${mostrarKey(fallo.actual)}».`;
+          lista.append(item);
+        });
+        cont.append(lista);
+      }
+
+      function sincronizarEtiquetas() {
+        const layout = layoutEtiqueta();
+        const badge = $('etiquetas');
+        const detectada = esperadoSel === 'auto' && !!layoutComparacion();
+
+        if (esperadoSel === 'auto') {
+          badge.className = 'badge ' + (detectada ? 'text-bg-success' : 'text-bg-secondary');
+          badge.textContent = detectada
+            ? 'Detectada: ' + layout.nombre
+            : 'Sin detectar · referencia ' + layout.corto;
+        } else {
+          badge.className = 'badge text-bg-primary';
+          badge.textContent = 'Elegida: ' + layout.nombre;
+        }
+
+        if (layout.id !== layoutEtiquetaActual) {
+          layoutEtiquetaActual = layout.id;
+          renderTeclado();
+        }
+      }
+
+      function renderTodo() {
+        renderMuestras();
+        renderDeteccion();
+        renderTestigos();
+        renderComparativa();
+        renderUltima();
+        renderProgreso();
+        renderFallos();
+        sincronizarEtiquetas();
+        actualizarTeclado();
+      }
+
+      // ---------- Captura de teclas ----------
+
+      function registrarMuestra(code, shift, key) {
+        if (key.length !== 1 && key !== 'Dead') return;
+        if (!muestras.has(code)) muestras.set(code, {});
+        muestras.get(code)[shift] = key;
+        renderMuestras();
+        renderDeteccion();
+        renderTestigos();
+        sincronizarEtiquetas();
+      }
+
+      function compararTecla(evento, code) {
+        if (evento.ctrlKey || evento.metaKey || evento.altKey) return null;
+        const layout = layoutComparacion();
+        if (!layout) return null;
+
+        const shift = evento.shiftKey ? 1 : 0;
+        const esperado = valorEsperado(layout, code, shift);
+        if (esperado == null) return null;
+
+        const ok = normKey(esperado) === normKey(evento.key);
+        estados.set(code, ok ? 'bien' : 'mal');
+        if (ok) {
+          fallos.delete(code);
+        } else {
+          fallos.set(code, { esperado, actual: evento.key, shift, layout: layout.nombre });
+        }
+        return { esperado, actual: evento.key, ok, layout: layout.nombre };
+      }
+
+      function alPresionar(evento) {
+        if (evento.key === 'Unidentified' || !evento.code) return;
+
+        const capturando = document.activeElement === $('captura');
+        if (capturando) {
+          if (evento.key.length === 1 || evento.key === 'Dead') evento.preventDefault();
+          if (!evento.ctrlKey && !evento.metaKey && !evento.altKey) {
+            registrarMuestra(evento.code, evento.shiftKey ? 1 : 0, evento.key);
+          }
+        }
+
+        ultima = {
+          key: evento.key,
+          code: evento.code,
+          shift: evento.shiftKey,
+          caps: evento.getModifierState ? evento.getModifierState('CapsLock') : false,
+          altgr: evento.getModifierState ? evento.getModifierState('AltGraph') : false,
+          location: evento.location,
+          keyCode: evento.keyCode,
+          cmp: null
+        };
+
+        probadas.add(evento.code);
+        activaCode = evento.code;
+        ultima.cmp = compararTecla(evento, evento.code);
+
+        renderUltima();
+        renderProgreso();
+        renderFallos();
+        actualizarTeclado();
+
+        clearTimeout(activaTimer);
+        activaTimer = setTimeout(() => {
+          activaCode = null;
+          actualizarTeclado();
+        }, 180);
+      }
+
+      // ---------- Eventos ----------
+
+      const captura = $('captura');
+      const estadoCaptura = $('captura-estado');
+
+      captura.addEventListener('focus', () => {
+        estadoCaptura.textContent = '✅ Escuchando teclas…';
+      });
+
+      captura.addEventListener('blur', () => {
+        estadoCaptura.textContent = 'Hacé clic para activar';
+      });
+
+      document.addEventListener('keydown', alPresionar);
+
+      $('limpiar-muestras').addEventListener('click', () => {
+        muestras = new Map();
+        if (esperadoSel === 'auto') {
+          estados = new Map();
+          fallos = new Map();
+        }
+        renderTodo();
+        captura.focus();
+        notificar('Muestras borradas.');
+      });
+
+      $('usar-detectada').addEventListener('click', () => {
+        const resultado = evaluar();
+        if (!resultado.concluyente) return;
+        esperadoSel = resultado.mejor.layout.id;
+        $('esperado').value = esperadoSel;
+        guardar();
+        renderTodo();
+        notificar('Distribución aplicada: ' + resultado.mejor.layout.nombre);
+        $('probar').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+
+      $('limpiar-texto').addEventListener('click', () => {
+        $('texto').value = '';
+        $('texto').focus();
+      });
+
+      const selectEsperado = $('esperado');
+      LAYOUTS.forEach((layout) => {
+        const opcion = document.createElement('option');
+        opcion.value = layout.id;
+        opcion.textContent = layout.nombre;
+        selectEsperado.append(opcion);
+      });
+      selectEsperado.value = esperadoSel;
+
+      selectEsperado.addEventListener('change', () => {
+        esperadoSel = selectEsperado.value;
+        guardar();
+        estados = new Map();
+        fallos = new Map();
+        renderTodo();
+      });
+
+      $('share').addEventListener('click', async () => {
+        const url = new URL(window.location.href);
+        url.search = '';
+        if (esperadoSel !== 'auto') url.searchParams.set('layout', esperadoSel);
+        try {
+          await copiarTexto(url.toString());
+          notificar('Link copiado.');
+        } catch {
+          window.prompt('Copiá el enlace:', url.toString());
+        }
+      });
+
+      $('reset').addEventListener('click', () => {
+        const boton = $('reset');
+        const desarmar = () => {
+          resetArmado = false;
+          boton.textContent = '🗑️ Reiniciar';
+          boton.classList.remove('btn-danger');
+          boton.classList.add('btn-outline-secondary');
+        };
+
+        if (!resetArmado) {
+          resetArmado = true;
+          boton.textContent = '¿Seguro? Tocá de nuevo';
+          boton.classList.remove('btn-outline-secondary');
+          boton.classList.add('btn-danger');
+          clearTimeout(resetTimer);
+          resetTimer = setTimeout(desarmar, 5000);
+          return;
+        }
+
+        clearTimeout(resetTimer);
+        desarmar();
+        try { localStorage.removeItem(STORAGE_KEY); } catch { /* sin persistencia */ }
+
+        esperadoSel = 'auto';
+        selectEsperado.value = 'auto';
+        muestras = new Map();
+        probadas = new Set();
+        estados = new Map();
+        fallos = new Map();
+        ultima = null;
+        activaCode = null;
+        $('texto').value = '';
+        history.replaceState(null, '', window.location.pathname);
+        renderTodo();
+        notificar('Herramienta reiniciada.');
+      });
+
+      // ---------- Tema ----------
+
+      (() => {
+        const root = document.documentElement;
+        const boton = $('theme-toggle');
+        const aplicar = (tema) => {
+          root.setAttribute('data-bs-theme', tema);
+          boton.textContent = tema === 'dark' ? '☀️' : '🌙';
+        };
+        aplicar(root.getAttribute('data-bs-theme') || 'light');
+        boton.addEventListener('click', () => {
+          const siguiente = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+          try { localStorage.setItem('theme', siguiente); } catch { /* modo privado */ }
+          aplicar(siguiente);
+        });
+      })();
+
+      // ---------- Arranque ----------
+
+      renderTodo();
+      if (fromUrl) notificar('Vista compartida: elegí una distribución para guardarla acá.');
+    })();
+  </script>
+</body>
+
+</html>

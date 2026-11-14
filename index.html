@@ -311,6 +311,11 @@
     } else {
       try {
         montarCatalogo();
+        // Foco inicial en el filtro para buscar sin mouse ni tabs.
+        // En pantallas táctiles no se enfoca, para no abrir el teclado solo.
+        if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+          document.getElementById('filter')?.focus({ preventScroll: true });
+        }
       } catch (error) {
         console.error('No se pudo iniciar el catálogo con Vue:', error);
         montarListadoSimple();

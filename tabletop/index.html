@@ -242,7 +242,9 @@
       return { rows: normalize(rows), hasHeader: false };
     }
 
-    // texto pegado → { rows, hasHeader, format }
+    // texto pegado → { rows, hasHeader?, format }
+    // `hasHeader` solo viene cuando la fuente lo expresa (Markdown con separador, HTML con TH, LaTeX con regla);
+    // en CSV/TSV/ASCII/texto plano se omite para conservar la elección del usuario.
     function detectAndParse(text, doc) {
       const clean = text.trim();
       if (!clean) return null;
@@ -258,17 +260,17 @@
       if (md) return { ...md, format: 'Markdown' };
       if (/^\+[-+ ]+\+$/m.test(clean)) {
         const ascii = parseAscii(clean);
-        if (ascii) return { ...ascii, format: 'ASCII' };
+        if (ascii) return { rows: ascii.rows, format: 'ASCII' };
       }
       const lines = clean.split('\n').filter(l => l.trim() !== '');
       if (clean.includes('\t') || /[,;]/.test(clean)) {
         const sep = clean.includes('\t') ? '\t' : guessSep(clean);
         const rows = parseDelimited(clean, sep);
         if (rows.length) {
-          return { rows, hasHeader: false, format: sep === '\t' ? 'TSV' : 'CSV' };
+          return { rows, format: sep === '\t' ? 'TSV' : 'CSV' };
         }
       }
-      if (lines.length) return { rows: lines.map(l => [l.trim()]), hasHeader: false, format: 'Texto' };
+      if (lines.length) return { rows: lines.map(l => [l.trim()]), format: 'Texto' };
       return null;
     }
 
@@ -575,7 +577,7 @@
         showNotice(`Tabla muy grande: se cargan las primeras ${MAX_ROWS} filas y ${MAX_COLS} columnas.`);
       }
       state.rows = normalize(parsed.rows.map(r => r.slice(0, MAX_COLS))).slice(0, MAX_ROWS);
-      state.hasHeader = parsed.hasHeader;
+      if (typeof parsed.hasHeader === 'boolean') state.hasHeader = parsed.hasHeader;
       state.input = text;
       showBadge(parsed.format);
       persist();

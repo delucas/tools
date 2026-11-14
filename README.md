@@ -36,6 +36,7 @@ Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herra
 | [`guess`](./guess) | Adiviná el número que piensa la máquina, con récord e historial. |
 | [`wand`](./wand) | Tus bookmarklets arrastrables, en cualquier computadora. |
 | [`tick`](./tick) | Cuenta atrás gigante para proyectar, que no deja dormir la pantalla. |
+| [`large-text`](./large-text) | 🔠 Texto grande: indicaciones enormes a pantalla completa, en blanco y negro, para leerlas desde el fondo del aula. |
 | [`chromatic`](./chromatic) | Analizá colores y paletas: contraste, variantes y vista previa de diapositiva. |
 | [`image-inspector`](./image-inspector) | DevTools para imágenes: archivo, hashes, dimensiones, EXIF y más, todo local. |
 | [`fontoscope`](./fontoscope) | Cargá una fuente y mirala en todos sus tamaños, con cobertura Unicode real. |

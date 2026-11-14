@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon"
+    href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1F520%3B%3C/text%3E%3C/svg%3E">
+  <title>Texto grande — Indicaciones a pantalla completa</title>
+
+  <script>
+    // Tema antes del CSS para evitar el parpadeo (clave global `theme`).
+    (() => {
+      let guardado = null;
+      try { guardado = localStorage.getItem('theme'); } catch { /* modo privado */ }
+      const tema = guardado || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-bs-theme', tema);
+    })();
+  </script>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    /* Escenario: colores puros e independientes del tema de la interfaz. */
+    #stage {
+      --stage-bg: #fff;
+      --stage-fg: #000;
+      position: relative;
+      height: clamp(220px, 45vh, 520px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      padding: 4vmin;
+      color: var(--stage-fg);
+      background: var(--stage-bg);
+      border: 1px solid var(--bs-border-color);
+      border-radius: var(--bs-border-radius-lg);
+    }
+
+    body.fondo-oscuro #stage {
+      --stage-bg: #000;
+      --stage-fg: #fff;
+      border-color: #444;
+    }
+
+    #display {
+      width: 100%;
+      margin: 0;
+      font-weight: 700;
+      line-height: 1.1;
+      text-align: center;
+      white-space: pre-wrap;
+      overflow-wrap: normal;
+    }
+
+    /* Solo se parte una palabra si es larguísima (por ejemplo, una URL). */
+    #display.romper-palabras {
+      overflow-wrap: anywhere;
+    }
+
+    #empty-hint {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+      padding: 1rem;
+      text-align: center;
+      opacity: 0.45;
+      pointer-events: none;
+      font-size: 0.95rem;
+    }
+
+    #stage.has-text #empty-hint,
+    body.presenting #empty-hint {
+      display: none;
+    }
+
+    /* Pantalla completa (API o F11): solo el escenario. */
+    body.presenting {
+      overflow: hidden;
+    }
+
+    body.presenting #stage {
+      position: fixed;
+      inset: 0;
+      z-index: 1040;
+      height: 100dvh;
+      padding: 4vmin;
+      border: 0;
+      border-radius: 0;
+    }
+
+    body.presenting main > :not(#stage) {
+      display: none !important;
+    }
+
+    #present-controls {
+      display: none;
+      position: absolute;
+      left: 50%;
+      bottom: 1.25rem;
+      transform: translateX(-50%);
+      z-index: 2;
+      transition: opacity 0.25s ease;
+    }
+
+    body.presenting #present-controls {
+      display: flex;
+    }
+
+    body.presenting.controls-hidden #present-controls {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    body.presenting.controls-hidden {
+      cursor: none;
+    }
+
+    #texto {
+      font-size: 1rem;
+    }
+
+    p.signature {
+      font-size: 0.8em;
+    }
+
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
+  </style>
+</head>
+
+<body>
+  <main class="container py-4">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+    <header class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">🔠 Texto grande</h1>
+        <p class="text-body-secondary mb-0">Mostrá indicaciones enormes en pantalla completa, para leerlas desde el fondo del aula.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="full" class="btn btn-outline-secondary btn-sm" type="button" title="Solo el mensaje, ocupando toda la pantalla (F11 o Esc para salir)">⛶ Pantalla completa</button>
+        <button id="share" class="btn btn-outline-secondary btn-sm" type="button">🔗 Compartir</button>
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </header>
+
+    <div id="notice" class="alert alert-flotante py-2 d-none" role="status"></div>
+
+    <section id="stage" class="my-3" aria-label="Mensaje a proyectar">
+      <div id="display" aria-live="off"></div>
+      <p id="empty-hint">Escribí tu mensaje abajo y se verá acá.</p>
+      <div id="present-controls" class="flex-wrap justify-content-center align-items-center gap-2" role="group" aria-label="Controles de presentación">
+        <button id="pres-fondo" class="btn btn-sm btn-light border shadow-sm" type="button" title="Cambiar el fondo (tecla C)">⚫ Fondo negro</button>
+        <button id="pres-editar" class="btn btn-sm btn-light border shadow-sm d-none" type="button" title="Salir de pantalla completa y editar el mensaje">✏️ Editar</button>
+        <span id="pres-hint" class="badge bg-dark bg-opacity-75">Esc para salir</span>
+      </div>
+    </section>
+
+    <div id="editor" class="card mb-4">
+      <div class="card-body">
+        <label for="texto" class="form-label">Mensaje</label>
+        <textarea id="texto" class="form-control" rows="3" autocomplete="off"
+          placeholder="Ej.: Silencio, por favor. Lean la consigna de la página 42."></textarea>
+        <div class="form-text mb-3">Se ajusta solo al tamaño de la pantalla; Enter agrega una línea.</div>
+
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+          <span class="small text-body-secondary">Mensajes rápidos:</span>
+          <div id="chips" class="d-flex flex-nowrap flex-md-wrap gap-2 overflow-auto">
+            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill text-nowrap flex-shrink-0" data-msg="Silencio, por favor">Silencio</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill text-nowrap flex-shrink-0" data-msg="Lean la consigna">Lean la consigna</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill text-nowrap flex-shrink-0" data-msg="Trabajen en parejas">Trabajen en parejas</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill text-nowrap flex-shrink-0" data-msg="5 minutos">5 minutos</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill text-nowrap flex-shrink-0" data-msg="Guarden todo">Guarden todo</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill text-nowrap flex-shrink-0" data-msg="Preguntas al final">Preguntas al final</button>
+          </div>
+        </div>
+
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <span class="small text-body-secondary">Fondo:</span>
+          <div class="btn-group" role="group" aria-label="Color de fondo de la proyección">
+            <button id="fondo-claro" type="button" class="btn btn-sm btn-secondary" aria-pressed="true">⚪ Blanco</button>
+            <button id="fondo-oscuro" type="button" class="btn btn-sm btn-outline-secondary" aria-pressed="false">⚫ Negro</button>
+          </div>
+          <span class="small text-body-secondary">En pantalla completa, <kbd>C</kbd> cambia el fondo.</span>
+        </div>
+      </div>
+    </div>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <h2 class="h6 mb-3">🧠 Trivias</h2>
+        <details class="mb-2">
+          <summary class="fw-semibold">¿Por qué blanco y negro puros y no grises?</summary>
+          <p class="small text-body-secondary mb-0 mt-1">El par negro/blanco tiene el contraste máximo posible: 21:1. Las pautas WCAG AAA piden 7:1 para texto normal, y un gris claro sobre blanco baja enseguida y se pierde a distancia.</p>
+        </details>
+        <details class="mb-2">
+          <summary class="fw-semibold">¿Cuándo conviene blanco sobre negro?</summary>
+          <p class="small text-body-secondary mb-0 mt-1">El contraste es el mismo, pero un fondo negro emite mucha menos luz: sirve en aulas a oscuras o para no encandilar. A algunas personas el texto claro sobre oscuro les produce halación, por eso conviene poder alternar.</p>
+        </details>
+        <details>
+          <summary class="fw-semibold">¿Por qué el tamaño se calcula solo?</summary>
+          <p class="small text-body-secondary mb-0 mt-1">Un proyector, una TV y un celular tienen resoluciones y relaciones de aspecto distintas. En vez de fijar píxeles, la página mide cuánto ocupa el texto y busca el mayor tamaño que entre completo.</p>
+        </details>
+      </div>
+    </section>
+
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'large-text';
+      const DEFAULT = { texto: '', fondo: 'claro' };
+
+      const textoEl = document.getElementById('texto');
+      const display = document.getElementById('display');
+      const stage = document.getElementById('stage');
+      const notice = document.getElementById('notice');
+      const fullBtn = document.getElementById('full');
+      const shareBtn = document.getElementById('share');
+      const resetBtn = document.getElementById('reset');
+      const fondoClaro = document.getElementById('fondo-claro');
+      const fondoOscuro = document.getElementById('fondo-oscuro');
+      const presFondo = document.getElementById('pres-fondo');
+      const presEditar = document.getElementById('pres-editar');
+      const presHint = document.getElementById('pres-hint');
+
+      let estado = { ...DEFAULT };
+      let fromUrl = false;
+      let saveTimer;
+      let noticeTimer;
+      let hideTimer;
+      let enfocarAlSalir = false;
+
+      /* ---------- Avisos ---------- */
+
+      function aviso(msg, tipo = 'ok') {
+        clearTimeout(noticeTimer);
+        notice.textContent = msg;
+        notice.className = `alert alert-flotante py-2 alert-${tipo === 'error' ? 'danger' : 'success'}`;
+        noticeTimer = setTimeout(() => notice.classList.add('d-none'), 2500);
+      }
+
+      /* ---------- Estado: URL > localStorage > defaults ---------- */
+
+      function cargar() {
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('texto') || params.has('fondo')) {
+          fromUrl = true;
+          return {
+            texto: params.get('texto') || '',
+            fondo: params.get('fondo') === 'oscuro' ? 'oscuro' : 'claro'
+          };
+        }
+        try {
+          const guardado = JSON.parse(localStorage.getItem(STORAGE_KEY));
+          if (guardado && typeof guardado.texto === 'string') {
+            return {
+              texto: guardado.texto,
+              fondo: guardado.fondo === 'oscuro' ? 'oscuro' : 'claro'
+            };
+          }
+        } catch { /* modo privado o JSON roto */ }
+        return { ...DEFAULT };
+      }
+
+      function guardar() {
+        // Un link compartido no debe pisar lo guardado en este navegador.
+        if (fromUrl) return;
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(() => {
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(estado)); } catch { /* modo privado */ }
+        }, 250);
+      }
+
+      /* ---------- Pintar ---------- */
+
+      function pintarFondo() {
+        const oscuro = estado.fondo === 'oscuro';
+        document.body.classList.toggle('fondo-oscuro', oscuro);
+        fondoClaro.classList.toggle('btn-secondary', !oscuro);
+        fondoClaro.classList.toggle('btn-outline-secondary', oscuro);
+        fondoOscuro.classList.toggle('btn-secondary', oscuro);
+        fondoOscuro.classList.toggle('btn-outline-secondary', !oscuro);
+        fondoClaro.setAttribute('aria-pressed', String(!oscuro));
+        fondoOscuro.setAttribute('aria-pressed', String(oscuro));
+        presFondo.textContent = oscuro ? '⚪ Fondo blanco' : '⚫ Fondo negro';
+      }
+
+      // Busca el mayor tamaño de letra que entre completo, sin desbordar en ancho ni alto.
+      function ajustar() {
+        display.style.fontSize = '16px';
+        if (!estado.texto.trim()) return;
+
+        const cs = getComputedStyle(stage);
+        const alto = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+        const ancho = stage.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+        if (alto <= 0 || ancho <= 0) return;
+
+        let bajo = 8;
+        let altoMax = Math.min(Math.max(16, alto * 1.5), 2000);
+        let mejor = bajo;
+        for (let i = 0; i < 18; i++) {
+          const medio = (bajo + altoMax) / 2;
+          display.style.fontSize = `${medio}px`;
+          const entra = display.offsetHeight <= alto + 1 && display.scrollWidth <= ancho + 1;
+          if (entra) { mejor = medio; bajo = medio; } else { altoMax = medio; }
+        }
+        display.style.fontSize = `${Math.max(8, Math.floor(mejor))}px`;
+      }
+
+      function actualizarDisplay() {
+        display.textContent = estado.texto;
+        stage.classList.toggle('has-text', Boolean(estado.texto.trim()));
+        const masLarga = estado.texto.split(/\s+/).reduce((max, palabra) => Math.max(max, palabra.length), 0);
+        display.classList.toggle('romper-palabras', masLarga > 30);
+      }
+
+      function pintarTexto() {
+        actualizarDisplay();
+        ajustar();
+      }
+
+      /* ---------- Pantalla completa / presentación ---------- */
+
+      function esImmersivo() {
+        const api = Boolean(document.fullscreenElement);
+        // F11 no expone API: se detecta porque la ventana ocupa toda la pantalla.
+        // Solo en dispositivos con mouse, para no confundirlo con el alto del celular.
+        const escritorio = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+        const f11 = escritorio && Math.abs(window.innerHeight - window.screen.height) <= 2;
+        return { api, presentando: api || f11 };
+      }
+
+      function mostrarControles() {
+        document.body.classList.remove('controls-hidden');
+        clearTimeout(hideTimer);
+        if (document.body.classList.contains('presenting')) {
+          hideTimer = setTimeout(() => document.body.classList.add('controls-hidden'), 3000);
+        }
+      }
+
+      function actualizarPresentacion() {
+        const { api, presentando } = esImmersivo();
+        document.body.classList.toggle('presenting', presentando);
+        presEditar.classList.toggle('d-none', !api);
+        presHint.textContent = api ? 'Esc para salir' : 'F11 para salir';
+        if (presentando) mostrarControles();
+        else {
+          clearTimeout(hideTimer);
+          document.body.classList.remove('controls-hidden');
+          if (enfocarAlSalir) {
+            enfocarAlSalir = false;
+            textoEl.focus();
+          }
+        }
+        requestAnimationFrame(ajustar);
+      }
+
+      /* ---------- Eventos ---------- */
+
+      textoEl.addEventListener('input', () => {
+        estado.texto = textoEl.value;
+        actualizarDisplay();
+        requestAnimationFrame(ajustar);
+        guardar();
+      });
+
+      document.querySelectorAll('#chips [data-msg]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          estado.texto = btn.dataset.msg;
+          textoEl.value = estado.texto;
+          pintarTexto();
+          guardar();
+          textoEl.focus();
+        });
+      });
+
+      fondoClaro.addEventListener('click', () => {
+        if (estado.fondo === 'claro') return;
+        estado.fondo = 'claro';
+        pintarFondo();
+        guardar();
+      });
+
+      fondoOscuro.addEventListener('click', () => {
+        if (estado.fondo === 'oscuro') return;
+        estado.fondo = 'oscuro';
+        pintarFondo();
+        guardar();
+      });
+
+      presFondo.addEventListener('click', () => {
+        estado.fondo = estado.fondo === 'oscuro' ? 'claro' : 'oscuro';
+        pintarFondo();
+        guardar();
+        mostrarControles();
+      });
+
+      presEditar.addEventListener('click', async () => {
+        enfocarAlSalir = true;
+        try {
+          if (document.fullscreenElement) await document.exitFullscreen();
+        } catch { /* sin fullscreen */ }
+        // Si no hubo evento (o el navegador no salió), se enfoca igual.
+        if (!document.fullscreenElement) actualizarPresentacion();
+      });
+
+      fullBtn.addEventListener('click', async () => {
+        try {
+          if (document.fullscreenElement) await document.exitFullscreen();
+          else await document.documentElement.requestFullscreen();
+        } catch {
+          aviso('No se pudo cambiar a pantalla completa.', 'error');
+        }
+      });
+
+      document.addEventListener('keydown', (e) => {
+        const activo = document.activeElement;
+        const escribiendo = /^(INPUT|TEXTAREA|SELECT)$/.test(activo?.tagName) || activo?.isContentEditable;
+        if (escribiendo || e.ctrlKey || e.metaKey || e.altKey) return;
+        if (e.key === 'c' || e.key === 'C') {
+          e.preventDefault();
+          estado.fondo = estado.fondo === 'oscuro' ? 'claro' : 'oscuro';
+          pintarFondo();
+          guardar();
+          mostrarControles();
+        }
+      });
+
+      ['mousemove', 'touchstart', 'click', 'keydown'].forEach((evento) => {
+        document.addEventListener(evento, mostrarControles, { passive: true });
+      });
+
+      shareBtn.addEventListener('click', async () => {
+        const url = new URL(window.location.href);
+        url.search = '';
+        url.searchParams.set('texto', estado.texto);
+        url.searchParams.set('fondo', estado.fondo);
+        try {
+          if (!navigator.clipboard?.writeText) throw new Error('Sin portapapeles');
+          await navigator.clipboard.writeText(url.toString());
+          aviso('Link copiado con el mensaje.');
+        } catch {
+          aviso('No se pudo copiar el link.', 'error');
+        }
+      });
+
+      let resetArmada = false, resetTimer;
+      function resetDesarmar() {
+        resetArmada = false;
+        resetBtn.textContent = '🗑️ Reiniciar';
+        resetBtn.classList.remove('btn-danger');
+        resetBtn.classList.add('btn-outline-secondary');
+      }
+      resetBtn.addEventListener('click', () => {
+        if (!resetArmada) {
+          resetArmada = true;
+          resetBtn.textContent = '¿Seguro? Tocá de nuevo';
+          resetBtn.classList.remove('btn-outline-secondary');
+          resetBtn.classList.add('btn-danger');
+          clearTimeout(resetTimer);
+          resetTimer = setTimeout(resetDesarmar, 5000);
+          return;
+        }
+        clearTimeout(resetTimer);
+        resetDesarmar();
+        try { localStorage.removeItem(STORAGE_KEY); } catch { /* modo privado */ }
+        estado = { ...DEFAULT };
+        fromUrl = false;
+        textoEl.value = '';
+        pintarFondo();
+        pintarTexto();
+        history.replaceState(null, '', window.location.pathname + window.location.hash);
+        aviso('Todo listo para empezar de nuevo.');
+        textoEl.focus();
+      });
+
+      const root = document.documentElement;
+      const themeBtn = document.getElementById('theme-toggle');
+      const applyTheme = (t) => {
+        root.setAttribute('data-bs-theme', t);
+        themeBtn.textContent = t === 'dark' ? '☀️' : '🌙';
+      };
+      applyTheme(root.getAttribute('data-bs-theme') || 'light');
+      themeBtn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        try { localStorage.setItem('theme', next); } catch { /* modo privado */ }
+        applyTheme(next);
+      });
+
+      window.addEventListener('resize', actualizarPresentacion);
+      document.addEventListener('fullscreenchange', actualizarPresentacion);
+
+      /* ---------- Inicio ---------- */
+
+      estado = cargar();
+      textoEl.value = estado.texto;
+      pintarFondo();
+      pintarTexto();
+      actualizarPresentacion();
+      document.fonts?.ready.then(() => requestAnimationFrame(ajustar));
+    })();
+  </script>
+</body>
+
+</html>

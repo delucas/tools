@@ -4,6 +4,15 @@ Colección de herramientas web autocontenidas: cada una es un único `index.html
 
 Ver [`AGENTS.md`](./AGENTS.md) para los lineamientos de cómo se arma cada herramienta. El índice raíz renderiza el catálogo con Vue desde el bloque JSON `#catalogo` de `index.html`: ahí se definen las secciones y a cuál pertenece cada herramienta.
 
+## Instalable en el celular
+
+El índice es una PWA mínima: `manifest.webmanifest`, `icons/` y `sw.js` en la raíz. En Android/Chrome aparece el botón **📲 Instalar**; en iOS/Safari se usa **Compartir → Agregar a inicio**.
+
+- El service worker precarga el índice y cachea cada herramienta (con sus CDN) la primera vez que se abre; después funcionan sin conexión.
+- Una herramienta que nunca se abrió no está en caché: sin red, esa URL muestra el catálogo.
+- Al cambiar archivos del sitio, subir `VERSION` en `sw.js` para invalidar la caché anterior.
+- Probar en local con `make serve` y abrir `http://localhost:5050/` (el service worker necesita `localhost` o HTTPS).
+
 ## Herramientas
 
 | Herramienta | Descripción |

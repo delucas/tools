@@ -5,6 +5,13 @@
   <meta charset="UTF-8">
   <meta name="author" content="Lucas Videla">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#212529" media="(prefers-color-scheme: dark)">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Herramientas">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f9f0%3B%3C/text%3E%3C/svg%3E">
 
   <title>Herramientas de Lucas Videla</title>
@@ -50,13 +57,20 @@
         <h1 class="h3 mb-1">🧰 Herramientas</h1>
         <p class="text-body-secondary mb-0">por Lucas Videla (<a href="https://github.com/delucas" target="_blank" rel="noopener">@delucas</a>)</p>
       </div>
-      <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      <div class="d-flex align-items-center gap-2 ms-auto">
+        <button id="install-btn" class="btn btn-outline-secondary btn-sm d-none" type="button">📲 Instalar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
     </div>
 
     <p style="max-width: 640px;">
       Colección de herramientas minimalistas: gratis, sin cuentas, sin backend ni tracking.
       Cada una es una página autocontenida que corre entera en tu navegador.
     </p>
+
+    <div id="ios-install" class="alert alert-info py-2 small d-none" role="note">
+      📲 Para tener las herramientas en el celular: tocá <strong>Compartir</strong> y elegí <strong>Agregar a inicio</strong>.
+    </div>
 
     <div id="catalogo-app" v-cloak>
       <div class="sticky-top bg-body py-2 my-3">
@@ -650,6 +664,47 @@
       });
 
       refreshStatus();
+    })();
+
+    // PWA: registrar el service worker y ofrecer la instalación cuando el navegador la permita.
+    (() => {
+      const btn = document.getElementById('install-btn');
+      const ios = document.getElementById('ios-install');
+      const ua = navigator.userAgent;
+      // iPadOS se presenta como Macintosh, pero con pantalla táctil.
+      const esIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(ua));
+      const instalada = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('sw.js').catch(() => { /* sin service worker el sitio sigue andando */ });
+        });
+      }
+
+      if (instalada) return;
+
+      // iOS no dispara beforeinstallprompt: se muestra la instrucción manual.
+      if (esIOS) ios.classList.remove('d-none');
+
+      let prompt = null;
+      window.addEventListener('beforeinstallprompt', (event) => {
+        event.preventDefault();
+        prompt = event;
+        btn.classList.remove('d-none');
+      });
+
+      btn.addEventListener('click', async () => {
+        if (!prompt) return;
+        prompt.prompt();
+        await prompt.userChoice;
+        prompt = null;
+        btn.classList.add('d-none');
+      });
+
+      window.addEventListener('appinstalled', () => {
+        btn.classList.add('d-none');
+        ios.classList.add('d-none');
+      });
     })();
   </script>
 </body>

@@ -5,7 +5,7 @@
   <meta name="author" content="Lucas Videla">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f4f0%3B%3C/text%3E%3C/svg%3E">
-  <title>MarkPress — editor markdown a PDF</title>
+  <title>MarkPress — editor markdown a PDF y ODT</title>
 
   <script>
     // Tema antes del CSS para evitar el parpadeo (clave global `theme`).
@@ -156,12 +156,13 @@
     <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
       <div>
         <h1 class="h3 mb-1 text-start">MarkPress</h1>
-        <p class="text-body-secondary mb-0">Editor markdown de dos paneles: escribí, previsualizá y sacá el PDF.</p>
+        <p class="text-body-secondary mb-0">Editor markdown de dos paneles: escribí, previsualizá y exportá a PDF o Writer.</p>
       </div>
       <div class="d-flex flex-wrap gap-2">
         <button id="open" class="btn btn-outline-secondary btn-sm" type="button">📂 Abrir</button>
         <button id="save" class="btn btn-outline-secondary btn-sm" type="button">💾 Guardar</button>
         <button id="pdf" class="btn btn-outline-secondary btn-sm" type="button">🖨️ PDF</button>
+        <button id="odt" class="btn btn-outline-secondary btn-sm" type="button">📝 Writer</button>
         <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
         <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
       </div>
@@ -202,7 +203,8 @@
       <summary class="text-body-secondary">Sintaxis soportada</summary>
       <div class="mt-2 small">
         <p class="mb-2">Markdown estándar y tablas estilo GitHub. LaTeX con <code>$...$</code> en línea y <code>$$...$$</code> en bloque. Si una fórmula falla, se muestra el texto original y el detalle queda en la consola.</p>
-        <p class="mb-0">El botón <code>🖨️ PDF</code> abre el diálogo de impresión con el documento ya optimizado: elegí "Guardar como PDF" para obtener un PDF vectorial en A4. El borrador se guarda automáticamente en este navegador.</p>
+        <p class="mb-2">El botón <code>🖨️ PDF</code> abre el diálogo de impresión con el documento ya optimizado: elegí "Guardar como PDF" para obtener un PDF vectorial en A4. El borrador se guarda automáticamente en este navegador.</p>
+        <p class="mb-0">El botón <code>📝 Writer</code> descarga un <code>.odt</code> listo para abrir y editar en LibreOffice Writer, con formato directo (sin estilos con nombre) y A4. Las fórmulas se convierten a texto con símbolos Unicode y las imágenes quedan como su texto alternativo: en ambos casos el original sigue disponible en el Markdown.</p>
       </div>
     </details>
 
@@ -216,6 +218,9 @@
     crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.18.6/katex.min.js"
     integrity="sha512-R6ebU8e1iPsUu+8q3BMGd8M7DyKQcB2lVvWSyTC1RK7O3ywVWCbHDr4a9C10w3HNbYvhxiRtIwjE5w3hPRwzRw=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"
+    integrity="sha512-8l6PLZDUdQBuIjsM0vEKUCup9KP+EsB6NlvUtFrDneI1JoIvIJGmxIoiq0qnA31BeKdAwYcTk0TQg71AX9HgRA=="
     crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
   <script>
@@ -331,11 +336,10 @@ $$f(x) = \\begin{cases}
 
     // Extrae segmentos (matemática display/inline y código) antes de marked.parse
     // y los restaura después, para que el parser no los deforme.
-    function renderMarkdown(markdown) {
+    function extraerSegmentos(markdown) {
       const display = [];
       const inline = [];
       const code = [];
-      let mathErrors = 0;
 
       // Bloques de código cercados: se restauran como <pre><code> escapado.
       let text = markdown.replace(/```(\w*)\n([\s\S]*?)(?:\n```|$)/g, (_, lang, body) => {
@@ -358,6 +362,13 @@ $$f(x) = \\begin{cases}
         inline.push(body.trim());
         return `MKPMATHI${inline.length - 1}MKP`;
       });
+
+      return { text, display, inline, code };
+    }
+
+    function renderMarkdown(markdown) {
+      const { text, display, inline, code } = extraerSegmentos(markdown);
+      let mathErrors = 0;
 
       let html = marked.parse(text);
 
@@ -440,6 +451,457 @@ $$f(x) = \\begin{cases}
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
+    // ---------- Exportar a LibreOffice Writer (.odt) ----------
+    // Genera un ODT real (ZIP sin compresión, sin dependencias) con formato
+    // directo: tamaños, negritas y márgenes como atributos del texto, sin
+    // estilos con nombre. Writer lo abre editable con su aspecto estándar.
+
+    const NAMESPACIOS_ODF = [
+      'xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"',
+      'xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"',
+      'xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"',
+      'xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"',
+      'xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"',
+      'xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"',
+      'xmlns:xlink="http://www.w3.org/1999/xlink"',
+      'xmlns:dc="http://purl.org/dc/elements/1.1/"',
+      'xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0"',
+      'xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0"'
+    ].join('\n    ');
+
+    const SIMBOLOS_LATEX = {
+      alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ε', varepsilon: 'ε', zeta: 'ζ', eta: 'η',
+      theta: 'θ', vartheta: 'ϑ', iota: 'ι', kappa: 'κ', lambda: 'λ', mu: 'μ', nu: 'ν', xi: 'ξ', pi: 'π',
+      rho: 'ρ', sigma: 'σ', tau: 'τ', upsilon: 'υ', phi: 'φ', varphi: 'φ', chi: 'χ', psi: 'ψ', omega: 'ω',
+      Gamma: 'Γ', Delta: 'Δ', Theta: 'Θ', Lambda: 'Λ', Xi: 'Ξ', Pi: 'Π', Sigma: 'Σ', Phi: 'Φ', Psi: 'Ψ', Omega: 'Ω',
+      cdot: '·', times: '×', div: '÷', pm: '±', mp: '∓', leq: '≤', le: '≤', geq: '≥', ge: '≥', neq: '≠', ne: '≠',
+      approx: '≈', equiv: '≡', sim: '∼', propto: '∝', in: '∈', notin: '∉', ni: '∋', subset: '⊂', supset: '⊃',
+      subseteq: '⊆', cup: '∪', cap: '∩', emptyset: '∅', forall: '∀', exists: '∃', neg: '¬', land: '∧', lor: '∨',
+      infty: '∞', partial: '∂', nabla: '∇', sum: '∑', prod: '∏', int: '∫', oint: '∮', sqrt: '√',
+      to: '→', rightarrow: '→', leftarrow: '←', leftrightarrow: '↔', Rightarrow: '⇒', Leftarrow: '⇐',
+      Leftrightarrow: '⇔', mapsto: '↦', ldots: '…', cdots: '⋯', dots: '…', quad: ' ', qquad: '  ',
+      langle: '⟨', rangle: '⟩', lceil: '⌈', rceil: '⌉', lfloor: '⌊', rfloor: '⌋', circ: '∘', degree: '°',
+      angle: '∠', perp: '⊥', parallel: '∥', '%': '%', '&': '&', '#': '#', _: '_', '{': '{', '}': '}', '$': '$'
+    };
+
+    const SUPERINDICES = {
+      '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+      '+': '⁺', '-': '⁻', '=': '⁼', '(': '⁽', ')': '⁾', a: 'ᵃ', b: 'ᵇ', c: 'ᶜ', d: 'ᵈ', e: 'ᵉ', f: 'ᶠ',
+      g: 'ᵍ', h: 'ʰ', i: 'ⁱ', j: 'ʲ', k: 'ᵏ', l: 'ˡ', m: 'ᵐ', n: 'ⁿ', o: 'ᵒ', p: 'ᵖ', r: 'ʳ', s: 'ˢ', t: 'ᵗ',
+      u: 'ᵘ', v: 'ᵛ', w: 'ʷ', x: 'ˣ', y: 'ʸ', z: 'ᶻ'
+    };
+
+    const SUBINDICES = {
+      '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄', '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉',
+      '+': '₊', '-': '₋', '=': '₌', '(': '₍', ')': '₎', a: 'ₐ', e: 'ₑ', h: 'ₕ', i: 'ᵢ', j: 'ⱼ', k: 'ₖ',
+      l: 'ₗ', m: 'ₘ', n: 'ₙ', o: 'ₒ', p: 'ₚ', r: 'ᵣ', s: 'ₛ', t: 'ₜ', u: 'ᵤ', v: 'ᵥ', x: 'ₓ'
+    };
+
+    // Traduce LaTeX a texto plano con símbolos Unicode: no hay fórmulas
+    // editables en el ODT, así que se privilegia que se lea bien.
+    function convertirLatex(fuente) {
+      const s = String(fuente);
+      let i = 0;
+
+      function espacios() {
+        while (i < s.length && /\s/.test(s[i])) i++;
+      }
+
+      function crudo() {
+        espacios();
+        if (s[i] !== '{') return argumento();
+        let nivel = 0;
+        const inicio = ++i;
+        while (i < s.length) {
+          if (s[i] === '{') nivel++;
+          else if (s[i] === '}') {
+            if (nivel === 0) break;
+            nivel--;
+          }
+          i++;
+        }
+        const texto = s.slice(inicio, i);
+        if (s[i] === '}') i++;
+        return texto;
+      }
+
+      function argumento() {
+        espacios();
+        if (s[i] === '{') {
+          i++;
+          const texto = cuerpo('}');
+          if (s[i] === '}') i++;
+          return texto;
+        }
+        if (s[i] === '\\') return secuencia();
+        if (i < s.length) return s[i++];
+        return '';
+      }
+
+      function guionizar(texto, mapa, marca) {
+        const limpio = texto.replace(/\s+/g, '');
+        if (limpio && [...limpio].every(c => mapa[c] !== undefined)) return [...limpio].map(c => mapa[c]).join('');
+        return limpio.length === 1 ? marca + limpio : `${marca}(${texto.trim()})`;
+      }
+
+      function envolver(texto) {
+        return /^[\w.,]+$/.test(texto) ? texto : `(${texto.trim()})`;
+      }
+
+      function secuencia() {
+        i++;
+        if (i >= s.length) return '';
+        const c = s[i];
+        if (c === '\\') { i++; return ' ; '; }
+        if (/[,;:!>]/.test(c)) { i++; return ' '; }
+        if (c === ' ') { i++; return ' '; }
+        if (!/[a-zA-Z]/.test(c)) {
+          i++;
+          return SIMBOLOS_LATEX[c] !== undefined ? SIMBOLOS_LATEX[c] : c;
+        }
+        const inicio = i;
+        while (i < s.length && /[a-zA-Z]/.test(s[i])) i++;
+        const nombre = s.slice(inicio, i);
+        if (nombre === 'frac') return `${envolver(argumento())}/${envolver(argumento())}`;
+        if (nombre === 'sqrt') {
+          espacios();
+          let indice = '';
+          if (s[i] === '[') {
+            const cierre = s.indexOf(']', i);
+            if (cierre > -1) { indice = s.slice(i + 1, cierre); i = cierre + 1; }
+          }
+          const radicando = argumento();
+          return (indice ? guionizar(indice, SUPERINDICES, '^') : '') + '√' + envolver(radicando);
+        }
+        if (['text', 'textrm', 'textnormal', 'textup', 'textit', 'textbf', 'mbox', 'operatorname', 'mathrm'].includes(nombre)) return crudo();
+        if (nombre === 'mathbb') {
+          const doble = { R: 'ℝ', N: 'ℕ', Z: 'ℤ', Q: 'ℚ', C: 'ℂ', P: 'ℙ', H: 'ℍ' };
+          return crudo().replace(/[A-Z]/g, letra => doble[letra] || letra);
+        }
+        if (nombre === 'begin' || nombre === 'end') {
+          crudo();
+          return nombre === 'end' ? ' ' : '';
+        }
+        if (['vec', 'overline', 'hat', 'bar', 'tilde', 'dot', 'ddot'].includes(nombre)) return argumento();
+        if (['displaystyle', 'textstyle', 'scriptstyle', 'limits', 'nolimits', 'left', 'right'].includes(nombre)) return '';
+        if (SIMBOLOS_LATEX[nombre] !== undefined) return SIMBOLOS_LATEX[nombre];
+        return nombre;
+      }
+
+      function cuerpo(fin) {
+        let salida = '';
+        while (i < s.length) {
+          const c = s[i];
+          if (fin && c === fin) break;
+          if (c === '{') { i++; salida += cuerpo('}'); if (s[i] === '}') i++; continue; }
+          if (c === '}') { i++; continue; }
+          if (c === '^') { i++; salida += guionizar(argumento(), SUPERINDICES, '^'); continue; }
+          if (c === '_') { i++; salida += guionizar(argumento(), SUBINDICES, '_'); continue; }
+          if (c === '&') { i++; salida += ' '; continue; }
+          if (c === '~') { i++; salida += ' '; continue; }
+          if (c === '\\') { salida += secuencia(); continue; }
+          salida += c;
+          i++;
+        }
+        return salida;
+      }
+
+      return cuerpo('').replace(/[ \t]+/g, ' ').trim();
+    }
+
+    // El ZIP lo arma fflate (CDN); acá solo se define el contenido del ODT.
+    // `mimetype` va primero y sin comprimir, como pide el formato.
+    function empaquetarZip(archivos) {
+      const entradas = {};
+      for (const archivo of archivos) {
+        const nivel = archivo.nombre === 'mimetype' ? 0 : 6;
+        entradas[archivo.nombre] = [fflate.strToU8(archivo.contenido), { level: nivel }];
+      }
+      return new Blob([fflate.zipSync(entradas)], { type: 'application/vnd.oasis.opendocument.text' });
+    }
+
+    function crearDocumentoOdt(markdown, nombre, justificar) {
+      const ex = extraerSegmentos(markdown);
+      const autos = [];
+      const cache = new Map();
+      let contador = 0;
+
+      function estilo(clave, generar) {
+        if (cache.has(clave)) return cache.get(clave);
+        const nombreEstilo = 'A' + (++contador);
+        cache.set(clave, nombreEstilo);
+        autos.push(generar(nombreEstilo));
+        return nombreEstilo;
+      }
+
+      function attrs(lista) {
+        return lista.length ? ' ' + lista.join(' ') : '';
+      }
+
+      function estiloTexto(fmt) {
+        const propiedades = [];
+        if (fmt.bold) propiedades.push('fo:font-weight="bold"');
+        if (fmt.italic) propiedades.push('fo:font-style="italic"');
+        if (fmt.mono) propiedades.push('fo:font-family="Liberation Mono"', 'fo:font-size="10pt"');
+        if (fmt.strike) propiedades.push('style:text-line-through-style="solid"');
+        if (!propiedades.length) return null;
+        const clave = 'T:' + propiedades.join('|');
+        return estilo(clave, nombreEstilo =>
+          `<style:style style:name="${nombreEstilo}" style:family="text"><style:text-properties${attrs(propiedades)}/></style:style>`);
+      }
+
+      function estiloParrafo(op) {
+        const clave = 'P:' + JSON.stringify(op);
+        return estilo(clave, nombreEstilo => {
+          const parrafo = [];
+          if (op.align) parrafo.push(`fo:text-align="${op.align}"`);
+          if (op.mt) parrafo.push(`fo:margin-top="${op.mt}"`);
+          if (op.mb) parrafo.push(`fo:margin-bottom="${op.mb}"`);
+          if (op.indent) parrafo.push(`fo:margin-left="${op.indent}"`);
+          if (op.borderBottom) parrafo.push(`fo:border-bottom="${op.borderBottom}"`, 'fo:padding-bottom="0.1cm"');
+          if (op.outline) parrafo.push(`style:default-outline-level="${op.outline}"`);
+          const texto = [];
+          if (op.size) texto.push(`fo:font-size="${op.size}"`);
+          if (op.bold) texto.push('fo:font-weight="bold"');
+          if (op.italic) texto.push('fo:font-style="italic"');
+          if (op.family) texto.push(`fo:font-family="${op.family}"`);
+          if (op.color) texto.push(`fo:color="${op.color}"`);
+          return `<style:style style:name="${nombreEstilo}" style:family="paragraph">`
+            + `<style:paragraph-properties${attrs(parrafo)}/><style:text-properties${attrs(texto)}/></style:style>`;
+        });
+      }
+
+      function conFormato(texto, fmt) {
+        if (!texto) return '';
+        const nombreEstilo = estiloTexto(fmt);
+        const seguro = escapeHtml(texto);
+        return nombreEstilo ? `<text:span text:style-name="${nombreEstilo}">${seguro}</text:span>` : seguro;
+      }
+
+      function textoConMarcas(texto, fmt) {
+        return texto.split(/(MKPMATHD\d+MKP|MKPMATHI\d+MKP|MKPCODE\d+MKP)/).filter(Boolean).map(trozo => {
+          const marca = /^MKP(MATHD|MATHI|CODE)(\d+)MKP$/.exec(trozo);
+          if (!marca) return conFormato(trozo, fmt);
+          const indice = Number(marca[2]);
+          if (marca[1] === 'CODE') {
+            const cuerpo = ex.code[indice] || {};
+            if (cuerpo.inline) return conFormato(cuerpo.body, { ...fmt, mono: true });
+            return (cuerpo.body || '').split('\n').map(linea => conFormato(linea, { ...fmt, mono: true })).join('<text:line-break/>');
+          }
+          if (marca[1] === 'MATHI') return conFormato(convertirLatex(ex.inline[indice] || ''), { ...fmt, italic: true });
+          return conFormato(` ${convertirLatex(ex.display[indice] || '')} `, { ...fmt, italic: true });
+        }).join('');
+      }
+
+      function inline(tokens, fmt) {
+        return (tokens || []).map(token => {
+          switch (token.type) {
+            case 'text':
+              return token.tokens ? inline(token.tokens, fmt) : textoConMarcas(token.text || '', fmt);
+            case 'strong': return inline(token.tokens, { ...fmt, bold: true });
+            case 'em': return inline(token.tokens, { ...fmt, italic: true });
+            case 'del': return inline(token.tokens, { ...fmt, strike: true });
+            case 'codespan': return conFormato(token.text || '', { ...fmt, mono: true });
+            case 'escape': return conFormato(token.text || '', fmt);
+            case 'br': return '<text:line-break/>';
+            case 'link':
+              return `<text:a xlink:type="simple" xlink:href="${escapeHtml(token.href || '')}">${inline(token.tokens, fmt)}</text:a>`;
+            case 'image':
+              return conFormato(token.text || token.href || '', { ...fmt, italic: true });
+            case 'html': return '';
+            default: return conFormato(token.text || token.raw || '', fmt);
+          }
+        }).join('');
+      }
+
+      function parrafo(contenido, op) {
+        return `<text:p text:style-name="${estiloParrafo(op)}">${contenido}</text:p>`;
+      }
+
+      function opCuerpo(extra = {}) {
+        const op = { mb: '0.25cm' };
+        if (justificar) op.align = 'justify';
+        Object.entries(extra).forEach(([clave, valor]) => {
+          if (valor !== undefined && valor !== null) op[clave] = valor;
+        });
+        return op;
+      }
+
+      const TAM_TITULO = { 1: '18pt', 2: '15pt', 3: '13pt', 4: '12pt', 5: '12pt', 6: '11pt' };
+
+      function bloque(token, ctx = {}) {
+        switch (token.type) {
+          case 'heading':
+            return parrafo(inline(token.tokens, {}), {
+              size: TAM_TITULO[token.depth] || '12pt',
+              bold: true,
+              family: 'Liberation Sans',
+              mt: token.depth === 1 ? '0.2cm' : '0.4cm',
+              mb: '0.25cm',
+              outline: token.depth,
+              indent: ctx.indent
+            });
+          case 'paragraph': {
+            const soloFormula = /^MKPMATHD(\d+)MKP$/.exec((token.text || '').trim());
+            if (soloFormula) {
+              return parrafo(conFormato(convertirLatex(ex.display[Number(soloFormula[1])] || ''), { italic: true }),
+                { align: 'center', mt: '0.2cm', mb: '0.35cm', indent: ctx.indent });
+            }
+            const soloCodigo = /^MKPCODE(\d+)MKP$/.exec((token.text || '').trim());
+            if (soloCodigo) {
+              const cuerpo = ex.code[Number(soloCodigo[1])] || {};
+              return parrafo((cuerpo.body || '').split('\n').map(linea => conFormato(linea, { mono: true })).join('<text:line-break/>'),
+                opCuerpo({ align: 'left', indent: '0.3cm', mb: '0.35cm' }));
+            }
+            const contenido = inline(token.tokens, {});
+            const op = opCuerpo({ indent: ctx.indent, mt: ctx.mt });
+            // Un salto de línea dentro del párrafo dejaría el renglón anterior
+            // estirado si el texto fuese justificado.
+            if (contenido.includes('<text:line-break/>')) op.align = 'left';
+            return parrafo(contenido, op);
+          }
+          case 'code':
+            return parrafo(token.text.split('\n').map(linea => conFormato(linea, { mono: true })).join('<text:line-break/>'),
+              opCuerpo({ align: 'left', indent: '0.3cm', mb: '0.35cm' }));
+          case 'blockquote': {
+            const nivel = (ctx.nivel || 0) + 1;
+            return bloques(token.tokens, { ...ctx, nivel, indent: `${0.7 * nivel}cm`, mt: '0.15cm' });
+          }
+          case 'list': return lista(token, ctx);
+          case 'table': return tabla(token, ctx);
+          case 'hr':
+            return parrafo('', { borderBottom: '0.75pt solid #000000', mt: '0.4cm', mb: '0.4cm' });
+          case 'text': return parrafo(inline(token.tokens, {}), opCuerpo({ indent: ctx.indent }));
+          default: return '';
+        }
+      }
+
+      function bloques(tokens, ctx) {
+        return (tokens || []).map(token => bloque(token, ctx)).join('');
+      }
+
+      function lista(token, ctx) {
+        const estiloLista = token.ordered ? 'ListaNumerada' : 'ListaVineta';
+        const items = (token.items || []).map(item => {
+          let contenido = '';
+          for (const hijo of item.tokens || []) {
+            if (hijo.type === 'list') contenido += lista(hijo, { ...ctx, nivel: (ctx.nivel || 0) + 1 });
+            else if (hijo.type === 'text') contenido += parrafo(inline(hijo.tokens, {}), opCuerpo({ mb: '0.05cm', indent: ctx.indent }));
+            else contenido += bloque(hijo, ctx);
+          }
+          return `<text:list-item>${contenido || '<text:p/>'}</text:list-item>`;
+        }).join('');
+        return `<text:list text:style-name="${estiloLista}">${items}</text:list>`;
+      }
+
+      let tablas = 0;
+
+      function tabla(token, ctx) {
+        const filas = [token.header || [], ...(token.rows || [])];
+        const columnas = Math.max(1, ...filas.map(fila => fila.length));
+        const ancho = (17 / columnas).toFixed(2);
+        const estiloColumna = estilo('C:' + ancho, nombreEstilo =>
+          `<style:style style:name="${nombreEstilo}" style:family="table-column"><style:table-column-properties style:column-width="${ancho}cm"/></style:style>`);
+        const estiloTabla = estilo('TB', nombreEstilo =>
+          `<style:style style:name="${nombreEstilo}" style:family="table"><style:table-properties style:width="17cm" table:align="margins" fo:margin-top="0.2cm" fo:margin-bottom="0.4cm"/></style:style>`);
+        const estiloCelda = estilo('TC', nombreEstilo =>
+          `<style:style style:name="${nombreEstilo}" style:family="table-cell"><style:table-cell-properties fo:border="0.5pt solid #000000" fo:padding="0.1cm" style:vertical-align="middle"/></style:style>`);
+        const fila = (celdas, encabezado) => '<table:table-row>' + celdas.map((celda, indice) => {
+          const alineacion = token.align?.[indice];
+          const contenido = celda?.tokens ? inline(celda.tokens, {}) : conFormato(celda?.text || '', {});
+          const op = { mb: '0', mt: '0', align: alineacion || undefined, bold: encabezado || undefined };
+          return `<table:table-cell table:style-name="${estiloCelda}" office:value-type="string">${parrafo(contenido, op)}</table:table-cell>`;
+        }).join('') + '</table:table-row>';
+        return `<table:table table:name="Tabla${++tablas}" table:style-name="${estiloTabla}">`
+          + `<table:table-column table:style-name="${estiloColumna}" table:number-columns-repeated="${columnas}"/>`
+          + fila(filas[0], true) + filas.slice(1).map(f => fila(f, false)).join('')
+          + '</table:table>';
+      }
+
+      function estilosDeLista(nombre, prefijo) {
+        const niveles = [];
+        for (let nivel = 1; nivel <= 4; nivel++) {
+          const sangria = (0.6 * nivel).toFixed(1);
+          const propiedades = `<style:list-level-properties text:space-before="${sangria}cm" text:min-label-width="0.5cm"/>`;
+          niveles.push(prefijo === 'bullet'
+            ? `<text:list-level-style-bullet text:level="${nivel}" text:bullet-char="${['•', '–', '·', '•'][nivel - 1]}">${propiedades}</text:list-level-style-bullet>`
+            : `<text:list-level-style-number text:level="${nivel}" style:num-format="${[1, 'a', 'i', 1][nivel - 1]}" style:num-suffix=".">${propiedades}</text:list-level-style-number>`);
+        }
+        return `<text:list-style style:name="${nombre}">${niveles.join('')}</text:list-style>`;
+      }
+
+      const cuerpo = bloques(marked.lexer(ex.text), {});
+      const fecha = new Date().toISOString();
+      const titulo = escapeHtml(nombre || 'Documento');
+      const declaracion = '<?xml version="1.0" encoding="UTF-8"?>';
+      const fuentes = '<office:font-face-decls>'
+        + '<style:font-face style:name="Liberation Serif" svg:font-family="Liberation Serif" style:font-family-generic="roman" style:font-pitch="variable"/>'
+        + '<style:font-face style:name="Liberation Sans" svg:font-family="Liberation Sans" style:font-family-generic="swiss" style:font-pitch="variable"/>'
+        + '<style:font-face style:name="Liberation Mono" svg:font-family="Liberation Mono" style:font-family-generic="modern" style:font-pitch="fixed"/>'
+        + '</office:font-face-decls>';
+
+      const content = `${declaracion}
+<office:document-content ${NAMESPACIOS_ODF} office:version="1.3">
+  ${fuentes}
+  <office:automatic-styles>
+    ${autos.join('\n    ')}
+    ${estilosDeLista('ListaVineta', 'bullet')}
+    ${estilosDeLista('ListaNumerada', 'number')}
+  </office:automatic-styles>
+  <office:body><office:text>${cuerpo}</office:text></office:body>
+</office:document-content>`;
+
+      const styles = `${declaracion}
+<office:document-styles ${NAMESPACIOS_ODF} office:version="1.3">
+  ${fuentes}
+  <office:styles>
+    <style:default-style style:family="paragraph">
+      <style:paragraph-properties fo:orphans="2" fo:widows="2" fo:margin-top="0cm" fo:margin-bottom="0cm"/>
+      <style:text-properties style:font-name="Liberation Serif" fo:font-size="12pt" fo:language="es" fo:country="AR"/>
+    </style:default-style>
+    <style:style style:name="Standard" style:family="paragraph" style:class="text"/>
+  </office:styles>
+  <office:automatic-styles>
+    <style:page-layout style:name="pagina">
+      <style:page-layout-properties fo:page-width="21cm" fo:page-height="29.7cm" style:print-orientation="portrait"
+        fo:margin-top="2cm" fo:margin-bottom="2cm" fo:margin-left="2cm" fo:margin-right="2cm"/>
+    </style:page-layout>
+  </office:automatic-styles>
+  <office:master-styles><style:master-page style:name="Standard" style:page-layout-name="pagina"/></office:master-styles>
+</office:document-styles>`;
+
+      const meta = `${declaracion}
+<office:document-meta ${NAMESPACIOS_ODF} office:version="1.3">
+  <office:meta>
+    <meta:generator>MarkPress</meta:generator>
+    <dc:title>${titulo}</dc:title>
+    <dc:language>es-AR</dc:language>
+    <meta:creation-date>${fecha}</meta:creation-date>
+  </office:meta>
+</office:document-meta>`;
+
+      const settings = `${declaracion}
+<office:document-settings ${NAMESPACIOS_ODF} office:version="1.3"><office:settings/></office:document-settings>`;
+
+      const manifest = `${declaracion}
+<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.3">
+  <manifest:file-entry manifest:full-path="/" manifest:version="1.3" manifest:media-type="application/vnd.oasis.opendocument.text"/>
+  <manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>
+  <manifest:file-entry manifest:full-path="styles.xml" manifest:media-type="text/xml"/>
+  <manifest:file-entry manifest:full-path="meta.xml" manifest:media-type="text/xml"/>
+  <manifest:file-entry manifest:full-path="settings.xml" manifest:media-type="text/xml"/>
+</manifest:manifest>`;
+
+      return empaquetarZip([
+        { nombre: 'mimetype', contenido: 'application/vnd.oasis.opendocument.text' },
+        { nombre: 'content.xml', contenido: content },
+        { nombre: 'styles.xml', contenido: styles },
+        { nombre: 'meta.xml', contenido: meta },
+        { nombre: 'settings.xml', contenido: settings },
+        { nombre: 'META-INF/manifest.xml', contenido: manifest }
+      ]);
+    }
+
     const initial = loadDoc();
     docName.value = initial.nombre;
     input.value = initial.markdown;
@@ -471,6 +933,21 @@ $$f(x) = \\begin{cases}
     });
 
     document.getElementById('pdf').addEventListener('click', () => window.print());
+
+    document.getElementById('odt').addEventListener('click', () => {
+      if (typeof marked === 'undefined' || typeof fflate === 'undefined') {
+        showNotice('No se pudo generar el documento.');
+        return;
+      }
+      try {
+        const blob = crearDocumentoOdt(input.value, docName.value || 'documento', estilo === 'latex');
+        downloadBlob(blob, sanitizeFilename(docName.value) + '.odt');
+        showNotice('Se descargó el documento para Writer.');
+      } catch (e) {
+        console.error('MarkPress: error al exportar a Writer:', e);
+        showNotice('No se pudo generar el documento.');
+      }
+    });
 
     const resetBtn = document.getElementById('reset');
     let resetArmada = false, resetTimer;

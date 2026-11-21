@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f532%3B%3C/text%3E%3C/svg%3E">
+  <title>Grillas</title>
+
+  <script>
+    // Tema antes del CSS para evitar el parpadeo (clave global `theme`).
+    (() => {
+      let guardado = null;
+      try { guardado = localStorage.getItem('theme'); } catch { /* modo privado */ }
+      const tema = guardado || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-bs-theme', tema);
+    })();
+  </script>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    p.signature { font-size: 0.8em; }
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
+    .page {
+      background-color: #ffffff;
+      position: relative;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .page.vertical {
+      width: 210mm;
+      height: 297mm;
+    }
+    .page.horizontal {
+      width: 297mm;
+      height: 210mm;
+    }
+    .grid-lines {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+    }
+    #preview-wrap {
+      max-width: 100%;
+      min-width: 0;
+    }
+
+    @media screen {
+      .sheet-screen {
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18), 0 1px 4px rgba(0, 0, 0, 0.10);
+      }
+      body.vista-hoja {
+        background: #e0e0e0;
+      }
+    }
+
+    @media print {
+      .no-print {
+        display: none !important;
+      }
+      html, body {
+        background: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+      .page {
+        box-shadow: none !important;
+        transform: none !important;
+        break-inside: avoid;
+      }
+      /* Un poco menos de la altura nominal: absorbe el redondeo mm→px y garantiza una sola página. */
+      .page.vertical {
+        height: 296.5mm !important;
+      }
+      .page.horizontal {
+        height: 209.5mm !important;
+      }
+      #sheet-wrap {
+        padding: 0 !important;
+        margin: 0 !important;
+        display: block !important;
+      }
+      @page {
+        margin: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="container py-4 no-print" id="config-app">
+    <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <h1 class="h3 mb-1">🔲 Grillas</h1>
+        <p class="text-body-secondary mb-0">Hojas A4 con grillas para imprimir: líneas verticales, horizontales o ambas.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button id="open-sheet" class="btn btn-success btn-sm" type="button">🖨️ Abrir hoja</button>
+        <button id="share" class="btn btn-outline-secondary btn-sm" type="button">🔗 Compartir</button>
+        <button id="reset" class="btn btn-outline-secondary btn-sm" type="button">🗑️ Reiniciar</button>
+        <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+      </div>
+    </div>
+
+    <div id="notice" class="alert alert-success py-2 alert-flotante d-none" role="status"></div>
+
+    <div class="card mb-3">
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-12 col-md-4">
+            <label for="columnas" class="form-label">Columnas</label>
+            <input id="columnas" class="form-control" type="number" min="1" max="100" step="1" value="5">
+            <div class="form-text">De 1 a 100; define la separación de las líneas.</div>
+          </div>
+          <div class="col-12 col-md-8">
+            <span class="form-label d-block" id="lineas-label">Líneas</span>
+            <div class="btn-group w-100" role="group" aria-labelledby="lineas-label">
+              <input type="radio" class="btn-check" name="lineas" id="lineas-verticales" value="verticales" autocomplete="off">
+              <label class="btn btn-outline-primary btn-sm" for="lineas-verticales">Verticales</label>
+              <input type="radio" class="btn-check" name="lineas" id="lineas-horizontales" value="horizontales" autocomplete="off">
+              <label class="btn btn-outline-primary btn-sm" for="lineas-horizontales">Horizontales</label>
+              <input type="radio" class="btn-check" name="lineas" id="lineas-ambas" value="ambas" autocomplete="off">
+              <label class="btn btn-outline-primary btn-sm" for="lineas-ambas">Ambas</label>
+            </div>
+          </div>
+          <div class="col-12 col-md-6">
+            <span class="form-label d-block" id="orientacion-label">Orientación</span>
+            <div class="btn-group w-100" role="group" aria-labelledby="orientacion-label">
+              <input type="radio" class="btn-check" name="orientacion" id="orientacion-vertical" value="vertical" autocomplete="off">
+              <label class="btn btn-outline-primary btn-sm" for="orientacion-vertical">Vertical</label>
+              <input type="radio" class="btn-check" name="orientacion" id="orientacion-horizontal" value="horizontal" autocomplete="off">
+              <label class="btn btn-outline-primary btn-sm" for="orientacion-horizontal">Horizontal</label>
+            </div>
+          </div>
+          <div class="col-12 col-md-6">
+            <span class="form-label d-block" id="tono-label">Tono</span>
+            <div class="btn-group w-100" role="group" aria-labelledby="tono-label">
+              <input type="radio" class="btn-check" name="tono" id="tono-claro" value="claro" autocomplete="off">
+              <label class="btn btn-outline-primary btn-sm" for="tono-claro">Claro</label>
+              <input type="radio" class="btn-check" name="tono" id="tono-medio" value="medio" autocomplete="off">
+              <label class="btn btn-outline-primary btn-sm" for="tono-medio">Medio</label>
+              <input type="radio" class="btn-check" name="tono" id="tono-oscuro" value="oscuro" autocomplete="off">
+              <label class="btn btn-outline-primary btn-sm" for="tono-oscuro">Oscuro</label>
+            </div>
+          </div>
+        </div>
+        <p id="info" class="form-text mt-2 mb-0"></p>
+        <div class="form-text mt-2">Abrir hoja muestra solo la hoja en una pestaña nueva, lista para imprimir en A4 sin márgenes.</div>
+      </div>
+    </div>
+
+    <h2 class="h5 mb-2">Vista previa</h2>
+    <div class="border rounded p-3 d-flex justify-content-center overflow-hidden" style="background: #e0e0e0;">
+      <div id="preview-wrap" class="overflow-hidden">
+        <div id="preview-sheet" class="page sheet-screen vertical"></div>
+      </div>
+    </div>
+
+    <section class="card mb-3">
+      <div class="card-body">
+        <h2 class="h6 mb-3">🧠 Trivias</h2>
+        <details class="mb-2">
+          <summary class="fw-semibold">¿Por qué las celdas de la grilla son cuadradas?</summary>
+          <p class="small text-body-secondary mb-0 mt-1">Porque el ancho de la celda sale de dividir la hoja en la cantidad de columnas y las filas usan esa misma medida. Por eso entran las filas completas que caben y el resto queda en blanco abajo.</p>
+        </details>
+        <details class="mb-2">
+          <summary class="fw-semibold">¿Cuántas filas de celdas de 42 mm entran en una A4 vertical?</summary>
+          <p class="small text-body-secondary mb-0 mt-1">Siete. Siete celdas de 42 mm ocupan 294 mm de los 297 mm de alto, así que sobran 3 mm. Es lo que se ve con 5 columnas en orientación vertical.</p>
+        </details>
+        <details>
+          <summary class="fw-semibold">¿Qué cambia al pasar de vertical a horizontal?</summary>
+          <p class="small text-body-secondary mb-0 mt-1">El ancho pasa de 210 a 297 mm. Con la misma cantidad de columnas, las celdas quedan más grandes y entran menos filas en el alto.</p>
+        </details>
+      </div>
+    </section>
+
+    <hr>
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <div id="sheet-app" class="d-none">
+    <div class="no-print d-flex flex-wrap justify-content-center gap-2 py-3">
+      <button id="print-now" class="btn btn-success btn-sm" type="button">🖨️ Imprimir</button>
+      <a id="back-link" href="./" class="btn btn-outline-secondary btn-sm">← Volver a configurar</a>
+    </div>
+    <div id="sheet-wrap" class="d-flex justify-content-center px-3 pb-4">
+      <div id="print-sheet" class="page sheet-screen vertical"></div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'grillas';
+      const ORIENTACIONES = ['vertical', 'horizontal'];
+      const LINEAS = ['verticales', 'horizontales', 'ambas'];
+      const TONOS = { claro: '#d9d9d9', medio: '#bdbdbd', oscuro: '#8a8a8a' };
+      const DEFAULTS = { columnas: 5, orientacion: 'vertical', tono: 'medio', lineas: 'verticales' };
+      const PAGINAS = {
+        vertical: { ancho: 210, alto: 297 },
+        horizontal: { ancho: 297, alto: 210 }
+      };
+      const GROSOR = 0.25;
+
+      function readStoredRaw() {
+        try { return localStorage.getItem(STORAGE_KEY); } catch { return null; }
+      }
+
+      function removeStored() {
+        try { localStorage.removeItem(STORAGE_KEY); } catch { /* modo privado */ }
+      }
+
+      function normalizeConfig(value) {
+        try {
+          const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+          if (!parsed || typeof parsed !== 'object') return null;
+          const columnas = Number(parsed.columnas);
+          if (!Number.isInteger(columnas) || columnas < 1 || columnas > 100) return null;
+          if (!ORIENTACIONES.includes(parsed.orientacion)) return null;
+          if (!Object.hasOwn(TONOS, parsed.tono)) return null;
+          const lineas = parsed.lineas ?? DEFAULTS.lineas;
+          if (!LINEAS.includes(lineas)) return null;
+          return { columnas, orientacion: parsed.orientacion, tono: parsed.tono, lineas };
+        } catch {
+          return null;
+        }
+      }
+
+      function fmt(n) {
+        return (Math.round(n * 10) / 10).toLocaleString('es-AR');
+      }
+
+      function plural(n, singular, muchos) {
+        return `${n} ${n === 1 ? singular : muchos}`;
+      }
+
+      function setPageSize(orientacion) {
+        let style = document.getElementById('page-size');
+        if (!style) {
+          style = document.createElement('style');
+          style.id = 'page-size';
+          document.head.appendChild(style);
+        }
+        const size = orientacion === 'horizontal' ? 'A4 landscape' : 'A4 portrait';
+        style.textContent = `@media print { @page { size: ${size}; margin: 0; } }`;
+      }
+
+      function paintSheet(el, config) {
+        const pagina = PAGINAS[config.orientacion];
+        el.classList.toggle('vertical', config.orientacion === 'vertical');
+        el.classList.toggle('horizontal', config.orientacion === 'horizontal');
+
+        const verticales = config.lineas !== 'horizontales';
+        const horizontales = config.lineas !== 'verticales';
+        const cell = pagina.ancho / config.columnas;
+        const filas = Math.max(1, Math.floor(pagina.alto / cell));
+        const cellCss = cell.toFixed(3);
+        const color = TONOS[config.tono];
+
+        let lineas = el.querySelector('.grid-lines');
+        if (!lineas) {
+          lineas = document.createElement('div');
+          lineas.className = 'grid-lines';
+          el.appendChild(lineas);
+        }
+        // Sin líneas horizontales, las verticales recorren toda la hoja.
+        lineas.style.height = `${(horizontales ? filas * cell : pagina.alto).toFixed(3)}mm`;
+
+        const capas = [];
+        if (verticales) {
+          capas.push(`repeating-linear-gradient(to right, ${color} 0 ${GROSOR}mm, transparent ${GROSOR}mm ${cellCss}mm)`);
+        }
+        if (horizontales) {
+          capas.push(`repeating-linear-gradient(to bottom, ${color} 0 ${GROSOR}mm, transparent ${GROSOR}mm ${cellCss}mm)`);
+        }
+        lineas.style.backgroundImage = capas.join(',');
+
+        const sombras = [];
+        if (verticales) sombras.push(`inset -${GROSOR}mm 0 0 ${color}`);
+        if (horizontales) sombras.push(`inset 0 -${GROSOR}mm 0 ${color}`);
+        lineas.style.boxShadow = sombras.join(',');
+
+        return { cell, filas };
+      }
+
+      const params = new URLSearchParams(window.location.search);
+      const urlConfig = normalizeConfig(params.get('data'));
+      const config = urlConfig ?? normalizeConfig(readStoredRaw()) ?? { ...DEFAULTS };
+
+      if (params.get('vista') === 'hoja') {
+        // Vista limpia: solo la hoja, fondo claro fijo.
+        document.documentElement.setAttribute('data-bs-theme', 'light');
+        document.body.classList.add('vista-hoja');
+        document.getElementById('config-app').remove();
+        const sheetApp = document.getElementById('sheet-app');
+        sheetApp.classList.remove('d-none');
+        paintSheet(document.getElementById('print-sheet'), config);
+        setPageSize(config.orientacion);
+        const back = document.getElementById('back-link');
+        back.href = `./?data=${encodeURIComponent(JSON.stringify(config))}`;
+        document.getElementById('print-now').addEventListener('click', () => window.print());
+        return;
+      }
+
+      // Vista configuración.
+      const columnasInput = document.getElementById('columnas');
+      const previewSheet = document.getElementById('preview-sheet');
+      const previewWrap = document.getElementById('preview-wrap');
+      const info = document.getElementById('info');
+      const notice = document.getElementById('notice');
+      let noticeTimeout;
+
+      columnasInput.value = config.columnas;
+      document.querySelector(`input[name="lineas"][value="${config.lineas}"]`).checked = true;
+      document.querySelector(`input[name="orientacion"][value="${config.orientacion}"]`).checked = true;
+      document.querySelector(`input[name="tono"][value="${config.tono}"]`).checked = true;
+
+      function showNotice(message) {
+        clearTimeout(noticeTimeout);
+        notice.textContent = message;
+        notice.classList.remove('d-none');
+        noticeTimeout = setTimeout(() => notice.classList.add('d-none'), 2200);
+      }
+
+      function fitPreview() {
+        // Escala la hoja A4 real al ancho disponible (el transform no afecta offsetWidth).
+        const parent = previewWrap.parentElement;
+        const estilos = getComputedStyle(parent);
+        const disponible = parent.clientWidth - parseFloat(estilos.paddingLeft) - parseFloat(estilos.paddingRight);
+        const scale = Math.min(1, disponible / previewSheet.offsetWidth);
+        previewSheet.style.transform = `scale(${scale})`;
+        previewSheet.style.transformOrigin = 'top left';
+        previewWrap.style.width = `${previewSheet.offsetWidth * scale}px`;
+        previewWrap.style.height = `${previewSheet.offsetHeight * scale}px`;
+      }
+
+      function currentConfig() {
+        return {
+          columnas: Math.min(100, Math.max(1, Math.round(Number(columnasInput.value) || DEFAULTS.columnas))),
+          orientacion: document.querySelector('input[name="orientacion"]:checked').value,
+          tono: document.querySelector('input[name="tono"]:checked').value,
+          lineas: document.querySelector('input[name="lineas"]:checked').value
+        };
+      }
+
+      function refresh(save = true) {
+        const next = currentConfig();
+        Object.assign(config, next);
+        const { cell, filas } = paintSheet(previewSheet, config);
+        setPageSize(config.orientacion);
+        const columnasTexto = plural(config.columnas, 'columna', 'columnas');
+        if (config.lineas === 'verticales') {
+          info.textContent = `${columnasTexto} · líneas verticales cada ${fmt(cell)} mm`;
+        } else if (config.lineas === 'horizontales') {
+          info.textContent = `${columnasTexto} · líneas horizontales cada ${fmt(cell)} mm`;
+        } else {
+          info.textContent = `${columnasTexto} · celdas de ${fmt(cell)} mm · ${plural(filas, 'fila', 'filas')}`;
+        }
+        fitPreview();
+        if (save) {
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(config)); } catch { /* modo privado */ }
+        }
+      }
+
+      document.querySelectorAll('input[name="lineas"], input[name="orientacion"], input[name="tono"]').forEach(input => {
+        input.addEventListener('change', () => refresh());
+      });
+      columnasInput.addEventListener('input', () => refresh());
+      columnasInput.addEventListener('change', () => {
+        columnasInput.value = currentConfig().columnas;
+        refresh();
+      });
+      window.addEventListener('resize', fitPreview);
+
+      function sheetUrl() {
+        const url = new URL(window.location.href);
+        url.search = '';
+        url.searchParams.set('data', JSON.stringify(config));
+        url.searchParams.set('vista', 'hoja');
+        return url.toString();
+      }
+
+      document.getElementById('open-sheet').addEventListener('click', () => {
+        refresh();
+        window.open(sheetUrl(), '_blank', 'noopener');
+      });
+
+      document.getElementById('share').addEventListener('click', async () => {
+        refresh();
+        const url = new URL(window.location.href);
+        url.search = '';
+        url.searchParams.set('data', JSON.stringify(config));
+        try {
+          await navigator.clipboard.writeText(url.toString());
+          showNotice('Se copió el enlace con la configuración.');
+        } catch {
+          showNotice('No se pudo copiar el enlace.');
+        }
+      });
+
+      const resetBtn = document.getElementById('reset');
+      let resetArmada = false, resetTimer;
+      function resetDesarmar() {
+        resetArmada = false;
+        resetBtn.textContent = '🗑️ Reiniciar';
+        resetBtn.classList.remove('btn-danger');
+        resetBtn.classList.add('btn-outline-secondary');
+      }
+      resetBtn.addEventListener('click', () => {
+        if (!resetArmada) {
+          resetArmada = true;
+          resetBtn.textContent = '¿Seguro? Tocá de nuevo';
+          resetBtn.classList.remove('btn-outline-secondary');
+          resetBtn.classList.add('btn-danger');
+          clearTimeout(resetTimer);
+          resetTimer = setTimeout(resetDesarmar, 5000);
+          return;
+        }
+        clearTimeout(resetTimer);
+        resetDesarmar();
+        removeStored();
+        Object.assign(config, DEFAULTS);
+        columnasInput.value = config.columnas;
+        document.querySelector(`input[name="lineas"][value="${config.lineas}"]`).checked = true;
+        document.querySelector(`input[name="orientacion"][value="${config.orientacion}"]`).checked = true;
+        document.querySelector(`input[name="tono"][value="${config.tono}"]`).checked = true;
+        window.history.replaceState(null, '', window.location.pathname);
+        refresh(false);
+        showNotice('Se restauró la configuración por defecto.');
+      });
+
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const apply = (t) => {
+        root.setAttribute('data-bs-theme', t);
+        btn.textContent = t === 'dark' ? '☀️' : '🌙';
+      };
+      apply(document.documentElement.getAttribute('data-bs-theme') || 'light');
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        try { localStorage.setItem('theme', next); } catch { /* modo privado */ }
+        apply(next);
+      });
+
+      // Un link compartido no debe pisar lo guardado; el estado inicial sí se persiste.
+      if (!urlConfig) {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(config)); } catch { /* modo privado */ }
+      }
+      refresh(false);
+    })();
+  </script>
+</body>
+</html>

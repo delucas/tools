@@ -28,6 +28,7 @@ El índice es una PWA mínima: `manifest.webmanifest`, `icons/` y `sw.js` en la 
 | [`gsd`](./gsd) | Get Sh*t Done: lista de tareas con fecha de creación y fecha de tildado. |
 | [`checksmith`](./checksmith) | Forja de checklists: catálogo de plantillas para instanciar en Get Sh*t Done. |
 | [`hojitas`](./hojitas) | Hojas A4 para imprimir: puntitos, renglones o cuadrícula configurables. |
+| [`grillas`](./grillas) | Hojas A4 con grillas de 1 a 100 columnas: líneas verticales, horizontales o ambas. |
 | [`eqtex`](./eqtex) | Editor de ecuaciones LaTeX con vista previa y descarga en PNG transparente. |
 | [`svg`](./svg) | Se ve ese SVG: editor con vista previa en vivo y descarga en PNG o SVG. |
 | [`markpress`](./markpress) | Editor markdown de dos paneles con tablas, LaTeX y salida a PDF. |

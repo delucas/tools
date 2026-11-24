@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="author" content="Lucas Videla">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%26%23x1f4c8%3B%3C/text%3E%3C/svg%3E">
+  <title>Stats — Estadística descriptiva de una columna</title>
+
+  <script>
+    // Tema antes del CSS para evitar el parpadeo (clave global `theme`).
+    (() => {
+      let guardado = null;
+      try { guardado = localStorage.getItem('theme'); } catch { /* modo privado */ }
+      const tema = guardado || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-bs-theme', tema);
+    })();
+  </script>
+
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.8/css/bootstrap.min.css" rel="stylesheet"
+    integrity="sha512-2bBQCjcnw658Lho4nlXJcc6WkV/UxpE/sAokbXPxQNGqmNdQrWqtw26Ns9kFF/yG792pKR1Sx8/Y1Lf1XN4GKA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.18.6/katex.min.css" rel="stylesheet"
+    integrity="sha512-hlhL0Hg3cxOco8tCQqGSQJpKClqXth8ioVSeCyXoRBvcWvMJGlKAtgz6McECrKqrzwiTtZf/p8U+LPzShtmgVw=="
+    crossorigin="anonymous" referrerpolicy="no-referrer">
+
+  <style>
+    #app input, #app textarea, #app select { font-size: 16px; }
+    .mono { font-family: var(--bs-font-monospace); }
+    textarea.datos { font-family: var(--bs-font-monospace); min-height: 160px; }
+    .alert-flotante { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: min(92vw, 560px); margin-bottom: 0; box-shadow: var(--bs-box-shadow); }
+    .chart-box { position: relative; height: 260px; }
+    svg.caja line.eje { stroke: var(--bs-border-color); }
+    svg.caja line.dato { stroke: var(--bs-body-color); stroke-width: 1.5; }
+    svg.caja line.tick { stroke: var(--bs-body-color); }
+    svg.caja rect.caja-box { fill: var(--bs-primary); fill-opacity: .2; stroke: var(--bs-primary); stroke-width: 1.5; }
+    svg.caja line.mediana { stroke: var(--bs-primary); stroke-width: 2.5; }
+    svg.caja path.media { fill: var(--bs-warning); stroke: var(--bs-body-color); stroke-width: .8; }
+    svg.caja circle.outlier { fill: var(--bs-danger); fill-opacity: .75; }
+    .grupo-titulo { letter-spacing: .05em; }
+    .resumen-tabla th, .resumen-tabla td { border-color: var(--bs-border-color-translucent); }
+    .resumen-tabla tr:last-child th, .resumen-tabla tr:last-child td { border-bottom: 0; }
+    .resumen-tabla td { width: 38%; }
+    .resumen-tabla td .mono { font-size: .95rem; }
+    .formula { max-width: 100%; overflow-x: auto; overflow-y: hidden; line-height: 1.35; }
+    .formula .katex { font-size: .92em; }
+    p.signature { font-size: 0.8em; }
+  </style>
+</head>
+<body>
+
+  <main class="container py-4" style="max-width: 960px;">
+    <div id="app">
+      <a href="../" class="d-inline-block mb-2 text-body-secondary small text-decoration-none">← Todas las herramientas</a>
+
+      <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+        <div>
+          <h1 class="h3 mb-1">📈 Stats</h1>
+          <p class="text-body-secondary mb-0">Describí una columna: centro, dispersión, forma, outliers, histograma y caja.</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="share">{{ shared ? '¡Copiado!' : '🔗 Compartir' }}</button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="reset" :class="resetArmed ? 'btn-danger' : 'btn-outline-secondary'">{{ resetArmed ? '¿Seguro? Tocá de nuevo' : '🗑️ Reiniciar' }}</button>
+          <button id="theme-toggle" class="btn btn-outline-secondary btn-sm" type="button">🌙</button>
+        </div>
+      </div>
+
+      <div v-if="notice" class="alert alert-success py-2 alert-flotante" role="status">{{ notice }}</div>
+
+      <div v-if="!hasChart" class="alert alert-warning py-2 small" role="alert">
+        No se pudo cargar Chart.js: el resumen y la caja funcionan, pero no el histograma.
+      </div>
+
+      <section class="card mb-3">
+        <div class="card-body">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+            <h2 class="h6 mb-0">Datos</h2>
+            <span class="badge text-bg-secondary" v-if="parsed.datos.length">{{ parsed.datos.length }} valores</span>
+          </div>
+          <label class="form-label small mb-1" for="datos">Una columna: un valor por línea, o un CSV de una columna con encabezado opcional.</label>
+          <textarea id="datos" class="form-control datos" rows="8" v-model="texto" @input="onDatos"
+            placeholder="12&#10;15&#10;14&#10;18…" aria-label="Datos numéricos"></textarea>
+          <div class="form-text">Acepta punto o coma decimal. Se ignoran los valores no numéricos.</div>
+          <div class="form-text text-warning-emphasis" v-if="parsed.descartados">
+            Se ignoraron {{ parsed.descartados }} valores no numéricos.
+          </div>
+          <div class="form-text text-warning-emphasis" v-if="parsed.columnas > 1">
+            Se detectaron {{ parsed.columnas }} columnas numéricas; se usa la primera.
+          </div>
+          <div class="d-flex flex-wrap gap-2 mt-2">
+            <button class="btn btn-outline-secondary btn-sm" type="button" @click="cargarEjemplo">Cargar ejemplo: tiempos con outlier</button>
+          </div>
+        </div>
+      </section>
+
+      <div v-if="hint" class="alert alert-info py-2 small" role="note">{{ hint }}</div>
+
+      <section class="card mb-3" v-if="stats">
+        <div class="card-body">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <h2 class="h6 mb-0">Resumen <small class="text-body-secondary fw-normal">(n = {{ stats.n }})</small></h2>
+            <button class="btn btn-outline-secondary btn-sm" type="button" @click="copiarResumen">📋 Copiar resumen</button>
+          </div>
+
+          <div class="row g-4">
+            <div class="col-12 col-lg-6" v-for="g in gruposResumen" :key="g.id">
+              <h3 class="grupo-titulo text-body-secondary small fw-semibold text-uppercase mb-2">{{ g.titulo }}</h3>
+              <table class="table table-sm align-middle resumen-tabla mb-0">
+                <caption class="visually-hidden">{{ g.titulo }}</caption>
+                <tbody>
+                  <tr v-for="m in g.filas" :key="m.nombre">
+                    <th scope="row" class="fw-normal py-2">
+                      <span class="d-block">{{ m.nombre }}</span>
+                      <span v-if="m.tex" class="formula d-block text-body-secondary" v-html="tex(m.tex)"></span>
+                      <span class="form-text d-block">{{ m.explicacion }}</span>
+                    </th>
+                    <td class="text-end py-2"><span class="mono fw-semibold">{{ m.valor }}</span></td>
+                  </tr>
+                </tbody>
+              </table>
+              <p v-for="(nota, i) in g.notas" :key="'n' + i" class="form-text mb-0 mt-1">{{ nota }}</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card mb-3" v-if="stats">
+        <div class="card-body">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <h2 class="h6 mb-0">Valores atípicos</h2>
+            <span class="badge" :class="stats.outliers.length ? 'text-bg-warning' : 'text-bg-success'">
+              {{ stats.outliers.length ? stats.outliers.length + ' fuera de las cercas' : 'Ninguno' }}
+            </span>
+          </div>
+          <div class="row g-3">
+            <div class="col-12 col-md-5">
+              <div class="text-body-secondary small mb-1">Cercas de Tukey</div>
+              <div class="formula text-body-secondary" v-html="tex('\\left[\\,Q_1 - 1{,}5\\,IQR,\\; Q_3 + 1{,}5\\,IQR\\,\\right]')"></div>
+              <div class="mono small mt-1">[{{ fmt(stats.cercaBaja) }} ; {{ fmt(stats.cercaAlta) }}]</div>
+              <div class="form-text">Fuera de este rango, un valor se considera atípico.</div>
+            </div>
+            <div class="col-12 col-md-7">
+              <div class="text-body-secondary small mb-1">Valores detectados</div>
+              <div class="mono" v-if="stats.outliers.length">{{ outliersTexto }}</div>
+              <div class="text-body-secondary" v-else>Ningún valor queda fuera de las cercas.</div>
+              <div class="form-text mb-0">Los bigotes llegan hasta {{ fmt(stats.bigoteBajo) }} y {{ fmt(stats.bigoteAlto) }}.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card mb-3" v-if="stats">
+        <div class="card-body">
+          <h2 class="h6">Histograma</h2>
+          <div class="chart-box"><canvas id="chart-hist">Tu navegador no dibuja gráficos.</canvas></div>
+          <p class="small text-body-secondary mb-0 mt-2">Frecuencia por intervalo. Líneas punteadas: media y mediana.</p>
+        </div>
+      </section>
+
+      <section class="card mb-3" v-if="stats">
+        <div class="card-body">
+          <h2 class="h6">Caja y bigotes</h2>
+          <svg v-if="caja" viewBox="0 0 600 58" class="w-100 caja" role="img" aria-label="Diagrama de caja y bigotes">
+            <line :x1="caja.x0" :x2="caja.x1" y1="50" y2="50" class="eje" />
+            <line :x1="caja.min" :x2="caja.max" y1="50" y2="50" class="dato" />
+            <line :x1="caja.min" :x2="caja.min" y1="50" y2="54" class="tick" />
+            <line :x1="caja.q1x" :x2="caja.q1x" y1="50" y2="54" class="tick" />
+            <line :x1="caja.mediana" :x2="caja.mediana" y1="50" y2="54" class="tick" />
+            <line :x1="caja.q3x" :x2="caja.q3x" y1="50" y2="54" class="tick" />
+            <line :x1="caja.max" :x2="caja.max" y1="50" y2="54" class="tick" />
+            <line :x1="caja.bigoteBajo" :x2="caja.bigoteAlto" y1="24" y2="24" class="dato" />
+            <line :x1="caja.bigoteBajo" :x2="caja.bigoteBajo" y1="17" y2="31" class="dato" />
+            <line :x1="caja.bigoteAlto" :x2="caja.bigoteAlto" y1="17" y2="31" class="dato" />
+            <rect :x="caja.q1" y="10" :width="caja.ancho" height="28" rx="2" class="caja-box" />
+            <line :x1="caja.mediana" :x2="caja.mediana" y1="10" y2="38" class="mediana" />
+            <path :d="caja.diamante" class="media" />
+            <circle v-for="(x, i) in caja.outliers" :key="'o' + i" :cx="x" cy="24" r="3.5" class="outlier" />
+          </svg>
+          <div class="d-flex flex-wrap gap-2 gap-md-3 small text-body-secondary mono mt-1">
+            <span>mín {{ fmt(stats.min) }}</span>
+            <span>Q1 {{ fmt(stats.q1) }}</span>
+            <span>mediana {{ fmt(stats.mediana) }}</span>
+            <span>Q3 {{ fmt(stats.q3) }}</span>
+            <span>máx {{ fmt(stats.max) }}</span>
+          </div>
+          <p class="small text-body-secondary mb-0 mt-1">Bigotes: valores más extremos dentro de 1,5 × IQR. Puntos: atípicos. Rombo: media.</p>
+        </div>
+      </section>
+
+      <section class="card mb-3">
+        <div class="card-body">
+          <h2 class="h6 mb-3">🧠 Trivias</h2>
+          <details class="mb-2">
+            <summary class="fw-semibold">¿La media siempre representa bien al conjunto?</summary>
+            <p class="small text-body-secondary mb-0 mt-1">No. Con asimetría o valores atípicos, la mediana suele representar mejor el centro.</p>
+          </details>
+          <details class="mb-2">
+            <summary class="fw-semibold">¿Qué mide el IQR?</summary>
+            <p class="small text-body-secondary mb-0 mt-1">El ancho del 50% central de los datos: de Q1 a Q3. Es robusto a los outliers.</p>
+          </details>
+          <details>
+            <summary class="fw-semibold">¿Por qué el desvío muestral divide por n−1?</summary>
+            <p class="small text-body-secondary mb-0 mt-1">Porque estima la dispersión de la población desde una muestra; la corrección de Bessel evita subestimarla.</p>
+          </details>
+        </div>
+      </section>
+    </div>
+
+    <hr>
+
+    <p class="signature text-body-secondary">Hecho con ❤️ y ⛏️ por <a href="https://www.sipofcode.com">Lucas</a>, con ayuda de las IA.</p>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.5.42/vue.global.prod.min.js"
+    integrity="sha512-PREsKi18CyKMgwXMJWtvkzinqjiN0znVfDovmVadp7pKiUpyNGtq7bD2fKElDBmdfH4DGJz8pmAdgihN8NZ8TQ=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.18.6/katex.min.js"
+    integrity="sha512-R6ebU8e1iPsUu+8q3BMGd8M7DyKQcB2lVvWSyTC1RK7O3ywVWCbHDr4a9C10w3HNbYvhxiRtIwjE5w3hPRwzRw=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"
+    integrity="sha512-WoViKhKD4qI2WruSZqv9+kvM4WfFhUMQCLN4QlDTt5aU56fLQy2gYoxWIqlEnXqJy/+Ac5q/hk1oWfqnMDhwMA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script>
+    const STORAGE_KEY = 'stats';
+    const HAS_CHART = typeof Chart !== 'undefined';
+    const EJEMPLO = [12, 15, 14, 18, 20, 22, 19, 17, 16, 21, 23, 25, 24, 19, 18, 20, 17, 16, 22, 21, 26, 28, 28, 18, 19, 20, 21, 22, 24, 45].join('\n');
+
+    // __PURE_START__
+    function numDeToken(token) {
+      let t = String(token ?? '').trim();
+      if (t.length >= 2 && t.startsWith('"') && t.endsWith('"')) t = t.slice(1, -1).trim();
+      if (!t) return null;
+      const compacto = t.replace(/\s+/g, '');
+      if (!/^[+-]?(?:\d+(?:[.,]\d*)?|[.,]\d+)(?:[eE][+-]?\d+)?$/.test(compacto)) return null;
+      const valor = Number(compacto.replace(',', '.'));
+      return Number.isFinite(valor) ? valor : null;
+    }
+
+    function partirLinea(linea, delim) {
+      if (!delim) return [linea];
+      const celdas = [];
+      let actual = '';
+      let entreComillas = false;
+      for (let i = 0; i < linea.length; i++) {
+        const c = linea[i];
+        if (c === '"') {
+          if (entreComillas && linea[i + 1] === '"') { actual += '"'; i++; }
+          else entreComillas = !entreComillas;
+        } else if (c === delim && !entreComillas) {
+          celdas.push(actual);
+          actual = '';
+        } else {
+          actual += c;
+        }
+      }
+      celdas.push(actual);
+      return celdas;
+    }
+
+    function detectarDelim(lineas) {
+      if (lineas.length < 2) return null;
+      for (const delim of ['\t', ';', ',']) {
+        const filas = lineas.map(l => partirLinea(l, delim));
+        const ancho = filas[0].length;
+        if (ancho < 2 || !filas.every(f => f.length === ancho)) continue;
+        if (delim === ',') {
+          const pareceDecimal = filas.every(([a, b = '']) =>
+            numDeToken(a) !== null && /^\d{1,4}$/.test(b.trim())
+          );
+          if (pareceDecimal) continue;
+        }
+        return delim;
+      }
+      return null;
+    }
+
+    function parsearColumna(texto) {
+      const lineas = String(texto ?? '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      const vacio = { datos: [], descartados: 0, columnas: 0, header: false };
+      if (!lineas.length) return vacio;
+
+      const delim = detectarDelim(lineas);
+      if (delim) {
+        const filas = lineas.map(l => partirLinea(l, delim));
+        const header = filas[0].every(c => numDeToken(c) === null);
+        const inicio = header ? 1 : 0;
+        const columnas = [];
+        for (let c = 0; c < filas[0].length; c++) {
+          let numericos = 0;
+          for (let r = inicio; r < filas.length; r++) {
+            const celda = filas[r][c];
+            if (celda && celda.trim() && numDeToken(celda) !== null) numericos++;
+          }
+          if (numericos > 0) columnas.push(c);
+        }
+        if (!columnas.length) return { ...vacio, header };
+        const elegida = columnas[0];
+        const datos = [];
+        let descartados = 0;
+        for (let r = inicio; r < filas.length; r++) {
+          const celda = filas[r][elegida];
+          if (celda === undefined || !celda.trim()) continue;
+          const valor = numDeToken(celda);
+          if (valor === null) descartados++;
+          else datos.push(valor);
+        }
+        return { datos, descartados, columnas: columnas.length, header };
+      }
+
+      let inicio = 0;
+      let header = false;
+      if (lineas.length > 1 && !/[0-9]/.test(lineas[0])) { inicio = 1; header = true; }
+      const datos = [];
+      let descartados = 0;
+      for (let i = inicio; i < lineas.length; i++) {
+        const tokens = lineas[i].split(/[\s;]+/).map(t => t.trim()).filter(Boolean);
+        for (const token of tokens) {
+          const partes = /^-?\d+,\d{1,4}$/.test(token) ? [token] : token.split(',');
+          for (const parte of partes) {
+            if (!parte.trim()) continue;
+            const valor = numDeToken(parte);
+            if (valor === null) descartados++;
+            else datos.push(valor);
+          }
+        }
+      }
+      return { datos, descartados, columnas: datos.length ? 1 : 0, header };
+    }
+
+    function cuantil(ordenados, p) {
+      if (!ordenados.length) return NaN;
+      const pos = (ordenados.length - 1) * p;
+      const bajo = Math.floor(pos);
+      const alto = Math.ceil(pos);
+      if (bajo === alto) return ordenados[bajo];
+      return ordenados[bajo] + (ordenados[alto] - ordenados[bajo]) * (pos - bajo);
+    }
+
+    function medidas(xs) {
+      const n = xs.length;
+      if (!n) return null;
+      const suma = xs.reduce((a, b) => a + b, 0);
+      const media = suma / n;
+      const ordenados = [...xs].sort((a, b) => a - b);
+      const mediana = cuantil(ordenados, 0.5);
+      const q1 = cuantil(ordenados, 0.25);
+      const q3 = cuantil(ordenados, 0.75);
+      const iqr = q3 - q1;
+      const varianza = n > 1 ? xs.reduce((a, x) => a + (x - media) ** 2, 0) / (n - 1) : NaN;
+      const ds = n > 1 ? Math.sqrt(varianza) : NaN;
+      const cv = n > 1 && media !== 0 ? (ds / Math.abs(media)) * 100 : NaN;
+
+      const conteo = new Map();
+      for (const x of xs) conteo.set(x, (conteo.get(x) || 0) + 1);
+      let maxFreq = 0;
+      for (const f of conteo.values()) if (f > maxFreq) maxFreq = f;
+      const modas = maxFreq > 1
+        ? [...conteo.entries()].filter(([, f]) => f === maxFreq).map(([v]) => v).sort((a, b) => a - b)
+        : [];
+
+      let asimetria = NaN;
+      let curtosis = NaN;
+      if (n >= 3 && ds > 0) {
+        const cubos = xs.reduce((a, x) => a + ((x - media) / ds) ** 3, 0);
+        asimetria = (n / ((n - 1) * (n - 2))) * cubos;
+      }
+      if (n >= 4 && ds > 0) {
+        const cuartas = xs.reduce((a, x) => a + ((x - media) / ds) ** 4, 0);
+        curtosis = (n * (n + 1) / ((n - 1) * (n - 2) * (n - 3))) * cuartas -
+          (3 * (n - 1) ** 2) / ((n - 2) * (n - 3));
+      }
+
+      const cercaBaja = q1 - 1.5 * iqr;
+      const cercaAlta = q3 + 1.5 * iqr;
+      const outliers = xs.filter(x => x < cercaBaja || x > cercaAlta).sort((a, b) => a - b);
+      const normales = xs.filter(x => x >= cercaBaja && x <= cercaAlta);
+      const bigoteBajo = normales.length ? Math.min(...normales) : ordenados[0];
+      const bigoteAlto = normales.length ? Math.max(...normales) : ordenados[n - 1];
+
+      return {
+        n, suma, media, mediana, q1, q3, iqr, varianza, ds, cv,
+        min: ordenados[0], max: ordenados[n - 1], rango: ordenados[n - 1] - ordenados[0],
+        modas, modaFreq: maxFreq, asimetria, curtosis,
+        cercaBaja, cercaAlta, outliers, bigoteBajo, bigoteAlto
+      };
+    }
+    // __PURE_END__
+
+    function fmt(x, dec = 2) {
+      if (!Number.isFinite(x)) return '—';
+      return Number(x).toLocaleString('es', { maximumFractionDigits: dec });
+    }
+
+    function estadoInicial() {
+      const q = new URLSearchParams(window.location.search);
+      const datosUrl = q.get('datos');
+      if (datosUrl !== null) return { texto: datosUrl, fromUrl: true };
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const guardado = JSON.parse(raw);
+          if (guardado && typeof guardado.texto === 'string') return { texto: guardado.texto, fromUrl: false };
+        }
+      } catch { /* se usa el ejemplo */ }
+      return { texto: EJEMPLO, fromUrl: false };
+    }
+
+    const init = estadoInicial();
+    let noticeTimeout;
+    let resetTimer;
+    let chartHist = null;
+    let renderChartExterno = null;
+
+    Vue.createApp({
+      data() {
+        return {
+          texto: init.texto,
+          fromUrl: init.fromUrl,
+          hasChart: HAS_CHART,
+          notice: '',
+          shared: false,
+          resetArmed: false,
+          sinGuardar: false
+        };
+      },
+      computed: {
+        parsed() {
+          return parsearColumna(this.texto);
+        },
+        stats() {
+          const xs = this.parsed.datos;
+          return xs.length >= 2 ? medidas(xs) : null;
+        },
+        hint() {
+          const n = this.parsed.datos.length;
+          if (n === 0) return 'Pegá al menos 2 valores numéricos para empezar.';
+          if (n === 1) return 'Con un solo valor no se pueden calcular dispersión ni cuartiles. Agregá otro.';
+          return '';
+        },
+        gruposResumen() {
+          const s = this.stats;
+          if (!s) return [];
+          const cv = Number.isFinite(s.cv) ? this.fmt(s.cv, 1) : '—';
+          return [
+            {
+              id: 'centro', titulo: 'Centro', notas: [],
+              filas: [
+                { nombre: 'n', valor: String(s.n), explicacion: 'Cantidad de valores válidos.' },
+                { nombre: 'Suma', valor: this.fmt(s.suma), tex: '\\sum_{i=1}^{n} x_i', explicacion: 'Total de todos los valores.' },
+                { nombre: 'Media', valor: this.fmt(s.media), tex: '\\bar{x} = \\frac{1}{n}\\sum_{i=1}^{n} x_i', explicacion: 'Promedio aritmético; centro de gravedad.' },
+                { nombre: 'Mediana (Q₂)', valor: this.fmt(s.mediana), tex: 'Q_2 = P_{50}', explicacion: 'Valor central: deja 50% a cada lado.' },
+                { nombre: 'Moda', valor: this.modaValor, explicacion: this.modaExplicacion }
+              ]
+            },
+            {
+              id: 'dispersion', titulo: 'Dispersión', notas: ['Varianza y desvío usan n − 1.'],
+              filas: [
+                { nombre: 'Mínimo', valor: this.fmt(s.min), tex: '\\min_i x_i', explicacion: 'Valor más chico del conjunto.' },
+                { nombre: 'Máximo', valor: this.fmt(s.max), tex: '\\max_i x_i', explicacion: 'Valor más grande del conjunto.' },
+                { nombre: 'Rango', valor: this.fmt(s.rango), tex: 'R = x_{\\max} - x_{\\min}', explicacion: 'Amplitud total entre los extremos.' },
+                { nombre: 'Varianza', valor: this.fmt(s.varianza), tex: 's^2 = \\frac{1}{n-1}\\sum_{i=1}^{n}(x_i - \\bar{x})^2', explicacion: 'Dispersión cuadrática media respecto de la media.' },
+                { nombre: 'Desvío', valor: this.fmt(s.ds), tex: 's = \\sqrt{s^2}', explicacion: 'Dispersión en las mismas unidades que los datos.' },
+                { nombre: 'CV (%)', valor: cv, tex: 'CV = \\frac{s}{|\\bar{x}|}\\cdot 100', explicacion: 'Dispersión relativa; permite comparar escalas.' }
+              ]
+            },
+            {
+              id: 'posicion', titulo: 'Posición',
+              notas: ['Percentiles con interpolación lineal R-7; Q₂ coincide con la mediana.'],
+              filas: [
+                { nombre: 'Q₁', valor: this.fmt(s.q1), tex: 'Q_1 = P_{25}', explicacion: '25% de los datos queda por debajo.' },
+                { nombre: 'Q₂ (mediana)', valor: this.fmt(s.mediana), tex: 'Q_2 = P_{50}', explicacion: '50% por debajo; coincide con la mediana.' },
+                { nombre: 'Q₃', valor: this.fmt(s.q3), tex: 'Q_3 = P_{75}', explicacion: '75% de los datos queda por debajo.' },
+                { nombre: 'IQR', valor: this.fmt(s.iqr), tex: 'IQR = Q_3 - Q_1', explicacion: 'Ancho del 50% central; resiste outliers.' }
+              ]
+            },
+            {
+              id: 'forma', titulo: 'Forma',
+              notas: ['zᵢ = (xᵢ − x̄) / s.', this.lecturaAsimetria, this.lecturaCurtosis],
+              filas: [
+                { nombre: 'Asimetría', valor: this.fmt(s.asimetria, 3), tex: 'g_1 = \\frac{n}{(n-1)(n-2)}\\sum_{i=1}^{n} z_i^3', explicacion: 'Signo y fuerza de la cola: + derecha, − izquierda.' },
+                { nombre: 'Curtosis (exceso)', valor: this.fmt(s.curtosis, 3), tex: 'g_2 = \\frac{n(n+1)}{(n-1)(n-2)(n-3)}\\sum_{i=1}^{n} z_i^4 - \\frac{3(n-1)^2}{(n-2)(n-3)}', explicacion: 'Peso de las colas frente a la normal (0).' }
+              ]
+            }
+          ];
+        },
+        modaValor() {
+          const s = this.stats;
+          if (!s) return '';
+          if (!s.modas.length) return 'sin moda';
+          const valores = s.modas.slice(0, 3).map(v => this.fmt(v)).join(', ');
+          return s.modas.length > 3 ? `${valores}…` : valores;
+        },
+        modaExplicacion() {
+          const s = this.stats;
+          if (!s) return '';
+          if (!s.modas.length) return 'Todos los valores aparecen una sola vez.';
+          const cuantos = s.modas.length === 1 ? 'Un valor se repite' : `${s.modas.length} valores se repiten`;
+          return `${cuantos} ${s.modaFreq} veces.`;
+        },
+        lecturaAsimetria() {
+          const a = this.stats?.asimetria;
+          if (!Number.isFinite(a)) return 'Se necesitan al menos 3 valores con variación.';
+          const ad = Math.abs(a);
+          const fuerza = ad < 0.5 ? 'casi simétrica' : ad < 1 ? 'asimetría moderada' : 'asimetría fuerte';
+          const lado = a > 0.05 ? 'cola a la derecha' : a < -0.05 ? 'cola a la izquierda' : 'sin cola marcada';
+          return `${fuerza}, ${lado}.`;
+        },
+        lecturaCurtosis() {
+          const k = this.stats?.curtosis;
+          if (!Number.isFinite(k)) return 'Se necesitan al menos 4 valores con variación.';
+          if (k > 0.5) return 'Colas más pesadas que la normal.';
+          if (k < -0.5) return 'Colas más livianas que la normal.';
+          return 'Forma de colas parecida a la normal.';
+        },
+        outliersTexto() {
+          const s = this.stats;
+          if (!s || !s.outliers.length) return '';
+          const valores = s.outliers.slice(0, 12).map(v => this.fmt(v)).join(', ');
+          return s.outliers.length > 12 ? `${valores}… (+${s.outliers.length - 12} más)` : valores;
+        },
+        bins() {
+          const s = this.stats;
+          if (!s) return null;
+          if (s.max === s.min) {
+            return { centros: [s.min], counts: [s.n], etiquetas: [this.fmt(s.min, 1)] };
+          }
+          const k = Math.min(30, Math.max(3, Math.ceil(Math.log2(s.n) + 1)));
+          const ancho = (s.max - s.min) / k;
+          const counts = new Array(k).fill(0);
+          for (const x of this.parsed.datos) {
+            const idx = Math.min(k - 1, Math.floor((x - s.min) / ancho));
+            counts[idx]++;
+          }
+          const centros = [];
+          const etiquetas = [];
+          for (let i = 0; i < k; i++) {
+            const a = s.min + ancho * i;
+            const b = a + ancho;
+            centros.push((a + b) / 2);
+            etiquetas.push(`${this.fmt(a, 1)}–${this.fmt(b, 1)}`);
+          }
+          return { centros, counts, etiquetas };
+        },
+        caja() {
+          const s = this.stats;
+          if (!s) return null;
+          const pad = (s.max - s.min) * 0.06 || 1;
+          const lo = s.min - pad;
+          const hi = s.max + pad;
+          const x0 = 30;
+          const x1 = 570;
+          const X = v => x0 + ((v - lo) / (hi - lo)) * (x1 - x0);
+          const mx = X(s.media);
+          return {
+            x0, x1,
+            q1: X(s.q1),
+            q1x: X(s.q1),
+            q3x: X(s.q3),
+            ancho: Math.max(1, X(s.q3) - X(s.q1)),
+            mediana: X(s.mediana),
+            media: mx,
+            bigoteBajo: X(s.bigoteBajo),
+            bigoteAlto: X(s.bigoteAlto),
+            min: X(s.min),
+            max: X(s.max),
+            outliers: s.outliers.map(v => X(v)),
+            diamante: `M ${mx - 5},24 L ${mx},19 L ${mx + 5},24 L ${mx},29 Z`
+          };
+        }
+      },
+      methods: {
+        fmt(x, dec) { return fmt(x, dec); },
+        tex(tex) {
+          try {
+            if (typeof katex !== 'undefined') {
+              return katex.renderToString(tex, { throwOnError: false, displayMode: false });
+            }
+          } catch { /* cae al texto plano */ }
+          return `<code>${tex}</code>`;
+        },
+        showNotice(msg) {
+          clearTimeout(noticeTimeout);
+          this.notice = msg;
+          noticeTimeout = setTimeout(() => { this.notice = ''; }, 2200);
+        },
+        persist() {
+          if (this.fromUrl) return;
+          const payload = JSON.stringify({ texto: this.texto });
+          if (payload.length > 100000) {
+            if (!this.sinGuardar) {
+              this.sinGuardar = true;
+              this.showNotice('Datos muy grandes: no se guardan localmente.');
+            }
+            return;
+          }
+          this.sinGuardar = false;
+          try { localStorage.setItem(STORAGE_KEY, payload); } catch { /* modo privado */ }
+        },
+        onDatos() {
+          this.persist();
+          this.$nextTick(() => this.renderChart());
+        },
+        cargarEjemplo() {
+          this.texto = EJEMPLO;
+          this.fromUrl = false;
+          this.onDatos();
+          this.showNotice('Ejemplo cargado: tiempos con outlier.');
+        },
+        resumenTexto() {
+          const s = this.stats;
+          if (!s) return '';
+          return [
+            `Stats — resumen (n = ${s.n})`,
+            '',
+            'Centro',
+            `Suma: ${this.fmt(s.suma)}`,
+            `Media: ${this.fmt(s.media)}`,
+            `Mediana (= Q2): ${this.fmt(s.mediana)}`,
+            `Moda: ${s.modas.length ? `${s.modas.slice(0, 10).map(v => this.fmt(v)).join(', ')}${s.modas.length > 10 ? '…' : ''} (${s.modaFreq}×)` : 'sin moda'}`,
+            '',
+            'Dispersión',
+            `Mínimo: ${this.fmt(s.min)}`,
+            `Máximo: ${this.fmt(s.max)}`,
+            `Rango: ${this.fmt(s.rango)}`,
+            `Varianza (n−1): ${this.fmt(s.varianza)}`,
+            `Desvío (n−1): ${this.fmt(s.ds)}`,
+            `CV (%): ${Number.isFinite(s.cv) ? this.fmt(s.cv, 1) : '—'}`,
+            '',
+            'Posición',
+            `Q1: ${this.fmt(s.q1)}`,
+            `Q2 (= mediana): ${this.fmt(s.mediana)}`,
+            `Q3: ${this.fmt(s.q3)}`,
+            `IQR: ${this.fmt(s.iqr)}`,
+            '',
+            'Forma',
+            `Asimetría: ${this.fmt(s.asimetria, 3)}`,
+            `Curtosis (exceso): ${this.fmt(s.curtosis, 3)}`,
+            '',
+            `Atípicos (1,5 × IQR): ${s.outliers.length}`
+          ].join('\n');
+        },
+        copiarResumen() {
+          const texto = this.resumenTexto();
+          if (!texto) return;
+          if (navigator.clipboard?.writeText) {
+            navigator.clipboard.writeText(texto).then(
+              () => this.showNotice('Resumen copiado.'),
+              () => this.showNotice('No se pudo copiar.')
+            );
+          } else {
+            this.showNotice('No se pudo copiar.');
+          }
+        },
+        paleta() {
+          const dark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+          return dark
+            ? { bar: '#3987e5', media: '#e66767', mediana: '#9b8afb', grid: '#444' }
+            : { bar: '#2a78d6', media: '#d64545', mediana: '#6741d9', grid: '#ddd' };
+        },
+        renderChart() {
+          if (chartHist) { chartHist.destroy(); chartHist = null; }
+          if (typeof Chart === 'undefined' || !this.bins || !this.stats) return;
+          const P = this.paleta();
+          const B = this.bins;
+          const S = this.stats;
+          const altura = Math.max(...B.counts) * 1.1;
+          const datosBarra = B.centros.map((x, i) => ({ x, y: B.counts[i] }));
+          const linea = (x, color, label) => ({
+            label, type: 'line', data: [{ x, y: 0 }, { x, y: altura }],
+            borderColor: color, borderDash: [5, 4], borderWidth: 2,
+            fill: false, pointRadius: 0
+          });
+          const constante = S.max === S.min;
+          chartHist = new Chart(document.getElementById('chart-hist'), {
+            type: 'bar',
+            data: {
+              datasets: [
+                {
+                  label: 'frecuencia', data: datosBarra,
+                  backgroundColor: P.bar + '66', borderColor: P.bar, borderWidth: 1,
+                  categoryPercentage: 1, barPercentage: 0.9
+                },
+                linea(S.media, P.media, 'media'),
+                linea(S.mediana, P.mediana, 'mediana')
+              ]
+            },
+            options: {
+              maintainAspectRatio: false,
+              animation: false,
+              plugins: {
+                legend: { position: 'bottom' },
+                tooltip: {
+                  callbacks: {
+                    title: items => {
+                      const it = items[0];
+                      if (!it) return '';
+                      return it.dataset.label === 'frecuencia'
+                        ? (B.etiquetas[it.dataIndex] || '')
+                        : it.dataset.label;
+                    }
+                  }
+                }
+              },
+              scales: {
+                x: {
+                  type: 'linear',
+                  min: constante ? S.min - 1 : undefined,
+                  max: constante ? S.min + 1 : undefined,
+                  title: { display: true, text: 'valor' },
+                  grid: { color: P.grid }
+                },
+                y: {
+                  beginAtZero: true,
+                  ticks: { precision: 0 },
+                  grid: { color: P.grid }
+                }
+              }
+            }
+          });
+        },
+        share() {
+          const url = new URL(window.location.href);
+          url.search = '';
+          const conDatos = this.texto.length < 3000;
+          if (conDatos) url.searchParams.set('datos', this.texto);
+          const done = ok => {
+            if (ok) {
+              this.shared = true;
+              setTimeout(() => { this.shared = false; }, 1500);
+              if (!conDatos) this.showNotice('Link copiado sin los datos (muy largos).');
+            } else {
+              this.showNotice('No se pudo copiar el enlace.');
+            }
+          };
+          if (navigator.clipboard?.writeText) navigator.clipboard.writeText(url.toString()).then(() => done(true), () => done(false));
+          else done(false);
+        },
+        reset() {
+          if (!this.resetArmed) {
+            this.resetArmed = true;
+            clearTimeout(resetTimer);
+            resetTimer = setTimeout(() => { this.resetArmed = false; }, 5000);
+            return;
+          }
+          clearTimeout(resetTimer);
+          this.resetArmed = false;
+          try { localStorage.removeItem(STORAGE_KEY); } catch { /* modo privado */ }
+          this.texto = EJEMPLO;
+          this.fromUrl = false;
+          this.sinGuardar = false;
+          history.replaceState(null, '', window.location.pathname);
+          this.$nextTick(() => this.renderChart());
+          this.showNotice('Ejemplo restaurado.');
+        }
+      },
+      mounted() {
+        renderChartExterno = () => this.renderChart();
+        this.renderChart();
+      }
+    }).mount('#app');
+
+    (() => {
+      const root = document.documentElement;
+      const btn = document.getElementById('theme-toggle');
+      const apply = (t) => {
+        root.setAttribute('data-bs-theme', t);
+        btn.textContent = t === 'dark' ? '☀️' : '🌙';
+      };
+      apply(document.documentElement.getAttribute('data-bs-theme') || 'light');
+      btn.addEventListener('click', () => {
+        const next = root.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        try { localStorage.setItem('theme', next); } catch { /* modo privado */ }
+        apply(next);
+        if (renderChartExterno) renderChartExterno();
+      });
+    })();
+  </script>
+</body>
+</html>

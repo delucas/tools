@@ -126,6 +126,70 @@ const CASOS = {
     ],
   },
 
+  stats: {
+    exportar: ['parsearColumna', 'medidas', 'cuantil'],
+    pruebas: (t) => [
+      ['parsearColumna: una columna con encabezado', () => {
+        assert.deepEqual(
+          plano(t.parsearColumna('valor\n1\n2\n3')),
+          { datos: [1, 2, 3], descartados: 0, columnas: 1, header: true },
+        );
+      }],
+      ['parsearColumna: coma decimal', () => {
+        const r = t.parsearColumna('3,5\n4,25\n-1,5');
+        assert.deepEqual(plano(r.datos), [3.5, 4.25, -1.5]);
+        assert.equal(r.descartados, 0);
+      }],
+      ['parsearColumna: ignora valores no numéricos', () => {
+        const r = t.parsearColumna('1\nN/A\n2\n\n3');
+        assert.deepEqual(plano(r.datos), [1, 2, 3]);
+        assert.equal(r.descartados, 1);
+      }],
+      ['parsearColumna: CSV de una columna con separador ;', () => {
+        const r = t.parsearColumna('valor;\n1;\n2;');
+        assert.deepEqual(plano(r.datos), [1, 2]);
+        assert.equal(r.header, true);
+      }],
+      ['parsearColumna: usa la primera columna numérica', () => {
+        const r = t.parsearColumna('x,y\n1,10\n2,20\n3,30');
+        assert.deepEqual(plano(r.datos), [1, 2, 3]);
+        assert.equal(r.columnas, 2);
+        assert.equal(r.header, true);
+      }],
+      ['cuantil: interpolación R-7', () => {
+        assert.equal(t.cuantil([1, 2, 3, 4], 0.25), 1.75);
+        assert.equal(t.cuantil([1, 2, 3, 4], 0.5), 2.5);
+        assert.equal(t.cuantil([1, 2, 3, 4], 0.75), 3.25);
+      }],
+      ['medidas: centro y dispersión', () => {
+        const m = t.medidas([1, 2, 3, 4]);
+        assert.equal(m.n, 4);
+        assert.equal(m.media, 2.5);
+        assert.equal(m.mediana, 2.5);
+        assert.equal(m.q1, 1.75);
+        assert.equal(m.q3, 3.25);
+        assert.equal(m.iqr, 1.5);
+        assert.equal(m.min, 1);
+        assert.equal(m.max, 4);
+        assert.equal(m.varianza, 5 / 3);
+        assert.deepEqual(plano(m.modas), []);
+        assert.deepEqual(plano(m.outliers), []);
+      }],
+      ['medidas: moda y outliers', () => {
+        const m = t.medidas([1, 2, 2, 3, 100]);
+        assert.deepEqual(plano(m.modas), [2]);
+        assert.equal(m.modaFreq, 2);
+        assert.deepEqual(plano(m.outliers), [100]);
+        assert.equal(m.bigoteAlto, 3);
+      }],
+      ['medidas: asimetría y curtosis de una serie simétrica', () => {
+        const m = t.medidas([1, 2, 3, 4, 5]);
+        assert.ok(Math.abs(m.asimetria) < 1e-12);
+        assert.ok(Math.abs(m.curtosis - (-1.2)) < 1e-9);
+      }],
+    ],
+  },
+
   tabletop: {
     exportar: [
       'normalize', 'parseDelimited', 'guessSep', 'parseMarkdown', 'parseAscii',

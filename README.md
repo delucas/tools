@@ -57,6 +57,7 @@ El índice es una PWA mínima: `manifest.webmanifest`, `icons/` y `sw.js` en la 
 | [`tabletop`](./tabletop) | Convertí tablas entre Markdown, CSV, HTML, ASCII y LaTeX, con grilla editable. |
 | [`algolab`](./algolab) | Mesa virtual para enseñar algoritmos con cartas, fichas y fibrones. |
 | [`swatchbook`](./swatchbook) | Biblioteca de paletas: explorá, compará y reutilizá, con ida y vuelta a Chromatic. |
+| [`stats`](./stats) | 📈 Stats: describí una columna numérica con medidas, outliers, histograma y caja. |
 | [`n-muestra`](./n-muestra) | n?: calculá cuántas observaciones necesita tu estudio, para proporciones y medias. |
 | [`p-value`](./p-value) | Inferencia rápida: p-value, valores críticos y decisión sobre H₀. |
 | [`test-ab`](./test-ab) | A/B: compará dos grupos con diferencia, intervalo, efecto y prueba t. |

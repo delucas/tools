@@ -354,27 +354,8 @@
       // Escritorio: exporta/importa el estado de todas las herramientas de una vez.
       // Cada herramienta guarda todo en UNA sola clave igual a su slug de carpeta
       // (ver AGENTS.md). Los valores se copian en crudo, sin parsear.
-      // MIGRACIÓN (2026-09-21): LEGACY cubre las claves viejas durante la transición. Eliminar en 2027-03.
       // El JSON del catálogo es la única fuente de verdad de slugs y nombres.
       const SLUGS = CATALOGO.herramientas.map((h) => h.slug);
-      const LEGACY = {
-        apacalypse: ['apacalypse-citas'],
-        basket: ['basket-lista'],
-        checksmith: ['checksmith-plantillas'],
-        clocks: ['people', 'clocks-intro'],
-        'csv-a-grafico': ['csv-grafico-csv', 'csv-grafico-type', 'csv-grafico-title'],
-        docfactory: ['docfactory-estado'],
-        ducky: ['rubber-ducky-messages'],
-        eqtex: ['eqtex-formulas', 'eqtex-actual'],
-        gsd: ['gsd-tareas'],
-        hojitas: ['hojitas-config'],
-        linkdb: ['linkdb-links'],
-        markpress: ['markpress-doc'],
-        pseditor: ['pseditor-archivos', 'pseditor-codigo', 'pseditor-mostrar-numeros'],
-        qrlabs: ['qrlabs-state'],
-        textwrangler: ['textwrangler-text'],
-        truth: ['truth-expression']
-      };
       const APP = 'tools-escritorio';
 
       const status = document.getElementById('escritorio-status');
@@ -400,25 +381,10 @@
         showNotice.timer = setTimeout(() => notice.classList.add('d-none'), 4000);
       }
 
-      function storedRaw(slug) {
-        // Nueva primero; si no hay, se lee la vieja y se migra (guardar en nueva + borrar vieja).
-        const fresh = localStorage.getItem(slug);
-        if (fresh !== null) return fresh;
-        for (const k of (LEGACY[slug] || [])) {
-          const v = localStorage.getItem(k);
-          if (v !== null) {
-            try { localStorage.setItem(slug, v); } catch {}
-            (LEGACY[slug] || []).forEach(x => { try { localStorage.removeItem(x); } catch {} });
-            return v;
-          }
-        }
-        return null;
-      }
-
       function collect() {
         const tools = {};
         SLUGS.forEach(slug => {
-          const v = storedRaw(slug);
+          const v = localStorage.getItem(slug);
           if (v !== null) tools[slug] = v;
         });
         const theme = localStorage.getItem('theme');
@@ -608,7 +574,6 @@
         try {
           names.forEach(n => {
             localStorage.setItem(n, pending.tools[n]);
-            (LEGACY[n] || []).forEach(k => { try { localStorage.removeItem(k); } catch {} });
           });
           if (pending.theme !== undefined) localStorage.setItem('theme', pending.theme);
         } catch {
@@ -652,7 +617,6 @@
         disarm();
         SLUGS.forEach(slug => {
           try { localStorage.removeItem(slug); } catch {}
-          (LEGACY[slug] || []).forEach(k => { try { localStorage.removeItem(k); } catch {} });
         });
         pending = null;
         preview.classList.add('d-none');

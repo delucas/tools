@@ -173,7 +173,6 @@
   <script>
     (() => {
       const STORAGE_KEY = 'qrlabs';
-      const LEGACY_KEYS = ['qrlabs-state']; // MIGRACIÓN (2026-09-21): leer vieja, guardar en nueva y borrar vieja. Eliminar este bloque en 2027-03.
       const MARGIN = 1; // módulos de zona de silencio por lado
       const DEFAULTS = { t: 'url', url: '', texto: '', ssid: '', pass: '', sec: 'WPA', hidden: false, email: '', vcard: '', size: '256' };
       const MAX_HISTORY = 50; // tope de QR guardados (los más nuevos primero)
@@ -229,19 +228,12 @@
         };
       }
 
-      // Normaliza lo guardado a { form, history }: acepta el formato nuevo,
-      // el plano anterior (solo formulario) y la clave legacy.
+      // Normaliza lo guardado a { form, history }: acepta el formato nuevo
+      // y el plano anterior (solo formulario).
       function readStore() {
         const fallback = { form: { ...DEFAULTS }, history: [] };
-        let raw = null;
         try {
-          raw = localStorage.getItem(STORAGE_KEY);
-          if (raw === null) {
-            for (const k of LEGACY_KEYS) {
-              const v = localStorage.getItem(k);
-              if (v !== null) { raw = v; break; }
-            }
-          }
+          const raw = localStorage.getItem(STORAGE_KEY);
           if (raw === null) return fallback;
           const parsed = JSON.parse(raw);
           if (parsed && typeof parsed === 'object' && parsed.form) {
@@ -259,7 +251,6 @@
       function writeStore(form, history) {
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify({ form, history }));
-          LEGACY_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch {} });
         } catch { /* modo privado: se sigue sin guardar */ }
       }
 

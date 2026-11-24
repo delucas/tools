@@ -188,9 +188,6 @@
     }
 
     const STORAGE_KEY = 'clocks';
-    // MIGRACIÓN (2026-09-21): antes se usaban 'people' y 'clocks-intro'. Leer viejas, guardar en nueva, borrar viejas. Eliminar este bloque en 2027-03.
-    const LEGACY_PEOPLE_KEY = 'people';
-    const LEGACY_INTRO_KEY = 'clocks-intro';
 
     let resetTimer = null;
 
@@ -218,14 +215,10 @@
           if (parsed && typeof parsed === 'object' && typeof parsed.introHidden === 'boolean') return parsed.introHidden;
         }
       } catch { /* link compartido: no tocar el storage */ }
-      try {
-        return localStorage.getItem(LEGACY_INTRO_KEY) === 'hidden';
-      } catch {
-        return false;
-      }
+      return false;
     }
 
-    function loadMigratedState() {
+    function loadStoredState() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw !== null) {
@@ -237,24 +230,7 @@
       } catch {
         localStorage.removeItem(STORAGE_KEY);
       }
-      const legacyPeopleRaw = localStorage.getItem(LEGACY_PEOPLE_KEY);
-      const legacyIntroRaw = localStorage.getItem(LEGACY_INTRO_KEY);
-      if (legacyPeopleRaw === null && legacyIntroRaw === null) return null;
-      let people = [];
-      if (legacyPeopleRaw !== null) {
-        try {
-          const parsed = JSON.parse(legacyPeopleRaw);
-          if (Array.isArray(parsed)) people = parsed;
-        } catch {
-          localStorage.removeItem(LEGACY_PEOPLE_KEY);
-        }
-      }
-      const introHidden = legacyIntroRaw === 'hidden';
-      const migrated = { people, introHidden };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
-      localStorage.removeItem(LEGACY_PEOPLE_KEY);
-      localStorage.removeItem(LEGACY_INTRO_KEY);
-      return migrated;
+      return null;
     }
 
     function buildTimezoneList(date) {
@@ -352,8 +328,6 @@
           this.people = [];
           this.showIntro = true;
           localStorage.removeItem(STORAGE_KEY);
-          localStorage.removeItem(LEGACY_PEOPLE_KEY);
-          localStorage.removeItem(LEGACY_INTRO_KEY);
           history.replaceState(null, '', window.location.pathname);
         },
         share() {
@@ -393,7 +367,7 @@
           this.showIntro = !getIntroHiddenReadOnly();
           this.fromUrl = true;
         } else {
-          const stored = loadMigratedState();
+          const stored = loadStoredState();
           if (stored) {
             this.people = stored.people;
             this.showIntro = !stored.introHidden;

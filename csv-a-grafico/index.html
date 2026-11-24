@@ -130,10 +130,6 @@
     }
 
     const STORAGE_KEY = 'csv-a-grafico';
-    // MIGRACIÓN (2026-09-21): antes se usaban 'csv-grafico-csv', 'csv-grafico-type' y 'csv-grafico-title'. Leer viejas, guardar en nueva, borrar viejas. Eliminar este bloque en 2027-03.
-    const LEGACY_CSV_KEY = 'csv-grafico-csv';
-    const LEGACY_TYPE_KEY = 'csv-grafico-type';
-    const LEGACY_TITLE_KEY = 'csv-grafico-title';
     const DEFAULT_CSV = 'Mes,Ingresos,Gastos\nEnero,1200,800\nFebrero,1500,900\nMarzo,1100,950\nAbril,1800,1000';
 
     function getQueryParam(param) {
@@ -155,13 +151,6 @@
             if (typeof parsed?.csv === 'string') csv = parsed.csv;
             if (typeof parsed?.type === 'string') type = parsed.type;
             if (typeof parsed?.title === 'string') title = parsed.title;
-          } else {
-            const legacyCsv = localStorage.getItem(LEGACY_CSV_KEY);
-            const legacyType = localStorage.getItem(LEGACY_TYPE_KEY);
-            const legacyTitle = localStorage.getItem(LEGACY_TITLE_KEY);
-            if (legacyCsv !== null) csv = legacyCsv;
-            if (legacyType !== null) type = legacyType;
-            if (legacyTitle !== null) title = legacyTitle;
           }
         } catch { /* lectura solo: no tocar el storage */ }
         // URLSearchParams.get() ya decodifica: no volver a llamar decodeURIComponent().
@@ -187,21 +176,6 @@
         }
       } catch {
         localStorage.removeItem(STORAGE_KEY);
-      }
-      const legacyCsv = localStorage.getItem(LEGACY_CSV_KEY);
-      const legacyType = localStorage.getItem(LEGACY_TYPE_KEY);
-      const legacyTitle = localStorage.getItem(LEGACY_TITLE_KEY);
-      if (legacyCsv !== null || legacyType !== null || legacyTitle !== null) {
-        const state = {
-          csv: legacyCsv !== null ? legacyCsv : DEFAULT_CSV,
-          type: legacyType !== null ? legacyType : 'bar',
-          title: legacyTitle !== null ? legacyTitle : ''
-        };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-        localStorage.removeItem(LEGACY_CSV_KEY);
-        localStorage.removeItem(LEGACY_TYPE_KEY);
-        localStorage.removeItem(LEGACY_TITLE_KEY);
-        return { ...state, fromURL: false };
       }
       return { csv: DEFAULT_CSV, type: 'bar', title: '', fromURL: false };
     }
@@ -396,9 +370,6 @@
           if (!this.resetArmed) { this.resetArmed = true; clearTimeout(resetTimer); resetTimer = setTimeout(() => { this.resetArmed = false; }, 5000); return; }
           clearTimeout(resetTimer); this.resetArmed = false;
           localStorage.removeItem(STORAGE_KEY);
-          localStorage.removeItem(LEGACY_CSV_KEY);
-          localStorage.removeItem(LEGACY_TYPE_KEY);
-          localStorage.removeItem(LEGACY_TITLE_KEY);
           this.csvText = DEFAULT_CSV;
           this.chartType = 'bar';
           this.title = '';
